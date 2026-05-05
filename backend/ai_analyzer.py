@@ -11,13 +11,14 @@ import json
 class AIAnalyzer:
     """AI 分析器"""
 
-    def __init__(self, api_key: str = None, provider: str = "deepseek"):
+    def __init__(self, api_key: str = None, provider: str = "deepseek", model: str = None):
         """
         初始化 AI 分析器
 
         Args:
             api_key: API 密钥
             provider: AI 提供商 (openai, deepseek)
+            model: 模型名称（可选，默认使用推荐模型）
         """
         self.api_key = api_key or os.getenv("AI_API_KEY")
         self.provider = provider.lower()
@@ -25,14 +26,14 @@ class AIAnalyzer:
         if self.provider == "openai":
             from openai import OpenAI
             self.client = OpenAI(api_key=self.api_key)
-            self.model = "gpt-4o-mini"
+            self.model = model or os.getenv("AI_MODEL", "gpt-4o-mini")
         elif self.provider == "deepseek":
             from openai import OpenAI
             self.client = OpenAI(
                 api_key=self.api_key,
                 base_url="https://api.deepseek.com"
             )
-            self.model = "deepseek-chat"
+            self.model = model or os.getenv("AI_MODEL", "deepseek-chat")
         else:
             raise ValueError(f"不支持的 AI 提供商: {provider}")
 

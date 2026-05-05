@@ -2,6 +2,9 @@
 BrowseMind 后端服务 - 主应用
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
