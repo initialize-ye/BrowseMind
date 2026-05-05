@@ -2,7 +2,7 @@
 
 一个智能的 Chrome 浏览行为分析插件，帮助你了解时间都花在哪里了。
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Chrome](https://img.shields.io/badge/chrome-extension-orange)
 
@@ -26,6 +26,13 @@
 - 柱状图：24小时活跃度分布
 - 折线图：7天浏览趋势
 - 交互式图表切换
+
+### 🤖 AI 智能分析（新功能）
+- 基于 AI 的浏览行为分析
+- 个性化问题识别
+- 智能优化建议
+- 支持 OpenAI 和 DeepSeek
+- 历史分析报告存储
 
 ### ☁️ 云端同步
 - 数据上传到云端
@@ -54,13 +61,46 @@ git clone https://github.com/your-username/browsemind.git
 
 ### 启动后端（可选）
 
+**本地开发：**
 ```bash
 cd backend
 pip install -r requirements.txt
+
+# 配置 AI 分析（可选）
+cp .env.example .env
+# 编辑 .env 文件，填入你的 DeepSeek API Key
+
 python main.py
 ```
 
 访问 API 文档：http://localhost:8000/docs
+
+**AI 分析配置：**
+详见 [AI_SETUP.md](AI_SETUP.md)
+
+## 💡 使用指南
+
+### 基础功能
+
+1. **查看统计**：点击插件图标，查看今日和 7 天的浏览统计
+2. **切换图表**：点击"分类占比"、"时间分布"、"每日趋势"切换不同视图
+3. **同步数据**：点击"☁️ 同步到云端"按钮上传数据到服务器
+
+### AI 分析功能
+
+1. **配置 API**：在服务器上配置 `.env` 文件（详见 [AI_SETUP.md](AI_SETUP.md)）
+2. **点击分析**：在插件中点击"🤖 AI 分析"按钮
+3. **查看报告**：AI 会生成：
+   - 📝 行为总结：概括你的浏览习惯
+   - ⚠️ 发现的问题：识别时间浪费和不良习惯
+   - 💡 优化建议：提供个性化改进方案
+
+### 测试 AI 功能
+
+```bash
+cd backend
+python test_ai_analysis.py
+```
 
 ## 📸 截图
 
@@ -86,6 +126,7 @@ python main.py
 - FastAPI 0.104.1
 - SQLAlchemy + SQLite
 - Pydantic 数据验证
+- OpenAI API（AI 分析）
 
 ### 部署
 - Ubuntu Server
@@ -95,6 +136,7 @@ python main.py
 ## 📖 文档
 
 - [项目总结](PROJECT_SUMMARY.md)
+- [AI 配置指南](AI_SETUP.md)
 - [部署指南](DEPLOY_QUICK.md)
 - [GitHub Actions](GITHUB_ACTIONS_QUICK.md)
 - [后端 API](backend/README.md)
@@ -122,14 +164,17 @@ sudo bash deploy.sh
 - ✅ 第二阶段：数据处理和分类
 - ✅ 第三阶段：图表可视化
 - ✅ 第四阶段：后端服务 + 云端部署
-- ⏳ 第五阶段：AI 分析
+- ✅ 第五阶段：AI 智能分析
 - ⏳ 第六阶段：高级功能
 
 ## 🎯 下一步计划
 
-- [ ] AI 行为分析
-- [ ] 生成优化建议
+- [x] AI 行为分析
+- [x] 生成优化建议
 - [ ] 时间黑洞检测
+- [ ] 注意力曲线分析
+- [ ] 用户目标设置
+- [ ] 娱乐时间提醒
 - [ ] 用户目标设置
 - [ ] 数据导出功能
 
