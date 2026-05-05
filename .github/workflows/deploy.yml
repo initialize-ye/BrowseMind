@@ -29,7 +29,7 @@ jobs:
 
           # 备份当前版本
           if [ -d "backend" ]; then
-            cp -r backend backend_backup_$(date +%Y%m%d_%H%M%S)
+            cp -r backend backend_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
           fi
 
           # 拉取最新代码
@@ -38,20 +38,33 @@ jobs:
           # 进入 backend 目录
           cd backend
 
+          # 创建虚拟环境（如果不存在）
+          if [ ! -d "venv" ]; then
+            echo "创建虚拟环境..."
+            python3 -m venv venv
+          fi
+
           # 激活虚拟环境
           source venv/bin/activate
 
           # 更新依赖
           pip install -r requirements.txt
 
-          # 重启服务
-          sudo systemctl restart browsemind
-
-          # 等待服务启动
-          sleep 3
-
-          # 检查服务状态
-          sudo systemctl status browsemind --no-pager
+          # 检查 systemd 服务是否存在
+          if systemctl list-unit-files | grep -q browsemind.service; then
+            echo "重启 systemd 服务..."
+            sudo systemctl restart browsemind
+            sleep 3
+            sudo systemctl status browsemind --no-pager
+          else
+            echo "⚠️  systemd 服务不存在，尝试直接启动..."
+            # 杀死旧进程
+            pkill -f "python.*main.py" || true
+            # 后台启动服务
+            nohup python main.py > /var/log/browsemind.log 2>&1 &
+            sleep 3
+            echo "服务已启动，PID: $(pgrep -f 'python.*main.py')"
+          fi
 
           echo "✅ 部署完成！"
 
