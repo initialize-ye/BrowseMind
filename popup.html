@@ -412,6 +412,85 @@
       color: #666;
       margin-top: 2px;
     }
+
+    .goal-item {
+      padding: 12px;
+      background: #f7f9fc;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .goal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .goal-type {
+      font-weight: 600;
+      color: #333;
+      font-size: 13px;
+    }
+
+    .goal-status {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .goal-status.achieved {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .goal-status.warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .goal-status.normal {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .goal-progress-bar {
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+
+    .goal-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .goal-progress-fill.warning {
+      background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .goal-meta {
+      font-size: 11px;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .goal-delete {
+      cursor: pointer;
+      color: #999;
+      font-size: 18px;
+      margin-left: 8px;
+    }
+
+    .goal-delete:hover {
+      color: #f56565;
+    }
   </style>
 </head>
 <body>
@@ -483,6 +562,14 @@
       </div>
 
       <div class="card">
+        <div class="card-title">🎯 今日目标</div>
+        <div id="goalsContainer">
+          <p style="text-align: center; color: #999; padding: 20px;">暂无目标</p>
+        </div>
+        <button id="addGoalBtn" style="margin-top: 12px; background: #43e97b;">➕ 添加目标</button>
+      </div>
+
+      <div class="card">
         <div class="card-title">⏰ 时间黑洞</div>
         <div id="blackholeStats">
           <p style="text-align: center; color: #999; padding: 20px;">点击"高级分析"查看</p>
@@ -510,6 +597,27 @@
         <span class="modal-close" id="closeModal">&times;</span>
         <h2 style="color: #667eea; margin-bottom: 16px;">🤖 AI 智能分析</h2>
         <div id="aiAnalysisContent"></div>
+      </div>
+    </div>
+
+    <div id="goalModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <span class="modal-close" id="closeGoalModal">&times;</span>
+        <h2 style="color: #667eea; margin-bottom: 16px;">🎯 设置目标</h2>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">目标类型</label>
+          <select id="goalTypeSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+            <option value="daily_learning">每日学习时长</option>
+            <option value="daily_entertainment">每日娱乐时长限制</option>
+            <option value="daily_coding">每日编程时长</option>
+            <option value="daily_social">每日社交时长限制</option>
+          </select>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">目标时长（分钟）</label>
+          <input type="number" id="goalDurationInput" min="1" max="1440" value="60" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+        </div>
+        <button id="saveGoalBtn" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">保存目标</button>
       </div>
     </div>
 

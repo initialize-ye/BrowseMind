@@ -11,6 +11,9 @@ document.getElementById('syncBtn').addEventListener('click', syncToCloud);
 document.getElementById('advancedAnalysisBtn').addEventListener('click', showAdvancedAnalysis);
 document.getElementById('aiAnalysisBtn').addEventListener('click', showAIAnalysis);
 document.getElementById('closeModal').addEventListener('click', closeModal);
+document.getElementById('addGoalBtn').addEventListener('click', openGoalModal);
+document.getElementById('closeGoalModal').addEventListener('click', closeGoalModal);
+document.getElementById('saveGoalBtn').addEventListener('click', saveGoal);
 
 async function loadData() {
   const loading = document.getElementById('loading');
@@ -62,6 +65,9 @@ async function loadData() {
 
     // 绘制默认图表（饼图）
     drawPieChart();
+
+    // 加载目标
+    loadGoals();
 
     loading.style.display = 'none';
     content.style.display = 'block';
@@ -806,4 +812,212 @@ function drawAttentionChart(hourlyFocus) {
       }
     }
   });
+}
+
+// ==================== 目标管理功能 ====================
+
+async function loadGoals() {
+  try {
+    const { userId } = await chrome.storage.local.get('userId');
+    if (!userId) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const response = await fetch(`${dataSync.baseUrl}/api/goals/${userId}?date=${today}&is_active=1`);
+
+    if (!response.ok) {
+      console.error('获取目标失败');
+      return;
+    }
+
+    const goals = await response.json();
+    displayGoals(goals);
+  } catch (error) {
+    console.error('加载目标失败:', error);
+  }
+}
+
+function displayGoals(goals) {
+  const container = document.getElementById('goalsContainer');
+
+  if (!goals || goals.length === 0) {
+    container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">暂无目标</p>';
+    return;
+  }
+
+  container.innerHTML = goals.map(goal => {
+    const percentage = goal.progress_percentage;
+    const isWarning = percentage >= 80;
+    const isAchieved = percentage >= 100;
+
+    let statusClass = 'normal';
+    let statusText = '进行中';
+    if (isAchieved) {
+      statusClass = 'achieved';
+      statusText = '已完成';
+    } else if (isWarning) {
+      statusClass = 'warning';
+      statusText = '即将超标';
+    }
+
+    const goalTypeMap = {
+      'daily_learning': '学习时长',
+      'daily_entertainment': '娱乐限制',
+      'daily_coding': '编程时长',
+      'daily_social': '社交限制'
+    };
+
+    return `
+      <div class="goal-item">
+        <div class="goal-header">
+          <span class="goal-type">${goalTypeMap[goal.goal_type] || goal.goal_type}</span>
+          <div>
+            <span class="goal-status ${statusClass}">${statusText}</span>
+            <span class="goal-delete" data-goal-id="${goal.id}">×</span>
+          </div>
+        </div>
+        <div class="goal-progress-bar">
+          <div class="goal-progress-fill ${isWarning ? 'warning' : ''}" style="width: ${Math.min(percentage, 100)}%"></div>
+        </div>
+        <div class="goal-meta">
+          <span>${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)}</span>
+          <span>${percentage.toFixed(1)}%</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // 添加删除事件监听
+  container.querySelectorAll('.goal-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const goalId = e.target.dataset.goalId;
+      deleteGoal(goalId);
+    });
+  });
+}
+
+function openGoalModal() {
+  document.getElementById('goalModal').style.display = 'flex';
+}
+
+function closeGoalModal() {
+  document.getElementById('goalModal').style.display = 'none';
+}
+
+async function saveGoal() {
+  try {
+    const { userId } = await chrome.storage.local.get('userId');
+    if (!userId) {
+      alert('请先同步数据');
+      return;
+    }
+
+    const goalType = document.getElementById('goalTypeSelect').value;
+    const durationMinutes = parseInt(document.getElementById('goalDurationInput').value);
+
+    if (!durationMinutes || durationMinutes <= 0) {
+      alert('请输入有效的时长');
+      return;
+    }
+
+    // 映射目标类型到分类
+    const categoryMap = {
+      'daily_learning': 'learning',
+      'daily_entertainment': 'entertainment',
+      'daily_coding': 'coding',
+      'daily_social': 'social'
+    };
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const response = await fetch(`${dataSync.baseUrl}/api/goals/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        goal_type: goalType,
+        category: categoryMap[goalType],
+        target_duration: durationMinutes * 60,
+        date: today
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      alert(error.detail || '创建目标失败');
+      return;
+    }
+
+    closeGoalModal();
+    await loadGoals();
+    alert('目标创建成功！');
+  } catch (error) {
+    console.error('保存目标失败:', error);
+    alert('保存失败，请重试');
+  }
+}
+
+async function deleteGoal(goalId) {
+  if (!confirm('确定要删除这个目标吗？')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${dataSync.baseUrl}/api/goals/${goalId}`, {
+      method: 'DELETE'
+    });
+
+    if (!response.ok) {
+      alert('删除失败');
+      return;
+    }
+
+    await loadGoals();
+  } catch (error) {
+    console.error('删除目标失败:', error);
+    alert('删除失败，请重试');
+  }
+}
+
+async function updateGoalsProgress() {
+  try {
+    const { userId } = await chrome.storage.local.get('userId');
+    if (!userId) return;
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const response = await fetch(`${dataSync.baseUrl}/api/goals/${userId}/update-progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: today })
+    });
+
+    if (!response.ok) {
+      console.error('更新目标进度失败');
+      return;
+    }
+
+    const result = await response.json();
+
+    // 处理通知
+    if (result.data && result.data.notifications) {
+      result.data.notifications.forEach(notif => {
+        showNotification(notif.type, notif.message);
+      });
+    }
+
+    await loadGoals();
+  } catch (error) {
+    console.error('更新目标进度失败:', error);
+  }
+}
+
+function showNotification(type, message) {
+  if (chrome.notifications) {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon128.png',
+      title: type === 'achieved' ? '🎉 目标达成' : '⚠️ 时间提醒',
+      message: message,
+      priority: 2
+    });
+  }
 }

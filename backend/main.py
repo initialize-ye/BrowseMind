@@ -13,14 +13,17 @@ from typing import List
 import json
 import os
 
-from database import init_db, get_db, BrowsingRecord, AnalysisReport
+from database import init_db, get_db, BrowsingRecord, AnalysisReport, UserGoal
 from schemas import (
     BrowsingRecordBatch,
     BrowsingRecordResponse,
     AnalysisResponse,
     CategoryStat,
     SuccessResponse,
-    AIAnalysisResponse
+    AIAnalysisResponse,
+    UserGoalCreate,
+    UserGoalUpdate,
+    UserGoalResponse
 )
 from ai_analyzer import AIAnalyzer
 from advanced_analyzer import AdvancedAnalyzer
@@ -497,6 +500,215 @@ async def get_advanced_analysis(
         'blackholes': result['blackholes'],
         'attention_curve': result['attention_curve']
     }
+
+
+@app.post("/api/goals/{user_id}", response_model=UserGoalResponse)
+async def create_goal(
+    user_id: str,
+    goal: UserGoalCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    创建用户目标
+
+    - user_id: 用户ID
+    - goal: 目标信息
+    """
+    # 检查是否已存在相同日期和类型的目标
+    existing = db.query(UserGoal).filter(
+        UserGoal.user_id == user_id,
+        UserGoal.goal_type == goal.goal_type,
+        UserGoal.date == goal.date,
+        UserGoal.is_active == 1
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="该日期已存在相同类型的目标")
+
+    # 创建新目标
+    new_goal = UserGoal(
+        user_id=user_id,
+        goal_type=goal.goal_type,
+        category=goal.category,
+        target_duration=goal.target_duration,
+        date=goal.date
+    )
+
+    db.add(new_goal)
+    db.commit()
+    db.refresh(new_goal)
+
+    return UserGoalResponse(**new_goal.to_dict())
+
+
+@app.get("/api/goals/{user_id}", response_model=List[UserGoalResponse])
+async def get_user_goals(
+    user_id: str,
+    date: str = None,
+    is_active: int = None,
+    db: Session = Depends(get_db)
+):
+    """
+    获取用户目标列表
+
+    - user_id: 用户ID
+    - date: 日期过滤（可选）
+    - is_active: 是否激活过滤（可选）
+    """
+    query = db.query(UserGoal).filter(UserGoal.user_id == user_id)
+
+    if date:
+        query = query.filter(UserGoal.date == date)
+    if is_active is not None:
+        query = query.filter(UserGoal.is_active == is_active)
+
+    goals = query.order_by(UserGoal.created_at.desc()).all()
+
+    return [UserGoalResponse(**g.to_dict()) for g in goals]
+
+
+@app.put("/api/goals/{goal_id}", response_model=UserGoalResponse)
+async def update_goal(
+    goal_id: int,
+    goal_update: UserGoalUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    更新用户目标
+
+    - goal_id: 目标ID
+    - goal_update: 更新信息
+    """
+    goal = db.query(UserGoal).filter(UserGoal.id == goal_id).first()
+
+    if not goal:
+        raise HTTPException(status_code=404, detail="目标不存在")
+
+    # 更新字段
+    if goal_update.target_duration is not None:
+        goal.target_duration = goal_update.target_duration
+    if goal_update.current_progress is not None:
+        goal.current_progress = goal_update.current_progress
+    if goal_update.is_active is not None:
+        goal.is_active = goal_update.is_active
+    if goal_update.notified is not None:
+        goal.notified = goal_update.notified
+
+    goal.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(goal)
+
+    return UserGoalResponse(**goal.to_dict())
+
+
+@app.delete("/api/goals/{goal_id}")
+async def delete_goal(
+    goal_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    删除用户目标
+
+    - goal_id: 目标ID
+    """
+    goal = db.query(UserGoal).filter(UserGoal.id == goal_id).first()
+
+    if not goal:
+        raise HTTPException(status_code=404, detail="目标不存在")
+
+    db.delete(goal)
+    db.commit()
+
+    return SuccessResponse(
+        success=True,
+        message="目标已删除",
+        data={"goal_id": goal_id}
+    )
+
+
+@app.post("/api/goals/{user_id}/update-progress")
+async def update_goals_progress(
+    user_id: str,
+    date: str,
+    db: Session = Depends(get_db)
+):
+    """
+    更新用户当日所有目标的进度
+
+    - user_id: 用户ID
+    - date: 日期 YYYY-MM-DD
+    """
+    # 获取当日所有激活的目标
+    goals = db.query(UserGoal).filter(
+        UserGoal.user_id == user_id,
+        UserGoal.date == date,
+        UserGoal.is_active == 1
+    ).all()
+
+    if not goals:
+        return SuccessResponse(
+            success=True,
+            message="当日无激活目标",
+            data={"updated_count": 0}
+        )
+
+    # 获取当日浏览记录
+    records = db.query(BrowsingRecord).filter(
+        BrowsingRecord.user_id == user_id,
+        BrowsingRecord.date == date
+    ).all()
+
+    # 按分类统计时长
+    category_durations = {}
+    for record in records:
+        category = record.category or 'other'
+        category_durations[category] = category_durations.get(category, 0) + record.duration
+
+    # 更新每个目标的进度
+    updated_count = 0
+    notifications = []
+
+    for goal in goals:
+        old_progress = goal.current_progress
+        new_progress = category_durations.get(goal.category, 0)
+        goal.current_progress = new_progress
+        goal.updated_at = datetime.utcnow()
+
+        # 检查是否需要通知
+        if not goal.notified:
+            progress_percentage = (new_progress / goal.target_duration * 100) if goal.target_duration > 0 else 0
+
+            # 达成目标
+            if new_progress >= goal.target_duration and old_progress < goal.target_duration:
+                notifications.append({
+                    'goal_id': goal.id,
+                    'type': 'achieved',
+                    'message': f'恭喜！你已完成今日 {goal.category} 目标'
+                })
+                goal.notified = 1
+
+            # 超标警告（娱乐类）
+            elif goal.goal_type.startswith('daily_entertainment') and progress_percentage >= 80:
+                if old_progress < goal.target_duration * 0.8:
+                    notifications.append({
+                        'goal_id': goal.id,
+                        'type': 'warning',
+                        'message': f'注意！{goal.category} 时间已达 {int(progress_percentage)}%'
+                    })
+
+        updated_count += 1
+
+    db.commit()
+
+    return SuccessResponse(
+        success=True,
+        message=f"已更新 {updated_count} 个目标进度",
+        data={
+            "updated_count": updated_count,
+            "notifications": notifications
+        }
+    )
 
 
 if __name__ == "__main__":

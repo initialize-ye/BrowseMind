@@ -89,3 +89,38 @@ class SuccessResponse(BaseModel):
     success: bool
     message: str
     data: Optional[dict] = None
+
+
+class UserGoalCreate(BaseModel):
+    """创建用户目标"""
+    goal_type: str = Field(..., description="目标类型：daily_learning, daily_entertainment等")
+    category: str = Field(..., description="关联分类：learning, entertainment等")
+    target_duration: int = Field(..., description="目标时长（秒）", gt=0)
+    date: str = Field(..., description="日期 YYYY-MM-DD")
+
+
+class UserGoalUpdate(BaseModel):
+    """更新用户目标"""
+    target_duration: Optional[int] = Field(None, description="目标时长（秒）", gt=0)
+    current_progress: Optional[int] = Field(None, description="当前进度（秒）", ge=0)
+    is_active: Optional[int] = Field(None, description="是否激活")
+    notified: Optional[int] = Field(None, description="是否已通知")
+
+
+class UserGoalResponse(BaseModel):
+    """用户目标响应"""
+    id: int
+    user_id: str
+    goal_type: str
+    category: str
+    target_duration: int
+    current_progress: int
+    date: str
+    is_active: int
+    notified: int
+    progress_percentage: float
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True

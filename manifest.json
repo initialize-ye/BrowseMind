@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "BrowseMind",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "分析浏览历史，生成AI行为报告",
   "permissions": [
     "history",
     "tabs",
     "storage",
     "activeTab",
-    "alarms"
+    "alarms",
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>"

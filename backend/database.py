@@ -84,6 +84,40 @@ class AnalysisReport(Base):
         }
 
 
+class UserGoal(Base):
+    """用户目标模型"""
+    __tablename__ = 'user_goals'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    goal_type = Column(String(50), nullable=False)  # daily_learning, daily_entertainment, etc.
+    category = Column(String(50))  # 关联的分类（learning, entertainment等）
+    target_duration = Column(Integer, nullable=False)  # 目标时长（秒）
+    current_progress = Column(Integer, default=0)  # 当前进度（秒）
+    date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD
+    is_active = Column(Integer, default=1)  # 是否激活（1=是，0=否）
+    notified = Column(Integer, default=0)  # 是否已通知（1=是，0=否）
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """转换为字典"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'goal_type': self.goal_type,
+            'category': self.category,
+            'target_duration': self.target_duration,
+            'current_progress': self.current_progress,
+            'date': self.date,
+            'is_active': self.is_active,
+            'notified': self.notified,
+            'progress_percentage': round((self.current_progress / self.target_duration * 100), 1) if self.target_duration > 0 else 0,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
 # 数据库引擎和会话
 DATABASE_URL = "sqlite:///./browsemind.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

@@ -132,8 +132,67 @@ async function collectHistoryData() {
 
 // 定期清理旧数据（每小时执行一次）
 chrome.alarms.create('cleanOldData', { periodInMinutes: 60 });
+
+// 定期更新目标进度（每5分钟）
+chrome.alarms.create('updateGoalsProgress', { periodInMinutes: 5 });
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'cleanOldData') {
     collectHistoryData(); // 重新采集并自动清理旧数据
+  } else if (alarm.name === 'updateGoalsProgress') {
+    updateGoalsProgress();
+  }
+});
+
+// ==================== 目标监控功能 ====================
+
+async function updateGoalsProgress() {
+  try {
+    const { userId } = await chrome.storage.local.get('userId');
+    if (!userId) return;
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const response = await fetch('http://localhost:8000/api/goals/' + userId + '/update-progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: today })
+    });
+
+    if (!response.ok) {
+      console.error('更新目标进度失败');
+      return;
+    }
+
+    const result = await response.json();
+
+    // 处理通知
+    if (result.data && result.data.notifications) {
+      result.data.notifications.forEach(notif => {
+        showNotification(notif.type, notif.message);
+      });
+    }
+  } catch (error) {
+    console.error('更新目标进度失败:', error);
+  }
+}
+
+function showNotification(type, message) {
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icon128.png',
+    title: type === 'achieved' ? '🎉 目标达成' : '⚠️ 时间提醒',
+    message: message,
+    priority: 2
+  });
+}
+
+// 监听浏览记录变化，实时检查目标
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes.browsingData) {
+    // 延迟1秒后更新目标进度，避免频繁调用
+    setTimeout(() => {
+      updateGoalsProgress();
+    }, 1000);
   }
 });
