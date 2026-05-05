@@ -24,49 +24,82 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: ${{ secrets.SERVER_PORT || 22 }}
         script: |
+          set -e  # 遇到错误立即退出
+
+          echo "=========================================="
+          echo "开始部署 BrowseMind"
+          echo "=========================================="
+
           # 进入项目目录
-          cd /var/www/browsemind
+          echo "📁 进入项目目录..."
+          cd /var/www/browsemind || { echo "❌ 项目目录不存在"; exit 1; }
 
           # 备份当前版本
+          echo "💾 备份当前版本..."
           if [ -d "backend" ]; then
             cp -r backend backend_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
           fi
 
           # 拉取最新代码
-          git pull origin main
+          echo "📥 拉取最新代码..."
+          git pull origin main || { echo "❌ Git 拉取失败"; exit 1; }
 
           # 进入 backend 目录
-          cd backend
+          echo "📂 进入 backend 目录..."
+          cd backend || { echo "❌ backend 目录不存在"; exit 1; }
 
           # 创建虚拟环境（如果不存在）
           if [ ! -d "venv" ]; then
-            echo "创建虚拟环境..."
-            python3 -m venv venv
+            echo "🔧 创建虚拟环境..."
+            python3 -m venv venv || { echo "❌ 虚拟环境创建失败"; exit 1; }
+          else
+            echo "✅ 虚拟环境已存在"
           fi
 
           # 激活虚拟环境
-          source venv/bin/activate
+          echo "🔌 激活虚拟环境..."
+          source venv/bin/activate || { echo "❌ 虚拟环境激活失败"; exit 1; }
 
           # 更新依赖
-          pip install -r requirements.txt
+          echo "📦 安装/更新依赖..."
+          pip install -r requirements.txt || { echo "❌ 依赖安装失败"; exit 1; }
+
+          # 检查 .env 文件
+          echo "🔍 检查环境变量配置..."
+          if [ ! -f ".env" ]; then
+            echo "⚠️  警告：.env 文件不存在，AI 功能可能无法使用"
+          else
+            echo "✅ .env 文件存在"
+          fi
 
           # 检查 systemd 服务是否存在
+          echo "🔄 重启服务..."
           if systemctl list-unit-files | grep -q browsemind.service; then
-            echo "重启 systemd 服务..."
-            sudo systemctl restart browsemind
+            echo "   使用 systemd 重启..."
+            sudo systemctl restart browsemind || { echo "❌ 服务重启失败"; sudo journalctl -u browsemind -n 20 --no-pager; exit 1; }
             sleep 3
-            sudo systemctl status browsemind --no-pager
+            sudo systemctl status browsemind --no-pager || true
           else
-            echo "⚠️  systemd 服务不存在，尝试直接启动..."
+            echo "   ⚠️  systemd 服务不存在，使用直接启动..."
             # 杀死旧进程
             pkill -f "python.*main.py" || true
+            sleep 1
             # 后台启动服务
             nohup python main.py > /var/log/browsemind.log 2>&1 &
             sleep 3
-            echo "服务已启动，PID: $(pgrep -f 'python.*main.py')"
+            if pgrep -f "python.*main.py" > /dev/null; then
+              echo "   ✅ 服务已启动，PID: $(pgrep -f 'python.*main.py')"
+            else
+              echo "   ❌ 服务启动失败"
+              tail -n 20 /var/log/browsemind.log 2>/dev/null || echo "无日志文件"
+              exit 1
+            fi
           fi
 
+          echo ""
+          echo "=========================================="
           echo "✅ 部署完成！"
+          echo "=========================================="
 
     - name: Health Check
       run: |
@@ -88,6 +121,36 @@ jobs:
 
     - name: Notify Failure
       if: failure()
-      run: |
-        echo "❌ 部署失败！"
-        echo "请检查日志"
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SERVER_PORT || 22 }}
+        script: |
+          echo "❌ 部署失败！查看最近日志："
+          echo ""
+          echo "=== Git 状态 ==="
+          cd /var/www/browsemind
+          git status
+          echo ""
+          echo "=== 最近的 Git 日志 ==="
+          git log -1 --oneline
+          echo ""
+          echo "=== Python 版本 ==="
+          python3 --version
+          echo ""
+          echo "=== 虚拟环境状态 ==="
+          ls -la backend/venv 2>/dev/null || echo "虚拟环境不存在"
+          echo ""
+          echo "=== systemd 服务状态 ==="
+          sudo systemctl status browsemind --no-pager -l 2>/dev/null || echo "服务不存在"
+          echo ""
+          echo "=== 最近 20 条服务日志 ==="
+          sudo journalctl -u browsemind -n 20 --no-pager 2>/dev/null || echo "无法获取日志"
+          echo ""
+          echo "=== 进程状态 ==="
+          ps aux | grep python | grep -v grep || echo "无 Python 进程"
+          echo ""
+          echo "=== 端口占用 ==="
+          sudo netstat -tlnp | grep 8000 || echo "8000 端口未被占用"
