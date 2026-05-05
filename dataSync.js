@@ -130,8 +130,8 @@ class DataSync {
           title: record.title || '',
           domain: domain,
           category: category,
-          visit_time: record.visitTime, // 毫秒时间戳
-          duration: record.duration || 0,
+          visit_time: Math.floor(record.visitTime), // 转换为整数
+          duration: Math.floor(record.duration || 0), // 转换为整数
           date: record.date
         };
       });
