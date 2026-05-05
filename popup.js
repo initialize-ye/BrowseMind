@@ -7,6 +7,8 @@ let dataSync = new DataSync('http://localhost:8000');
 document.addEventListener('DOMContentLoaded', loadData);
 document.getElementById('refreshBtn').addEventListener('click', loadData);
 document.getElementById('syncBtn').addEventListener('click', syncToCloud);
+document.getElementById('aiAnalysisBtn').addEventListener('click', showAIAnalysis);
+document.getElementById('closeModal').addEventListener('click', closeModal);
 
 async function loadData() {
   const loading = document.getElementById('loading');
@@ -527,3 +529,92 @@ async function syncToCloud() {
     syncBtn.disabled = false;
   }
 }
+
+// 显示 AI 分析
+async function showAIAnalysis() {
+  const modal = document.getElementById('aiAnalysisModal');
+  const content = document.getElementById('aiAnalysisContent');
+
+  // 显示加载状态
+  modal.style.display = 'flex';
+  content.innerHTML = '<div class="ai-loading"><div class="spinner"></div><p>AI 正在分析中...</p></div>';
+
+  try {
+    // 检查服务器连接
+    const isConnected = await dataSync.checkConnection();
+    if (!isConnected) {
+      content.innerHTML = '<p style="color: #f56565; text-align: center;">❌ 无法连接到服务器<br>请确保后端服务已启动</p>';
+      return;
+    }
+
+    // 获取用户ID
+    await dataSync.initUserId();
+
+    // 调用 AI 分析接口
+    const response = await fetch(
+      `${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=7`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || '分析失败');
+    }
+
+    const analysis = await response.json();
+
+    // 显示分析结果
+    displayAIAnalysis(analysis);
+
+  } catch (error) {
+    console.error('AI 分析失败:', error);
+    content.innerHTML = `
+      <p style="color: #f56565; text-align: center;">
+        ❌ AI 分析失败<br>
+        ${error.message}<br><br>
+        ${error.message.includes('API') ? '请配置 AI_API_KEY 环境变量' : ''}
+      </p>
+    `;
+  }
+}
+
+// 显示 AI 分析结果
+function displayAIAnalysis(analysis) {
+  const content = document.getElementById('aiAnalysisContent');
+
+  const issuesHtml = analysis.issues.map(issue =>
+    `<li>• ${escapeHtml(issue)}</li>`
+  ).join('');
+
+  const suggestionsHtml = analysis.suggestions.map(suggestion =>
+    `<li>✓ ${escapeHtml(suggestion)}</li>`
+  ).join('');
+
+  content.innerHTML = `
+    <div class="ai-section">
+      <h3>📝 行为总结</h3>
+      <p>${escapeHtml(analysis.summary)}</p>
+    </div>
+
+    <div class="ai-section">
+      <h3>⚠️ 发现的问题</h3>
+      <ul>${issuesHtml}</ul>
+    </div>
+
+    <div class="ai-section">
+      <h3>💡 优化建议</h3>
+      <ul>${suggestionsHtml}</ul>
+    </div>
+  `;
+}
+
+// 关闭模态框
+function closeModal() {
+  document.getElementById('aiAnalysisModal').style.display = 'none';
+}
+
+// 点击模态框外部关闭
+document.getElementById('aiAnalysisModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeModal();
+  }
+});

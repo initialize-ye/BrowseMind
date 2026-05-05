@@ -77,6 +77,13 @@ class AIAnalysisResponse(BaseModel):
     suggestions: List[str]
 
 
+class AIAnalysisResponse(BaseModel):
+    """AI分析响应"""
+    summary: str
+    issues: List[str]
+    suggestions: List[str]
+
+
 class SuccessResponse(BaseModel):
     """成功响应"""
     success: bool

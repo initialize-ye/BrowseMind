@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List
 import json
+import os
 
 from database import init_db, get_db, BrowsingRecord, AnalysisReport
 from schemas import (
@@ -15,8 +16,10 @@ from schemas import (
     BrowsingRecordResponse,
     AnalysisResponse,
     CategoryStat,
-    SuccessResponse
+    SuccessResponse,
+    AIAnalysisResponse
 )
+from ai_analyzer import AIAnalyzer
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -302,6 +305,145 @@ async def get_user_stats(
             "records": total_records
         }
     }
+
+
+@app.post("/api/ai-analysis/{user_id}", response_model=AIAnalysisResponse)
+async def get_ai_analysis(
+    user_id: str,
+    days: int = 7,
+    db: Session = Depends(get_db)
+):
+    """
+    获取 AI 智能分析
+
+    - user_id: 用户ID
+    - days: 分析最近N天的数据（默认7天）
+    """
+    # 检查 API 密钥
+    api_key = os.getenv("AI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="AI API 密钥未配置，请设置环境变量 AI_API_KEY"
+        )
+
+    # 获取分析数据
+    start_date = datetime.now() - timedelta(days=days)
+    records = db.query(BrowsingRecord).filter(
+        BrowsingRecord.user_id == user_id,
+        BrowsingRecord.visit_time >= start_date
+    ).all()
+
+    if not records:
+        raise HTTPException(status_code=404, detail="未找到浏览数据")
+
+    # 统计分析
+    total_duration = sum(r.duration for r in records)
+
+    # 按分类统计
+    category_stats_dict = {}
+    for record in records:
+        category = record.category or 'other'
+        if category not in category_stats_dict:
+            category_stats_dict[category] = {
+                'visits': 0,
+                'total_duration': 0,
+                'domains': set()
+            }
+        category_stats_dict[category]['visits'] += 1
+        category_stats_dict[category]['total_duration'] += record.duration
+        if record.domain:
+            category_stats_dict[category]['domains'].add(record.domain)
+
+    # 转换为列表
+    category_stats = []
+    for category, stats in category_stats_dict.items():
+        percentage = (stats['total_duration'] / total_duration * 100) if total_duration > 0 else 0
+        category_stats.append({
+            'category': category,
+            'visits': stats['visits'],
+            'total_duration': stats['total_duration'],
+            'percentage': round(percentage, 1),
+            'unique_domains': len(stats['domains'])
+        })
+
+    category_stats.sort(key=lambda x: x['total_duration'], reverse=True)
+
+    # 统计热门域名
+    domain_stats = {}
+    for record in records:
+        if record.domain:
+            if record.domain not in domain_stats:
+                domain_stats[record.domain] = {
+                    'domain': record.domain,
+                    'visits': 0,
+                    'total_duration': 0
+                }
+            domain_stats[record.domain]['visits'] += 1
+            domain_stats[record.domain]['total_duration'] += record.duration
+
+    top_domains = sorted(
+        domain_stats.values(),
+        key=lambda x: x['total_duration'],
+        reverse=True
+    )[:10]
+
+    # 调用 AI 分析
+    try:
+        provider = os.getenv("AI_PROVIDER", "deepseek")
+        analyzer = AIAnalyzer(api_key=api_key, provider=provider)
+
+        result = analyzer.analyze_browsing_behavior(
+            category_stats=category_stats,
+            total_duration=total_duration,
+            top_domains=top_domains,
+            date_range=f"{days}天"
+        )
+
+        # 保存分析报告到数据库
+        report = AnalysisReport(
+            user_id=user_id,
+            report_date=datetime.now().date().isoformat(),
+            report_type='ai_analysis',
+            total_visits=len(records),
+            total_duration=total_duration,
+            unique_domains=len(set(r.domain for r in records if r.domain)),
+            category_stats=json.dumps(category_stats, ensure_ascii=False),
+            ai_summary=result['summary'],
+            ai_issues=json.dumps(result['issues'], ensure_ascii=False),
+            ai_suggestions=json.dumps(result['suggestions'], ensure_ascii=False)
+        )
+
+        db.add(report)
+        db.commit()
+
+        return AIAnalysisResponse(
+            summary=result['summary'],
+            issues=result['issues'],
+            suggestions=result['suggestions']
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI 分析失败: {str(e)}")
+
+
+@app.get("/api/reports/{user_id}")
+async def get_user_reports(
+    user_id: str,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    获取用户的历史分析报告
+
+    - user_id: 用户ID
+    - limit: 返回数量（默认10条）
+    """
+    reports = db.query(AnalysisReport).filter(
+        AnalysisReport.user_id == user_id
+    ).order_by(AnalysisReport.created_at.desc()).limit(limit).all()
+
+    return [report.to_dict() for report in reports]
 
 
 if __name__ == "__main__":
