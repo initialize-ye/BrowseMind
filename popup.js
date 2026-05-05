@@ -1,0 +1,529 @@
+// BrowseMind Popup 脚本 - 展示浏览数据统计（图表增强版）
+
+let currentChart = null;
+let chartData = null;
+let dataSync = new DataSync('http://localhost:8000');
+
+document.addEventListener('DOMContentLoaded', loadData);
+document.getElementById('refreshBtn').addEventListener('click', loadData);
+document.getElementById('syncBtn').addEventListener('click', syncToCloud);
+
+async function loadData() {
+  const loading = document.getElementById('loading');
+  const content = document.getElementById('content');
+  const emptyState = document.getElementById('emptyState');
+
+  loading.style.display = 'block';
+  content.style.display = 'none';
+  emptyState.style.display = 'none';
+
+  try {
+    // 从 storage 获取数据
+    const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+
+    if (browsingData.length === 0) {
+      loading.style.display = 'none';
+      emptyState.style.display = 'block';
+      return;
+    }
+
+    // 数据处理和分类
+    const processor = new DataProcessor(browsingData);
+    const cleanedData = processor.clean().getData();
+
+    const classifier = new WebsiteClassifier();
+    const classifiedData = classifier.classifyBatch(cleanedData);
+
+    // 统计分析
+    const analyzer = new StatisticsAnalyzer(classifiedData);
+    const categoryStats = analyzer.analyzeByCategory();
+    const todayStats = analyzer.getTodayStats();
+    const hourlyDist = analyzer.getHourlyDistribution();
+    const dailyTrend = calculateDailyTrend(classifiedData);
+
+    // 保存数据供图表使用
+    chartData = {
+      categoryStats,
+      todayStats,
+      hourlyDist,
+      dailyTrend,
+      classifier
+    };
+
+    // 计算基础统计
+    const stats = calculateStats(browsingData);
+
+    // 更新UI
+    updateUI(stats, browsingData, categoryStats, todayStats, classifier);
+
+    // 绘制默认图表（饼图）
+    drawPieChart();
+
+    loading.style.display = 'none';
+    content.style.display = 'block';
+  } catch (error) {
+    console.error('加载数据失败:', error);
+    loading.style.display = 'none';
+    emptyState.style.display = 'block';
+  }
+}
+
+function calculateStats(data) {
+  const today = new Date().toISOString().split('T')[0];
+
+  // 今日数据
+  const todayData = data.filter(r => r.date === today);
+  const todayVisits = todayData.length;
+  const todayDuration = todayData.reduce((sum, r) => sum + (r.duration || 0), 0);
+
+  // 7天数据
+  const totalVisits = data.length;
+  const uniqueSites = new Set(data.map(r => {
+    try {
+      return new URL(r.url).hostname;
+    } catch {
+      return r.url;
+    }
+  })).size;
+
+  return {
+    todayVisits,
+    todayDuration,
+    totalVisits,
+    uniqueSites
+  };
+}
+
+// 计算每日趋势
+function calculateDailyTrend(data) {
+  const dailyStats = {};
+
+  data.forEach(record => {
+    const date = record.date;
+    if (!dailyStats[date]) {
+      dailyStats[date] = {
+        date,
+        duration: 0,
+        visits: 0
+      };
+    }
+    dailyStats[date].duration += record.duration || 0;
+    dailyStats[date].visits++;
+  });
+
+  // 转换为数组并排序
+  return Object.values(dailyStats)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-7); // 最近7天
+}
+
+function updateUI(stats, data, categoryStats, todayStats, classifier) {
+  // 更新统计数字
+  document.getElementById('todayVisits').textContent = stats.todayVisits;
+  document.getElementById('todayDuration').textContent = formatDuration(stats.todayDuration);
+  document.getElementById('totalVisits').textContent = stats.totalVisits;
+  document.getElementById('uniqueSites').textContent = stats.uniqueSites;
+
+  // 更新分类统计（7天）
+  updateCategoryStats(categoryStats, classifier);
+
+  // 更新今日分类统计
+  updateTodayCategoryStats(todayStats, classifier);
+
+  // 显示最近访问记录（最新10条）
+  const recentRecords = data
+    .sort((a, b) => b.visitTime - a.visitTime)
+    .slice(0, 10);
+
+  const recordsContainer = document.getElementById('recentRecords');
+  recordsContainer.innerHTML = recentRecords.map(record => {
+    const domain = extractDomain(record.url);
+    const time = formatTime(record.visitTime);
+    const duration = record.duration > 0 ? ` · ${formatDuration(record.duration)}` : '';
+
+    return `
+      <div class="record-item">
+        <div class="record-title">${escapeHtml(record.title || domain)}</div>
+        <div class="record-meta">${domain} · ${time}${duration}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 更新分类统计（7天）
+function updateCategoryStats(categoryStats, classifier) {
+  const container = document.getElementById('categoryStats');
+  const categories = classifier.getAllCategories();
+
+  container.innerHTML = categoryStats.map(stat => {
+    const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦' };
+    const percentage = parseFloat(stat.percentage);
+
+    return `
+      <div class="category-item">
+        <div class="category-header">
+          <span class="category-icon">${categoryInfo.icon}</span>
+          <span class="category-name">${categoryInfo.name}</span>
+          <span class="category-percentage">${percentage}%</span>
+        </div>
+        <div class="category-bar">
+          <div class="category-bar-fill" style="width: ${percentage}%"></div>
+        </div>
+        <div class="category-meta">
+          ${formatDuration(stat.totalDuration)} · ${stat.visits}次访问
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 更新今日分类统计
+function updateTodayCategoryStats(todayStats, classifier) {
+  const container = document.getElementById('todayCategoryStats');
+  const categories = classifier.getAllCategories();
+
+  if (todayStats.length === 0) {
+    container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">今日暂无数据</div>';
+    return;
+  }
+
+  container.innerHTML = todayStats.slice(0, 5).map(stat => {
+    const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦' };
+    const percentage = parseFloat(stat.percentage);
+
+    return `
+      <div class="category-item-compact">
+        <span class="category-icon">${categoryInfo.icon}</span>
+        <span class="category-name">${categoryInfo.name}</span>
+        <span class="category-value">${percentage}%</span>
+      </div>
+    `;
+  }).join('');
+}
+
+// 切换图表
+function switchChart(type) {
+  // 更新按钮状态
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+
+  // 绘制对应图表
+  if (type === 'pie') {
+    drawPieChart();
+  } else if (type === 'bar') {
+    drawBarChart();
+  } else if (type === 'line') {
+    drawLineChart();
+  }
+}
+
+// 绘制饼图 - 分类占比
+function drawPieChart() {
+  if (!chartData) return;
+
+  const { categoryStats, classifier } = chartData;
+  const categories = classifier.getAllCategories();
+
+  // 准备数据
+  const labels = categoryStats.map(stat => {
+    const info = categories[stat.category] || { name: '其他', icon: '📦' };
+    return `${info.icon} ${info.name}`;
+  });
+
+  const data = categoryStats.map(stat => stat.totalDuration / 60); // 转换为分钟
+
+  const colors = [
+    '#667eea', // 紫色
+    '#764ba2', // 深紫
+    '#f093fb', // 粉紫
+    '#4facfe', // 蓝色
+    '#43e97b', // 绿色
+    '#fa709a'  // 粉色
+  ];
+
+  destroyChart();
+
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  currentChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: colors,
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            padding: 10,
+            font: { size: 11 },
+            usePointStyle: true
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const minutes = Math.round(context.parsed);
+              return ` ${formatDuration(minutes * 60)}`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// 绘制柱状图 - 时间分布
+function drawBarChart() {
+  if (!chartData) return;
+
+  const { hourlyDist } = chartData;
+
+  // 准备数据（只显示有数据的小时）
+  const labels = hourlyDist
+    .filter(h => h.duration > 0)
+    .map(h => `${h.hour}:00`);
+
+  const data = hourlyDist
+    .filter(h => h.duration > 0)
+    .map(h => h.duration / 60); // 转换为分钟
+
+  destroyChart();
+
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  currentChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: '浏览时长（分钟）',
+        data: data,
+        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return ` ${formatDuration(context.parsed.y * 60)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            font: { size: 10 }
+          }
+        },
+        x: {
+          ticks: {
+            font: { size: 10 }
+          }
+        }
+      }
+    }
+  });
+}
+
+// 绘制折线图 - 每日趋势
+function drawLineChart() {
+  if (!chartData) return;
+
+  const { dailyTrend } = chartData;
+
+  // 准备数据
+  const labels = dailyTrend.map(d => {
+    const date = new Date(d.date);
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  });
+
+  const durationData = dailyTrend.map(d => d.duration / 60); // 分钟
+  const visitsData = dailyTrend.map(d => d.visits);
+
+  destroyChart();
+
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  currentChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: '浏览时长（分钟）',
+          data: durationData,
+          borderColor: '#667eea',
+          backgroundColor: 'rgba(102, 126, 234, 0.1)',
+          tension: 0.4,
+          fill: true,
+          yAxisID: 'y'
+        },
+        {
+          label: '访问次数',
+          data: visitsData,
+          borderColor: '#764ba2',
+          backgroundColor: 'rgba(118, 75, 162, 0.1)',
+          tension: 0.4,
+          fill: true,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            padding: 8,
+            font: { size: 10 },
+            usePointStyle: true
+          }
+        }
+      },
+      scales: {
+        y: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          beginAtZero: true,
+          ticks: { font: { size: 10 } }
+        },
+        y1: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+          beginAtZero: true,
+          grid: { drawOnChartArea: false },
+          ticks: { font: { size: 10 } }
+        },
+        x: {
+          ticks: { font: { size: 10 } }
+        }
+      }
+    }
+  });
+}
+
+// 销毁当前图表
+function destroyChart() {
+  if (currentChart) {
+    currentChart.destroy();
+    currentChart = null;
+  }
+}
+
+// 提取域名
+function extractDomain(url) {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname.replace('www.', '');
+  } catch {
+    return url;
+  }
+}
+
+// 格式化时长
+function formatDuration(seconds) {
+  if (seconds < 60) return `${seconds}秒`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}分钟`;
+  const hours = Math.floor(minutes / 60);
+  const remainMinutes = minutes % 60;
+  return `${hours}小时${remainMinutes}分钟`;
+}
+
+// 格式化时间
+function formatTime(timestamp) {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now - date;
+
+  // 今天
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // 昨天
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) {
+    return '昨天 ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // 7天内
+  if (diff < 7 * 24 * 60 * 60 * 1000) {
+    const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    return days[date.getDay()] + ' ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // 更早
+  return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+}
+
+// HTML转义
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// 同步到云端
+async function syncToCloud() {
+  const syncBtn = document.getElementById('syncBtn');
+  const originalText = syncBtn.textContent;
+
+  try {
+    syncBtn.textContent = '⏳ 同步中...';
+    syncBtn.disabled = true;
+
+    // 检查服务器连接
+    const isConnected = await dataSync.checkConnection();
+    if (!isConnected) {
+      alert('❌ 无法连接到服务器\n请确保后端服务已启动：\ncd backend && python main.py');
+      return;
+    }
+
+    // 同步数据
+    const result = await dataSync.syncLocalData();
+
+    if (result.success) {
+      syncBtn.textContent = '✅ 同步成功';
+      setTimeout(() => {
+        syncBtn.textContent = originalText;
+      }, 2000);
+
+      alert(`✅ 同步成功\n${result.message}`);
+    }
+
+  } catch (error) {
+    console.error('同步失败:', error);
+    syncBtn.textContent = '❌ 同步失败';
+    setTimeout(() => {
+      syncBtn.textContent = originalText;
+    }, 2000);
+
+    alert(`❌ 同步失败\n${error.message}\n\n请确保后端服务已启动`);
+  } finally {
+    syncBtn.disabled = false;
+  }
+}

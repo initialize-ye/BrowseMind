@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrowseMind 分类测试</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+
+    h1 {
+      color: #667eea;
+      margin-bottom: 30px;
+    }
+
+    .test-section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    h2 {
+      font-size: 18px;
+      margin-bottom: 16px;
+      color: #333;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    th {
+      background: #f7f9fc;
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    .category-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .category-learning { background: #e3f2fd; color: #1976d2; }
+    .category-coding { background: #f3e5f5; color: #7b1fa2; }
+    .category-entertainment { background: #fff3e0; color: #f57c00; }
+    .category-social { background: #e8f5e9; color: #388e3c; }
+    .category-tools { background: #fce4ec; color: #c2185b; }
+    .category-other { background: #f5f5f5; color: #757575; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .stat-card {
+      background: #f7f9fc;
+      padding: 16px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #666;
+    }
+
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 12px;
+    }
+
+    button:hover {
+      background: #5568d3;
+    }
+
+    pre {
+      background: #f7f9fc;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧠 BrowseMind 数据处理测试</h1>
+
+  <div class="test-section">
+    <h2>测试数据生成</h2>
+    <button onclick="generateTestData()">生成测试数据</button>
+    <button onclick="clearTestData()">清除测试数据</button>
+    <button onclick="runTests()">运行分类测试</button>
+  </div>
+
+  <div class="test-section" id="chartSection" style="display: none;">
+    <h2>可视化图表</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+      <div>
+        <h3 style="font-size: 14px; margin-bottom: 12px;">分类占比（饼图）</h3>
+        <canvas id="pieChart" style="max-height: 250px;"></canvas>
+      </div>
+      <div>
+        <h3 style="font-size: 14px; margin-bottom: 12px;">时间分布（柱状图）</h3>
+        <canvas id="barChart" style="max-height: 250px;"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="test-section" id="testResults" style="display: none;">
+    <h2>分类结果</h2>
+    <div class="stats-grid" id="categoryStatsGrid"></div>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>域名</th>
+          <th>标题</th>
+          <th>分类</th>
+          <th>访问次数</th>
+          <th>总时长</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+
+  <div class="test-section" id="rawData" style="display: none;">
+    <h2>原始数据</h2>
+    <pre id="rawDataContent"></pre>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="dataProcessor.js"></script>
+  <script>
+    // 生成测试数据
+    function generateTestData() {
+      const testSites = [
+        // 学习类
+        { domain: 'stackoverflow.com', title: 'How to use async/await in JavaScript', category: 'learning' },
+        { domain: 'zhihu.com', title: '如何学习前端开发', category: 'learning' },
+        { domain: 'medium.com', title: 'Understanding React Hooks', category: 'learning' },
+        { domain: 'csdn.net', title: 'Python 数据分析教程', category: 'learning' },
+
+        // 编程类
+        { domain: 'github.com', title: 'facebook/react: A JavaScript library', category: 'coding' },
+        { domain: 'leetcode.com', title: 'Two Sum - LeetCode', category: 'coding' },
+        { domain: 'gitlab.com', title: 'My Project Repository', category: 'coding' },
+
+        // 娱乐类
+        { domain: 'youtube.com', title: 'Funny Cat Videos', category: 'entertainment' },
+        { domain: 'bilibili.com', title: '【游戏】最新游戏实况', category: 'entertainment' },
+        { domain: 'netflix.com', title: 'Watch Movies Online', category: 'entertainment' },
+
+        // 社交类
+        { domain: 'twitter.com', title: 'Twitter / Home', category: 'social' },
+        { domain: 'discord.com', title: 'Discord | Your Place to Talk', category: 'social' },
+        { domain: 'weibo.com', title: '微博 - 随时随地发现新鲜事', category: 'social' },
+
+        // 工具类
+        { domain: 'google.com', title: 'Google Search', category: 'tools' },
+        { domain: 'notion.so', title: 'My Workspace - Notion', category: 'tools' },
+        { domain: 'gmail.com', title: 'Inbox - Gmail', category: 'tools' },
+
+        // 其他
+        { domain: 'example.com', title: 'Example Domain', category: 'other' }
+      ];
+
+      const now = Date.now();
+      const testData = [];
+
+      testSites.forEach((site, index) => {
+        // 每个网站生成1-5次访问记录
+        const visits = Math.floor(Math.random() * 5) + 1;
+
+        for (let i = 0; i < visits; i++) {
+          const visitTime = now - Math.random() * 7 * 24 * 60 * 60 * 1000; // 7天内随机时间
+          const duration = Math.floor(Math.random() * 600) + 30; // 30-630秒
+
+          testData.push({
+            url: `https://${site.domain}/page${i}`,
+            title: site.title,
+            visitTime: visitTime,
+            duration: duration,
+            date: new Date(visitTime).toISOString().split('T')[0]
+          });
+        }
+      });
+
+      // 保存到 localStorage（模拟 chrome.storage）
+      localStorage.setItem('testBrowsingData', JSON.stringify(testData));
+
+      alert(`已生成 ${testData.length} 条测试数据`);
+      document.getElementById('rawData').style.display = 'block';
+      document.getElementById('rawDataContent').textContent = JSON.stringify(testData, null, 2);
+    }
+
+    // 清除测试数据
+    function clearTestData() {
+      localStorage.removeItem('testBrowsingData');
+      document.getElementById('testResults').style.display = 'none';
+      document.getElementById('chartSection').style.display = 'none';
+      document.getElementById('rawData').style.display = 'none';
+      alert('测试数据已清除');
+    }
+
+    // 运行测试
+    function runTests() {
+      const testData = JSON.parse(localStorage.getItem('testBrowsingData') || '[]');
+
+      if (testData.length === 0) {
+        alert('请先生成测试数据');
+        return;
+      }
+
+      // 数据处理
+      const processor = new DataProcessor(testData);
+      const cleanedData = processor.clean().getData();
+
+      // 分类
+      const classifier = new WebsiteClassifier();
+      const classifiedData = classifier.classifyBatch(cleanedData);
+
+      // 统计
+      const analyzer = new StatisticsAnalyzer(classifiedData);
+      const categoryStats = analyzer.analyzeByCategory();
+      const domainStats = processor.groupByDomain();
+      const hourlyDist = analyzer.getHourlyDistribution();
+
+      // 显示结果
+      displayResults(categoryStats, domainStats, classifier);
+
+      // 绘制图表
+      drawCharts(categoryStats, hourlyDist, classifier);
+    }
+
+    // 显示结果
+    function displayResults(categoryStats, domainStats, classifier) {
+      document.getElementById('testResults').style.display = 'block';
+
+      // 分类统计卡片
+      const statsGrid = document.getElementById('categoryStatsGrid');
+      const categories = classifier.getAllCategories();
+
+      statsGrid.innerHTML = categoryStats.map(stat => {
+        const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦' };
+        return `
+          <div class="stat-card">
+            <div style="font-size: 32px; margin-bottom: 8px;">${categoryInfo.icon}</div>
+            <div class="stat-value">${stat.percentage}%</div>
+            <div class="stat-label">${categoryInfo.name}</div>
+            <div style="font-size: 11px; color: #999; margin-top: 4px;">
+              ${stat.visits}次 · ${formatDuration(stat.totalDuration)}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // 域名统计表格
+      const tbody = document.getElementById('resultsBody');
+      tbody.innerHTML = domainStats.slice(0, 20).map(stat => {
+        const category = classifier.classify(stat.domain, stat.titles[0]);
+        const categoryInfo = categories[category] || { name: '其他', icon: '📦' };
+
+        return `
+          <tr>
+            <td>${stat.domain}</td>
+            <td>${stat.titles[0] || '-'}</td>
+            <td>
+              <span class="category-badge category-${category}">
+                ${categoryInfo.icon} ${categoryInfo.name}
+              </span>
+            </td>
+            <td>${stat.visits}</td>
+            <td>${formatDuration(stat.totalDuration)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 绘制图表
+    let pieChart = null;
+    let barChart = null;
+
+    function drawCharts(categoryStats, hourlyDist, classifier) {
+      document.getElementById('chartSection').style.display = 'block';
+
+      const categories = classifier.getAllCategories();
+
+      // 饼图数据
+      const pieLabels = categoryStats.map(stat => {
+        const info = categories[stat.category] || { name: '其他', icon: '📦' };
+        return `${info.icon} ${info.name}`;
+      });
+
+      const pieData = categoryStats.map(stat => stat.totalDuration / 60);
+
+      const colors = [
+        '#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a'
+      ];
+
+      // 销毁旧图表
+      if (pieChart) pieChart.destroy();
+      if (barChart) barChart.destroy();
+
+      // 绘制饼图
+      const pieCtx = document.getElementById('pieChart').getContext('2d');
+      pieChart = new Chart(pieCtx, {
+        type: 'doughnut',
+        data: {
+          labels: pieLabels,
+          datasets: [{
+            data: pieData,
+            backgroundColor: colors,
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                padding: 10,
+                font: { size: 11 },
+                usePointStyle: true
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const minutes = Math.round(context.parsed);
+                  return ` ${formatDuration(minutes * 60)} (${context.label})`;
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // 柱状图数据
+      const barLabels = hourlyDist
+        .filter(h => h.duration > 0)
+        .map(h => `${h.hour}:00`);
+
+      const barData = hourlyDist
+        .filter(h => h.duration > 0)
+        .map(h => h.duration / 60);
+
+      // 绘制柱状图
+      const barCtx = document.getElementById('barChart').getContext('2d');
+      barChart = new Chart(barCtx, {
+        type: 'bar',
+        data: {
+          labels: barLabels,
+          datasets: [{
+            label: '浏览时长（分钟）',
+            data: barData,
+            backgroundColor: 'rgba(102, 126, 234, 0.8)',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return ` ${formatDuration(context.parsed.y * 60)}`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { font: { size: 10 } }
+            },
+            x: {
+              ticks: { font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    // 格式化时长
+    function formatDuration(seconds) {
+      if (seconds < 60) return `${seconds}秒`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}分钟`;
+      const hours = Math.floor(minutes / 60);
+      const remainMinutes = minutes % 60;
+      return `${hours}小时${remainMinutes}分钟`;
+    }
+  </script>
+</body>
+</html>

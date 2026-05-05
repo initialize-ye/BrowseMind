@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrowseMind</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 400px;
+      min-height: 500px;
+      max-height: 600px;
+      overflow-y: auto;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #333;
+    }
+
+    .container {
+      padding: 20px;
+    }
+
+    header {
+      text-align: center;
+      color: white;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #667eea;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 12px;
+      background: #f7f9fc;
+      border-radius: 8px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: white;
+    }
+
+    .spinner {
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top: 3px solid white;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px;
+      color: white;
+    }
+
+    .empty-state p {
+      margin-top: 10px;
+      opacity: 0.9;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: white;
+      color: #667eea;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .record-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .record-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 12px;
+    }
+
+    .record-item:last-child {
+      border-bottom: none;
+    }
+
+    .record-title {
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .record-meta {
+      color: #999;
+      font-size: 11px;
+    }
+
+    .category-item {
+      margin-bottom: 16px;
+    }
+
+    .category-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .category-icon {
+      font-size: 18px;
+    }
+
+    .category-name {
+      flex: 1;
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    .category-percentage {
+      font-weight: 600;
+      color: #667eea;
+      font-size: 14px;
+    }
+
+    .category-bar {
+      height: 6px;
+      background: #f0f0f0;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+
+    .category-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .category-meta {
+      font-size: 11px;
+      color: #999;
+    }
+
+    .category-item-compact {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .category-item-compact:last-child {
+      border-bottom: none;
+    }
+
+    .category-item-compact .category-icon {
+      font-size: 16px;
+    }
+
+    .category-item-compact .category-name {
+      flex: 1;
+      font-size: 12px;
+    }
+
+    .category-item-compact .category-value {
+      font-weight: 600;
+      color: #667eea;
+      font-size: 13px;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 200px;
+      margin: 16px 0;
+    }
+
+    .chart-container canvas {
+      max-height: 200px;
+    }
+
+    .tab-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px;
+      background: #f7f9fc;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .tab-btn:hover {
+      background: #e8ecf7;
+    }
+
+    .tab-btn.active:hover {
+      background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🧠 BrowseMind</h1>
+      <p class="subtitle">浏览行为智能分析</p>
+    </header>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>正在加载数据...</p>
+    </div>
+
+    <div id="content" style="display: none;">
+      <div class="card">
+        <div class="card-title">📊 今日统计</div>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="todayVisits">0</div>
+            <div class="stat-label">访问次数</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="todayDuration">0分钟</div>
+            <div class="stat-label">浏览时长</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📈 可视化分析</div>
+        <div class="tab-buttons">
+          <button class="tab-btn active" onclick="switchChart('pie')">分类占比</button>
+          <button class="tab-btn" onclick="switchChart('bar')">时间分布</button>
+          <button class="tab-btn" onclick="switchChart('line')">每日趋势</button>
+        </div>
+        <div class="chart-container">
+          <canvas id="mainChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎯 今日分类</div>
+        <div id="todayCategoryStats"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📊 7天分类占比</div>
+        <div id="categoryStats"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📈 7天统计</div>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="totalVisits">0</div>
+            <div class="stat-label">总访问</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="uniqueSites">0</div>
+            <div class="stat-label">独立网站</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔥 最近访问</div>
+        <div class="record-list" id="recentRecords"></div>
+      </div>
+
+      <button id="refreshBtn">🔄 刷新数据</button>
+      <button id="syncBtn" style="margin-top: 8px; background: #43e97b;">☁️ 同步到云端</button>
+    </div>
+
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <div style="font-size: 48px;">📭</div>
+      <p>暂无浏览数据</p>
+      <p style="font-size: 12px; margin-top: 8px;">开始浏览网页后数据将自动记录</p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="dataProcessor.js"></script>
+  <script src="dataSync.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
