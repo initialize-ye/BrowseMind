@@ -37,6 +37,15 @@
 - CORS 跨域支持
 - 数据同步功能
 
+### ✅ 第五阶段：AI 智能分析
+- AI 分析模块（支持 OpenAI 和 DeepSeek）
+- 浏览行为智能分析
+- 个性化问题识别
+- 优化建议生成
+- 历史分析报告存储
+- 降级策略（规则分析）
+- AI 分析模态框 UI
+
 ### ✅ 部署方案
 - Ubuntu 服务器部署指南
 - 一键部署脚本
@@ -56,6 +65,7 @@ BrowseMind/
 │   ├── main.py                 # FastAPI 应用
 │   ├── database.py             # 数据库模型
 │   ├── schemas.py              # 数据验证
+│   ├── ai_analyzer.py          # AI 分析模块
 │   ├── requirements.txt        # Python 依赖
 │   ├── deploy.sh              # 部署脚本
 │   ├── start.sh / start.bat   # 启动脚本
@@ -79,7 +89,9 @@ BrowseMind/
 ├── DEPLOY.md                  # 部署指南（详细）
 ├── DEPLOY_QUICK.md            # 部署指南（快速）
 ├── GITHUB_ACTIONS.md          # GitHub Actions 指南
-└── GITHUB_ACTIONS_QUICK.md    # GitHub Actions 快速指南
+├── GITHUB_ACTIONS_QUICK.md    # GitHub Actions 快速指南
+├── AI_SETUP.md                # AI 配置指南
+└── PROJECT_SUMMARY.md         # 项目总结（本文件）
 ```
 
 ## 🚀 快速开始
@@ -137,6 +149,7 @@ sudo bash deploy.sh
 - Pydantic 2.5.0
 - Uvicorn + Gunicorn
 - SQLite
+- OpenAI API (AI 分析)
 
 ### 部署
 - Ubuntu Server
@@ -172,6 +185,7 @@ sudo bash deploy.sh
 - 跨设备同步
 - 数据持久化
 - 自动备份
+- AI 智能分析
 
 ## 📈 性能指标
 
@@ -199,6 +213,8 @@ sudo bash deploy.sh
 | `/api/records/{user_id}` | GET | 获取记录 |
 | `/api/analysis/{user_id}` | GET | 获取分析 |
 | `/api/stats/{user_id}` | GET | 获取统计 |
+| `/api/ai-analysis/{user_id}` | POST | AI 智能分析 |
+| `/api/reports/{user_id}` | GET | 历史报告 |
 | `/api/records/{user_id}` | DELETE | 删除记录 |
 
 API 文档：http://localhost:8000/docs
@@ -215,15 +231,9 @@ API 文档：http://localhost:8000/docs
 - [ ] 隐身模式下无法采集数据（Chrome 限制）
 - [ ] 后台标签页不计时（设计如此）
 - [ ] 需要手动点击同步（可改为自动）
+- [ ] AI 分析需要配置 API 密钥（见 AI_SETUP.md）
 
 ## 🔮 下一步计划
-
-### ⏳ 第五阶段：AI 分析
-- 集成 OpenAI/DeepSeek API
-- 生成行为总结
-- 识别问题行为
-- 提供优化建议
-- 生成每日/每周报告
 
 ### ⏳ 第六阶段：高级功能
 - 注意力曲线分析
@@ -268,6 +278,6 @@ MIT License
 
 ---
 
-**当前版本**：v1.0.0（第四阶段完成）
+**当前版本**：v1.1.0（第五阶段完成 - AI 分析）
 
-**下一版本**：v1.1.0（第五阶段：AI 分析）
+**下一版本**：v1.2.0（第六阶段：高级功能）
