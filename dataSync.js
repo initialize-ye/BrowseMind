@@ -29,19 +29,29 @@ class DataSync {
     await this.initUserId();
 
     try {
+      const payload = {
+        user_id: this.userId,
+        records: records
+      };
+
+      console.log('准备上传数据:', {
+        user_id: this.userId,
+        records_count: records.length,
+        sample_record: records[0]
+      });
+
       const response = await fetch(`${this.apiBaseUrl}/api/upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          user_id: this.userId,
-          records: records
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        throw new Error(`上传失败: ${response.status}`);
+        const errorText = await response.text();
+        console.error('上传失败详情:', errorText);
+        throw new Error(`上传失败: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
@@ -107,16 +117,24 @@ class DataSync {
         return { success: true, message: '没有需要同步的数据' };
       }
 
-      // 转换数据格式
-      const records = browsingData.map(record => ({
-        url: record.url,
-        title: record.title,
-        domain: this.extractDomain(record.url),
-        category: record.category || null,
-        visit_time: record.visitTime,
-        duration: record.duration || 0,
-        date: record.date
-      }));
+      // 初始化分类器
+      const classifier = new WebsiteClassifier();
+
+      // 转换数据格式并分类
+      const records = browsingData.map(record => {
+        const domain = this.extractDomain(record.url);
+        const category = record.category || classifier.classify(record.url);
+
+        return {
+          url: record.url,
+          title: record.title || '',
+          domain: domain,
+          category: category,
+          visit_time: record.visitTime, // 毫秒时间戳
+          duration: record.duration || 0,
+          date: record.date
+        };
+      });
 
       // 上传到服务器
       const result = await this.uploadData(records);
