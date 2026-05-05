@@ -23,6 +23,7 @@ from schemas import (
     AIAnalysisResponse
 )
 from ai_analyzer import AIAnalyzer
+from advanced_analyzer import AdvancedAnalyzer
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -447,6 +448,55 @@ async def get_user_reports(
     ).order_by(AnalysisReport.created_at.desc()).limit(limit).all()
 
     return [report.to_dict() for report in reports]
+
+
+@app.get("/api/advanced-analysis/{user_id}")
+async def get_advanced_analysis(
+    user_id: str,
+    days: int = 7,
+    blackhole_threshold: int = 30,
+    db: Session = Depends(get_db)
+):
+    """
+    获取高级分析（时间黑洞 + 注意力曲线）
+
+    - user_id: 用户ID
+    - days: 分析最近N天的数据（默认7天）
+    - blackhole_threshold: 时间黑洞阈值（分钟，默认30）
+    """
+    start_date = datetime.now() - timedelta(days=days)
+
+    # 获取记录
+    records = db.query(BrowsingRecord).filter(
+        BrowsingRecord.user_id == user_id,
+        BrowsingRecord.visit_time >= start_date
+    ).all()
+
+    if not records:
+        raise HTTPException(status_code=404, detail="未找到浏览数据")
+
+    # 转换为字典格式
+    records_data = [{
+        'url': r.url,
+        'title': r.title,
+        'domain': r.domain,
+        'category': r.category,
+        'visit_time': r.visit_time.isoformat(),
+        'duration': r.duration,
+        'date': r.date
+    } for r in records]
+
+    # 执行高级分析
+    analyzer = AdvancedAnalyzer(blackhole_threshold=blackhole_threshold)
+    result = analyzer.analyze_all(records_data)
+
+    return {
+        'user_id': user_id,
+        'date_range': f'{days}天',
+        'blackhole_threshold': blackhole_threshold,
+        'blackholes': result['blackholes'],
+        'attention_curve': result['attention_curve']
+    }
 
 
 if __name__ == "__main__":

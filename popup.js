@@ -2,11 +2,13 @@
 
 let currentChart = null;
 let chartData = null;
+let attentionChart = null;
 let dataSync = new DataSync('http://localhost:8000');
 
 document.addEventListener('DOMContentLoaded', loadData);
 document.getElementById('refreshBtn').addEventListener('click', loadData);
 document.getElementById('syncBtn').addEventListener('click', syncToCloud);
+document.getElementById('advancedAnalysisBtn').addEventListener('click', showAdvancedAnalysis);
 document.getElementById('aiAnalysisBtn').addEventListener('click', showAIAnalysis);
 document.getElementById('closeModal').addEventListener('click', closeModal);
 
@@ -618,3 +620,190 @@ document.getElementById('aiAnalysisModal').addEventListener('click', function(e)
     closeModal();
   }
 });
+
+// 显示高级分析
+async function showAdvancedAnalysis() {
+  const advancedBtn = document.getElementById('advancedAnalysisBtn');
+  const originalText = advancedBtn.textContent;
+
+  try {
+    advancedBtn.textContent = '⏳ 分析中...';
+    advancedBtn.disabled = true;
+
+    // 检查服务器连接
+    const isConnected = await dataSync.checkConnection();
+    if (!isConnected) {
+      alert('❌ 无法连接到服务器\n请确保后端服务已启动');
+      return;
+    }
+
+    // 获取用户ID
+    await dataSync.initUserId();
+
+    // 调用高级分析接口
+    const response = await fetch(
+      `${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=7&blackhole_threshold=30`
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || '分析失败');
+    }
+
+    const analysis = await response.json();
+
+    // 显示时间黑洞
+    displayBlackholes(analysis.blackholes);
+
+    // 显示注意力曲线
+    displayAttentionCurve(analysis.attention_curve);
+
+    advancedBtn.textContent = '✅ 分析完成';
+    setTimeout(() => {
+      advancedBtn.textContent = originalText;
+    }, 2000);
+
+  } catch (error) {
+    console.error('高级分析失败:', error);
+    advancedBtn.textContent = '❌ 分析失败';
+    setTimeout(() => {
+      advancedBtn.textContent = originalText;
+    }, 2000);
+
+    alert(`❌ 高级分析失败\n${error.message}`);
+  } finally {
+    advancedBtn.disabled = false;
+  }
+}
+
+// 显示时间黑洞
+function displayBlackholes(blackholes) {
+  const container = document.getElementById('blackholeStats');
+
+  if (!blackholes.top_blackholes || blackholes.top_blackholes.length === 0) {
+    container.innerHTML = '<p style="text-align: center; color: #43e97b; padding: 20px;">🎉 太棒了！没有发现时间黑洞</p>';
+    return;
+  }
+
+  const wastePercentage = blackholes.waste_percentage;
+  const totalWasted = formatDuration(blackholes.total_wasted_time);
+
+  let html = `
+    <div style="text-align: center; margin-bottom: 12px; padding: 8px; background: #fff5f5; border-radius: 6px;">
+      <div style="font-size: 20px; font-weight: 700; color: #f56565;">${wastePercentage}%</div>
+      <div style="font-size: 11px; color: #999;">浪费时间占比 · 共 ${totalWasted}</div>
+    </div>
+  `;
+
+  html += blackholes.top_blackholes.slice(0, 3).map(bh => {
+    return `
+      <div class="blackhole-item">
+        <div class="blackhole-header">
+          <span class="blackhole-domain">${escapeHtml(bh.domain)}</span>
+          <span class="blackhole-duration">${formatDuration(bh.total_duration)}</span>
+        </div>
+        <div class="blackhole-meta">
+          ${bh.long_sessions_count} 次长时间访问 · 最长 ${formatDuration(bh.longest_session)}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = html;
+}
+
+// 显示注意力曲线
+function displayAttentionCurve(attentionCurve) {
+  const statsContainer = document.getElementById('attentionStats');
+
+  // 显示统计信息
+  const focusScore = attentionCurve.focus_score;
+  const peakHours = attentionCurve.peak_hours;
+  const recommendations = attentionCurve.recommendations;
+
+  let statsHtml = `
+    <div class="attention-stats">
+      <div class="attention-stat-item">
+        <div class="attention-stat-value">${focusScore}</div>
+        <div class="attention-stat-label">专注度分数</div>
+      </div>
+      <div class="attention-stat-item">
+        <div class="attention-stat-value">${peakHours.length}</div>
+        <div class="attention-stat-label">高效时段</div>
+      </div>
+    </div>
+  `;
+
+  if (recommendations && recommendations.length > 0) {
+    statsHtml += `
+      <div style="margin-top: 12px; padding: 10px; background: #f7f9fc; border-radius: 6px; font-size: 11px; color: #666;">
+        💡 ${escapeHtml(recommendations[0])}
+      </div>
+    `;
+  }
+
+  statsContainer.innerHTML = statsHtml;
+
+  // 绘制注意力曲线图
+  drawAttentionChart(attentionCurve.hourly_focus);
+}
+
+// 绘制注意力曲线图
+function drawAttentionChart(hourlyFocus) {
+  // 销毁旧图表
+  if (attentionChart) {
+    attentionChart.destroy();
+    attentionChart = null;
+  }
+
+  // 只显示有数据的小时
+  const activeHours = hourlyFocus.filter(h => h.total_duration > 0);
+  if (activeHours.length === 0) {
+    return;
+  }
+
+  const labels = activeHours.map(h => `${h.hour}:00`);
+  const data = activeHours.map(h => h.score);
+
+  const ctx = document.getElementById('attentionChart').getContext('2d');
+  attentionChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: '专注度',
+        data: data,
+        borderColor: '#667eea',
+        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+        tension: 0.4,
+        fill: true,
+        pointRadius: 3,
+        pointHoverRadius: 5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return ` 专注度: ${context.parsed.y.toFixed(1)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          ticks: { font: { size: 9 } }
+        },
+        x: {
+          ticks: { font: { size: 9 } }
+        }
+      }
+    }
+  });
+}

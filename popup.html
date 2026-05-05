@@ -354,6 +354,64 @@
     .tab-btn.active:hover {
       background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
     }
+
+    .blackhole-item {
+      padding: 12px;
+      background: #fff5f5;
+      border-left: 3px solid #f56565;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+
+    .blackhole-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .blackhole-domain {
+      font-weight: 600;
+      color: #333;
+      font-size: 13px;
+    }
+
+    .blackhole-duration {
+      color: #f56565;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .blackhole-meta {
+      font-size: 11px;
+      color: #999;
+    }
+
+    .attention-stats {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .attention-stat-item {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      background: #f7f9fc;
+      border-radius: 6px;
+    }
+
+    .attention-stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .attention-stat-label {
+      font-size: 10px;
+      color: #666;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -424,8 +482,26 @@
         <div class="record-list" id="recentRecords"></div>
       </div>
 
+      <div class="card">
+        <div class="card-title">⏰ 时间黑洞</div>
+        <div id="blackholeStats">
+          <p style="text-align: center; color: #999; padding: 20px;">点击"高级分析"查看</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📈 注意力曲线</div>
+        <div class="chart-container" style="height: 150px;">
+          <canvas id="attentionChart"></canvas>
+        </div>
+        <div id="attentionStats" style="margin-top: 12px;">
+          <p style="text-align: center; color: #999;">点击"高级分析"查看</p>
+        </div>
+      </div>
+
       <button id="refreshBtn">🔄 刷新数据</button>
       <button id="syncBtn" style="margin-top: 8px; background: #43e97b;">☁️ 同步到云端</button>
+      <button id="advancedAnalysisBtn" style="margin-top: 8px; background: #fa709a;">📊 高级分析</button>
       <button id="aiAnalysisBtn" style="margin-top: 8px; background: #f093fb;">🤖 AI 分析</button>
     </div>
 
