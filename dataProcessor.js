@@ -13,7 +13,7 @@ class DataProcessor {
   extractDomain(url) {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname.replace('www.', '');
+      return WebsiteClassifier.normalizeDomain(urlObj.hostname);
     } catch {
       return null;
     }
@@ -105,7 +105,6 @@ class DataProcessor {
  */
 class WebsiteClassifier {
   constructor() {
-    // 分类规则：关键词匹配
     this.rules = {
       learning: {
         name: '学习',
@@ -114,12 +113,15 @@ class WebsiteClassifier {
           'edu', 'university', 'course', 'mooc', 'udemy', 'coursera',
           'khan', 'edx', 'learn', 'tutorial', 'documentation', 'docs',
           'wikipedia', 'wiki', 'baike', 'zhihu', 'quora', 'stackoverflow',
-          'medium', 'blog', 'article', 'paper', 'arxiv', 'scholar'
+          'medium', 'blog', 'article', 'paper', 'arxiv', 'scholar',
+          '教程', '文档', '课程', '题解', '论文', '学习', '知识', '百科'
         ],
         domains: [
           'wikipedia.org', 'zhihu.com', 'stackoverflow.com', 'medium.com',
           'csdn.net', 'juejin.cn', 'segmentfault.com', 'cnblogs.com',
-          'jianshu.com', 'oschina.net', 'infoq.cn'
+          'jianshu.com', 'oschina.net', 'infoq.cn', 'developer.mozilla.org',
+          'docs.python.org', 'readthedocs.io', 'coursera.org', 'udemy.com',
+          'edx.org', 'khanacademy.org', 'arxiv.org', 'scholar.google.com'
         ]
       },
       coding: {
@@ -128,12 +130,15 @@ class WebsiteClassifier {
         keywords: [
           'github', 'gitlab', 'bitbucket', 'code', 'dev', 'developer',
           'programming', 'coding', 'npm', 'pypi', 'maven', 'cargo',
-          'docker', 'kubernetes', 'aws', 'azure', 'cloud'
+          'docker', 'kubernetes', 'aws', 'azure', 'cloud', 'api', 'sdk',
+          '代码', '开发', '编程', '仓库', '提交', '调试', '算法', '刷题'
         ],
         domains: [
           'github.com', 'gitlab.com', 'gitee.com', 'coding.net',
           'leetcode.com', 'leetcode.cn', 'hackerrank.com', 'codewars.com',
-          'replit.com', 'codesandbox.io', 'stackblitz.com'
+          'replit.com', 'codesandbox.io', 'stackblitz.com', 'npmjs.com',
+          'pypi.org', 'nodejs.org', 'huggingface.co', 'vercel.com',
+          'netlify.com', 'codepen.io'
         ]
       },
       entertainment: {
@@ -142,13 +147,14 @@ class WebsiteClassifier {
         keywords: [
           'video', 'movie', 'film', 'tv', 'music', 'game', 'gaming',
           'play', 'watch', 'stream', 'netflix', 'youtube', 'bilibili',
-          'douyin', 'tiktok', 'instagram', 'twitter', 'weibo'
+          'douyin', 'tiktok', '直播', '视频', '音乐', '综艺', '番剧', '电影', '游戏'
         ],
         domains: [
           'youtube.com', 'bilibili.com', 'douyin.com', 'tiktok.com',
           'netflix.com', 'iqiyi.com', 'youku.com', 'qq.com',
-          'twitch.tv', 'huya.com', 'douyu.com',
-          'steam', 'epicgames.com', 'ea.com'
+          'twitch.tv', 'huya.com', 'douyu.com', 'steamcommunity.com',
+          'store.steampowered.com', 'epicgames.com', 'ea.com', 'music.163.com',
+          'y.qq.com', 'spotify.com'
         ]
       },
       social: {
@@ -157,13 +163,14 @@ class WebsiteClassifier {
         keywords: [
           'chat', 'message', 'social', 'friend', 'community',
           'forum', 'discuss', 'talk', 'wechat', 'qq', 'telegram',
-          'whatsapp', 'discord', 'slack', 'teams'
+          'whatsapp', 'discord', 'slack', 'teams', '社区', '论坛', '帖子', '聊天', '消息'
         ],
         domains: [
           'twitter.com', 'x.com', 'facebook.com', 'instagram.com',
           'weibo.com', 'douban.com', 'xiaohongshu.com',
           'discord.com', 'slack.com', 'teams.microsoft.com',
-          'reddit.com', 'v2ex.com', 'hostloc.com'
+          'reddit.com', 'v2ex.com', 'hostloc.com', 't.me', 'web.telegram.org',
+          'web.whatsapp.com', 'discord.gg'
         ]
       },
       tools: {
@@ -171,48 +178,81 @@ class WebsiteClassifier {
         icon: '🔧',
         keywords: [
           'mail', 'email', 'calendar', 'drive', 'cloud', 'storage',
-          'translate', 'map', 'weather', 'news', 'search',
-          'google', 'baidu', 'bing', 'notion', 'trello', 'jira'
+          'translate', 'map', 'weather', 'search',
+          'google', 'baidu', 'bing', 'notion', 'trello', 'jira',
+          'workspace', 'office', 'design', 'ai', 'assistant',
+          '邮箱', '日历', '翻译', '网盘', '设计', '搜索', '协作', '助手'
         ],
         domains: [
           'google.com', 'baidu.com', 'bing.com',
           'gmail.com', 'outlook.com', 'mail.qq.com',
           'notion.so', 'trello.com', 'asana.com', 'monday.com',
           'figma.com', 'canva.com', 'photopea.com',
-          'translate.google.com', 'deepl.com'
+          'translate.google.com', 'deepl.com', 'drive.google.com',
+          'calendar.google.com', 'chatgpt.com', 'claude.ai', 'perplexity.ai',
+          'openai.com', 'miro.com'
         ]
       }
     };
   }
 
+  static normalizeDomain(domain = '') {
+    return domain
+      .toLowerCase()
+      .trim()
+      .replace(/^www\./, '')
+      .replace(/^m\./, '');
+  }
+
+  matchesDomain(hostname, ruleDomain) {
+    return hostname === ruleDomain || hostname.endsWith(`.${ruleDomain}`);
+  }
+
+  calculateRuleScore(rule, hostname, title) {
+    let score = 0;
+
+    if (rule.domains.some(ruleDomain => this.matchesDomain(hostname, ruleDomain))) {
+      score += 100;
+    }
+
+    if (rule.keywords.some(keyword => hostname.includes(keyword))) {
+      score += 30;
+    }
+
+    if (rule.keywords.some(keyword => title.includes(keyword))) {
+      score += 20;
+    }
+
+    return score;
+  }
+
   // 分类单个网站
   classify(domain, title = '') {
-    const lowerDomain = domain.toLowerCase();
-    const lowerTitle = title.toLowerCase();
+    const hostname = WebsiteClassifier.normalizeDomain(domain);
+    const lowerTitle = (title || '').toLowerCase();
 
-    // 遍历所有分类规则
+    if (!hostname) return 'other';
+
+    let bestCategory = 'other';
+    let bestScore = 0;
+
     for (const [category, rule] of Object.entries(this.rules)) {
-      // 精确域名匹配
-      if (rule.domains.some(d => lowerDomain.includes(d))) {
-        return category;
-      }
-
-      // 关键词匹配（域名或标题）
-      if (rule.keywords.some(keyword =>
-        lowerDomain.includes(keyword) || lowerTitle.includes(keyword)
-      )) {
-        return category;
+      const score = this.calculateRuleScore(rule, hostname, lowerTitle);
+      if (score > bestScore) {
+        bestScore = score;
+        bestCategory = category;
       }
     }
 
-    return 'other'; // 未分类
+    return bestScore > 0 ? bestCategory : 'other';
   }
 
   // 批量分类
   classifyBatch(records) {
     return records.map(record => ({
       ...record,
-      category: this.classify(record.domain, record.title)
+      domain: WebsiteClassifier.normalizeDomain(record.domain || ''),
+      category: this.classify(record.domain || '', record.title || '')
     }));
   }
 

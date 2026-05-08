@@ -123,11 +123,12 @@ class DataSync {
       // 转换数据格式并分类
       const records = browsingData.map(record => {
         const domain = this.extractDomain(record.url);
-        const category = record.category || classifier.classify(record.url);
+        const title = record.title || '';
+        const category = record.category || classifier.classify(domain || '', title);
 
         return {
           url: record.url,
-          title: record.title || '',
+          title: title,
           domain: domain,
           category: category,
           visit_time: Math.floor(record.visitTime), // 转换为整数
