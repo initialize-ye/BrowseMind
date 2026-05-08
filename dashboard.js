@@ -1,7 +1,7 @@
 let trendChart = null;
 let hourlyChart = null;
 
-const palette = ['#516b48', '#d98c2b', '#a85338', '#3f5f7f', '#6b5678', '#8c7a5f'];
+const palette = ['#1a73e8', '#34a853', '#fbbc04', '#ea4335', '#5f6368', '#9aa0a6'];
 
 const formatDurationShort = (seconds) => {
   const total = Math.floor(seconds || 0);
@@ -117,8 +117,8 @@ function renderTrendChart(dailyTrend) {
         {
           label: '时长（分钟）',
           data: dailyTrend.map(item => Math.round((item.duration || 0) / 60)),
-          borderColor: '#516b48',
-          backgroundColor: 'rgba(81,107,72,.12)',
+          borderColor: '#1a73e8',
+          backgroundColor: 'rgba(26,115,232,.10)',
           tension: .36,
           fill: true,
           yAxisID: 'y'
@@ -126,8 +126,8 @@ function renderTrendChart(dailyTrend) {
         {
           label: '访问次数',
           data: dailyTrend.map(item => item.visits),
-          borderColor: '#d98c2b',
-          backgroundColor: 'rgba(217,140,43,.12)',
+          borderColor: '#34a853',
+          backgroundColor: 'rgba(52,168,83,.10)',
           tension: .36,
           fill: true,
           yAxisID: 'y1'

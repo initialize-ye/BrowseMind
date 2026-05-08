@@ -256,12 +256,12 @@ function drawPieChart() {
   const data = categoryStats.map(stat => stat.totalDuration / 60); // 转换为分钟
 
   const colors = [
-    '#667eea', // 紫色
-    '#764ba2', // 深紫
-    '#f093fb', // 粉紫
-    '#4facfe', // 蓝色
-    '#43e97b', // 绿色
-    '#fa709a'  // 粉色
+    '#1a73e8',
+    '#34a853',
+    '#fbbc04',
+    '#ea4335',
+    '#5f6368',
+    '#9aa0a6'
   ];
 
   destroyChart();
@@ -387,8 +387,8 @@ function drawLineChart() {
         {
           label: '浏览时长（分钟）',
           data: durationData,
-          borderColor: '#667eea',
-          backgroundColor: 'rgba(102, 126, 234, 0.1)',
+          borderColor: '#1a73e8',
+          backgroundColor: 'rgba(26, 115, 232, 0.10)',
           tension: 0.4,
           fill: true,
           yAxisID: 'y'
@@ -396,8 +396,8 @@ function drawLineChart() {
         {
           label: '访问次数',
           data: visitsData,
-          borderColor: '#764ba2',
-          backgroundColor: 'rgba(118, 75, 162, 0.1)',
+          borderColor: '#34a853',
+          backgroundColor: 'rgba(52, 168, 83, 0.10)',
           tension: 0.4,
           fill: true,
           yAxisID: 'y1'
@@ -563,7 +563,7 @@ async function showAIAnalysis() {
     // 检查服务器连接
     const isConnected = await dataSync.checkConnection();
     if (!isConnected) {
-      content.innerHTML = '<p style="color: #f56565; text-align: center;">❌ 无法连接到服务器<br>请确保后端服务已启动</p>';
+      content.innerHTML = '<p style="color: #d93025; text-align: center;">❌ 无法连接到服务器<br>请确保后端服务已启动</p>';
       return;
     }
 
@@ -589,7 +589,7 @@ async function showAIAnalysis() {
   } catch (error) {
     console.error('AI 分析失败:', error);
     content.innerHTML = `
-      <p style="color: #f56565; text-align: center;">
+      <p style="color: #d93025; text-align: center;">
         ❌ AI 分析失败<br>
         ${error.message}<br><br>
         ${error.message.includes('API') ? '请配置 AI_API_KEY 环境变量' : ''}
@@ -706,7 +706,7 @@ function displayBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
 
   if (!blackholes.top_blackholes || blackholes.top_blackholes.length === 0) {
-    container.innerHTML = '<p style="text-align: center; color: #43e97b; padding: 20px;">🎉 太棒了！没有发现时间黑洞</p>';
+    container.innerHTML = '<p style="text-align: center; color: #188038; padding: 20px;">🎉 太棒了！没有发现时间黑洞</p>';
     return;
   }
 
@@ -715,7 +715,7 @@ function displayBlackholes(blackholes) {
 
   let html = `
     <div style="text-align: center; margin-bottom: 12px; padding: 8px; background: #fff5f5; border-radius: 6px;">
-      <div style="font-size: 20px; font-weight: 700; color: #f56565;">${wastePercentage}%</div>
+      <div style="font-size: 20px; font-weight: 700; color: #d93025;">${wastePercentage}%</div>
       <div style="font-size: 11px; color: #999;">浪费时间占比 · 共 ${totalWasted}</div>
     </div>
   `;
