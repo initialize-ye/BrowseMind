@@ -62,7 +62,14 @@ jobs:
 
           # 更新依赖
           echo "📦 安装/更新依赖..."
-          pip install -r requirements.txt || { echo "❌ 依赖安装失败"; exit 1; }
+          python -m pip install --upgrade pip || { echo "❌ pip 更新失败"; exit 1; }
+          python -m pip install --upgrade --force-reinstall -r requirements.txt || { echo "❌ 依赖安装失败"; exit 1; }
+
+          # 检查关键依赖版本
+          echo "🔎 检查 Python 和关键依赖版本..."
+          which python
+          python --version
+          python -c "import openai, httpx; print('openai', openai.__version__); print('httpx', httpx.__version__)" || { echo "❌ 依赖版本检查失败"; exit 1; }
 
           # 检查 .env 文件
           echo "🔍 检查环境变量配置..."
@@ -139,6 +146,17 @@ jobs:
           echo ""
           echo "=== Python 版本 ==="
           python3 --version
+          echo ""
+          echo "=== 后端虚拟环境依赖版本 ==="
+          cd /var/www/browsemind/backend
+          if [ -f "venv/bin/activate" ]; then
+            source venv/bin/activate
+            which python
+            python --version
+            python -c "import openai, httpx; print('openai', openai.__version__); print('httpx', httpx.__version__)" 2>/dev/null || echo "无法读取 openai/httpx 版本"
+          else
+            echo "虚拟环境不存在或不可激活"
+          fi
           echo ""
           echo "=== 虚拟环境状态 ==="
           ls -la backend/venv 2>/dev/null || echo "虚拟环境不存在"
