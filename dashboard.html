@@ -19,37 +19,46 @@
       --red: #d93025;
       --red-soft: #fce8e6;
       --yellow: #f9ab00;
+      --yellow-soft: #fef7e0;
       --shadow: 0 1px 2px rgba(60,64,67,.16), 0 1px 3px rgba(60,64,67,.12);
+      --radius-sm: 2px;
+      --radius-md: 4px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { min-height: 100vh; color: var(--text); font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif; background: var(--bg); }
     body.sidebar-collapsed .layout { grid-template-columns: 88px minmax(0, 1fr); }
-    .page { width: min(1440px, calc(100vw - 24px)); margin: 0 auto; padding: 20px 0 28px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
-    .brand { display: flex; align-items: center; gap: 12px; }
-    .brand-dot { width: 28px; height: 28px; border-radius: 50%; background: conic-gradient(from 0deg, #4285f4, #34a853, #fbbc04, #ea4335, #4285f4); }
+    .page { width: min(1440px, calc(100vw - 24px)); margin: 0 auto; padding: var(--space-5) 0 28px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: 22px; }
+    .brand { display: flex; align-items: center; gap: var(--space-3); }
+    .brand-dot { width: 28px; height: 28px; border-radius: var(--radius-md); background: conic-gradient(from 0deg, #4285f4, #34a853, #fbbc04, #ea4335, #4285f4); }
     h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.04em; font-weight: 600; }
-    .subtitle { margin-top: 4px; color: var(--muted); font-size: 14px; }
-    .panel, .metric { border: 1px solid var(--line); border-radius: 24px; background: var(--surface); box-shadow: var(--shadow); }
-    .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; transition: grid-template-columns .22s ease; }
+    .subtitle { margin-top: var(--space-1); color: var(--muted); font-size: 14px; }
+    .panel, .metric { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow); }
+    .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: var(--space-5); align-items: start; transition: grid-template-columns .22s ease; }
     .analytics-main { min-width: 0; order: 2; }
-    .sidebar { position: sticky; top: 16px; order: 1; min-height: calc(100vh - 32px); padding: 16px; border-radius: 28px; background: #202123; color: #ececf1; box-shadow: 0 12px 32px rgba(15, 23, 42, .18); transition: padding .22s ease, width .22s ease; overflow: hidden; }
+    .sidebar { position: sticky; top: 16px; order: 1; min-height: calc(100vh - 32px); padding: 16px; border-radius: 0; background: #202123; color: #ececf1; box-shadow: 0 12px 32px rgba(15, 23, 42, .18); transition: padding .22s ease, width .22s ease; overflow: hidden; }
     .sidebar-shell { display: grid; gap: 16px; }
     .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .sidebar-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .sidebar-brand-copy { min-width: 0; }
-    .sidebar-title { font-size: 15px; font-weight: 700; color: #f7f7f8; white-space: nowrap; }
-    .sidebar-subtitle { margin-top: 2px; color: #a1a1aa; font-size: 12px; white-space: nowrap; }
-    .sidebar-toggle { width: 40px; height: 40px; padding: 0; border-radius: 14px; color: #ececf1; background: rgba(255,255,255,.08); }
+    .sidebar-title { font-size: 15px; font-weight: 700; color: #f7f7f8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-subtitle { margin-top: 2px; color: #a1a1aa; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-toggle { width: 40px; height: 40px; padding: 0; border-radius: var(--radius-sm); color: #ececf1; background: rgba(255,255,255,.08); }
     .sidebar-toggle:hover { background: rgba(255,255,255,.14); box-shadow: none; transform: none; }
     .sidebar-label { color: #a1a1aa; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
     .sidebar-tabs { display: grid; gap: 8px; padding: 0; border: 0; background: transparent; box-shadow: none; }
-    .sidebar-tab { display: flex; align-items: center; justify-content: flex-start; gap: 12px; border: 0; border-radius: 16px; padding: 12px 14px; color: #c5c5d2; background: transparent; font-weight: 600; text-align: left; }
+    .sidebar-tab { display: flex; align-items: center; justify-content: flex-start; gap: 12px; border: 0; border-radius: var(--radius-sm); padding: 12px 14px; color: #c5c5d2; background: transparent; font-weight: 600; text-align: left; }
     .sidebar-tab:hover { color: #fff; background: rgba(255,255,255,.08); box-shadow: none; transform: none; }
     .sidebar-tab.active { color: #fff; background: rgba(255,255,255,.12); }
     .sidebar-tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; font-size: 15px; flex: 0 0 18px; }
-    .sidebar-tab-label { white-space: nowrap; }
-    .sidebar-panel { display: none; padding: 18px; border: 1px solid rgba(255,255,255,.08); border-radius: 22px; background: rgba(255,255,255,.04); box-shadow: none; }
+    .sidebar-tab-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-panel { display: none; padding: 18px; border: 1px solid rgba(255,255,255,.08); border-radius: var(--radius-sm); background: rgba(255,255,255,.04); box-shadow: none; }
     .sidebar-panel.active { display: block; }
     .sidebar .section-title h2, .sidebar .section-title p, .sidebar .muted, .sidebar label, .sidebar .goal-card strong, .sidebar .goal-card .muted, .sidebar .setting-row strong, .sidebar .toggle-row strong { color: inherit; }
     .sidebar .section-title p, .sidebar .muted, .sidebar label, .sidebar .category-meta, .sidebar .domain-meta { color: #a1a1aa; }
@@ -69,51 +78,75 @@
     body.sidebar-collapsed .sidebar-toggle { margin: 0 auto; }
     body.sidebar-collapsed .sidebar-tabs { width: 100%; }
     body.sidebar-collapsed .sidebar-tab { justify-content: center; padding: 12px; }
-    .hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 16px; margin-bottom: 16px; }
-    .intro, .status-panel, .panel { padding: 20px; }
-    .intro h2 { margin-bottom: 8px; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+    .main-view { display: none; }
+    .main-view.active { display: block; }
+    .view-shell { display: grid; gap: var(--space-4); }
+    .view-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+    .view-copy { min-width: 0; }
+    .view-copy h2 { font-size: 24px; letter-spacing: -0.03em; word-break: break-word; }
+    .view-copy p { margin-top: 6px; color: var(--muted); line-height: 1.6; font-size: 13px; overflow-wrap: anywhere; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: var(--space-4); margin-bottom: var(--space-4); }
+    .intro, .status-panel, .panel { padding: var(--space-5); }
+    .intro h2 { margin-bottom: var(--space-2); font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
     .intro p, .section-title p, .muted { color: var(--muted); line-height: 1.6; font-size: 13px; }
-    .status-note { margin-top: 12px; padding: 12px 14px; border-radius: 14px; color: var(--blue); background: var(--blue-soft); font-size: 13px; line-height: 1.6; }
-    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
-    .metric { padding: 18px; min-height: 124px; }
-    .metric span { color: var(--muted); font-size: 13px; font-weight: 500; }
+    .status-note { margin-top: var(--space-3); padding: 12px 14px; border-radius: var(--radius-sm); color: var(--blue); background: var(--blue-soft); font-size: 13px; line-height: 1.6; }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: var(--space-4); }
+    .metric { padding: 14px; min-height: 124px; background: var(--surface-2); box-shadow: none; }
+    .metric span { color: var(--muted); font-size: 12px; font-weight: 500; }
     .metric strong { display: block; margin-top: 14px; font-size: clamp(30px, 4vw, 44px); line-height: 1; font-weight: 700; letter-spacing: -0.04em; }
-    .dashboard-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; align-items: start; }
-    .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-    .section-title h2 { font-size: 18px; font-weight: 600; }
+    .dashboard-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: var(--space-4); align-items: start; }
+    .section-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
+    .section-title h2 { font-size: 16px; font-weight: 600; }
     .chart-box { position: relative; height: 320px; }
     .chart-box.small { height: 240px; }
     .sidebar .chart-box, .sidebar .chart-box.small { height: auto; }
-    .category-row, .domain-row, .goal-card, .setting-row { display: grid; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .category-row, .domain-row, .goal-card, .setting-row { display: grid; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13px; min-width: 0; }
     .category-row { grid-template-columns: 120px 1fr auto; }
     .domain-row, .goal-card { grid-template-columns: 1fr auto; }
     .setting-row { grid-template-columns: 1fr; }
     .category-row:last-child, .domain-row:last-child, .goal-card:last-child, .setting-row:last-child { border-bottom: 0; }
-    .bar-track { height: 8px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+    .bar-track { height: 8px; border-radius: 0; overflow: hidden; background: var(--surface-2); }
     .bar-fill { height: 100%; border-radius: inherit; background: var(--blue); }
     .domain-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .domain-row > div:first-child,
+    .goal-card > div:first-child,
+    .setting-row > div:first-child,
+    .category-row > div:first-child { min-width: 0; }
     .domain-meta, .category-meta, .label { color: var(--muted); font-size: 12px; }
-    .empty { padding: 42px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 18px; background: var(--surface-2); }
-    .button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .empty { padding: 42px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 2px; background: var(--surface-2); }
+    .button-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: 14px; }
     .button-row.compact { margin-top: 0; }
-    button { border: 0; cursor: pointer; border-radius: 999px; padding: 10px 16px; color: #fff; background: var(--blue); font-family: inherit; font-weight: 600; transition: background .16s ease, box-shadow .16s ease, transform .16s ease; }
+    button { min-height: 44px; border: 0; cursor: pointer; border-radius: var(--radius-sm); padding: 10px 16px; color: #fff; background: var(--blue); font-family: inherit; font-weight: 600; transition: background .16s ease, box-shadow .16s ease, transform .16s ease, opacity .16s ease; }
     button:hover { background: #1765cc; box-shadow: var(--shadow); transform: translateY(-1px); }
+    button:active { transform: translateY(0); box-shadow: none; }
+    button:disabled { cursor: wait; opacity: .68; box-shadow: none; transform: none; }
     button.secondary { color: var(--blue); background: var(--blue-soft); }
     button.ghost { color: var(--blue); background: transparent; border: 1px solid var(--line); }
     button.danger { color: var(--red); background: var(--red-soft); }
-    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); outline: none; font: inherit; }
+    button:focus-visible,
+    .sidebar-tab:focus-visible,
+    .sidebar-toggle:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    .main-view:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--blue-soft); }
+    input, select, textarea { min-height: 44px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); outline: none; font: inherit; transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }
     input:focus, select:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+    input:disabled, select:disabled, textarea:disabled { opacity: .7; cursor: not-allowed; }
     .form-grid { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: end; margin-top: 12px; }
     .settings-grid { display: grid; gap: 12px; margin-top: 12px; }
     .inline-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
     .toggle-row:last-child { border-bottom: 0; }
-    .toggle-row input[type="checkbox"] { width: 18px; height: 18px; }
+    .toggle-row input[type="checkbox"] { width: 18px; min-height: 18px; height: 18px; accent-color: var(--blue); }
     label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; font-weight: 500; }
-    .note { display: none; margin-top: 12px; padding: 12px 14px; border-radius: 14px; color: var(--blue); background: var(--blue-soft); font-size: 13px; line-height: 1.6; }
+    .note { display: none; margin-top: var(--space-3); padding: 12px 14px; border-radius: var(--radius-sm); color: var(--blue); background: var(--blue-soft); font-size: 13px; line-height: 1.6; }
     .note.success { color: var(--green); background: var(--green-soft); }
     .note.danger { color: var(--red); background: var(--red-soft); }
-    .log-box { max-height: 180px; overflow: auto; padding: 12px; border-radius: 14px; background: #202124; color: #e8eaed; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; }
+    .log-box { max-height: 180px; overflow: auto; padding: 12px; border-radius: 2px; background: #202124; color: #e8eaed; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    }
     @media (max-width: 1100px) {
       .layout { grid-template-columns: 1fr; }
       .analytics-main { order: 2; }
@@ -124,6 +157,8 @@
       .hero, .dashboard-grid, .inline-grid { grid-template-columns: 1fr; }
       .metric-grid { grid-template-columns: repeat(2, 1fr); }
       .topbar { align-items: flex-start; flex-direction: column; }
+      .view-header { flex-direction: column; }
+      .view-header > button { width: 100%; }
       .category-row { grid-template-columns: 1fr; }
     }
   </style>
@@ -131,12 +166,12 @@
 <body>
   <main class="page">
     <header class="topbar">
-      <div class="brand"><div class="brand-dot"></div><div><h1>BrowseMind Dashboard</h1><p class="subtitle">仪表盘保留数据展示主视图，操作与设置集中在侧边栏</p></div></div>
+      <div class="brand"><div class="brand-dot"></div><div><h1>BrowseMind Dashboard</h1><p class="subtitle">本地浏览数据、同步操作与插件设置</p></div></div>
       <button id="refreshBtn">刷新数据</button>
     </header>
 
     <div class="layout">
-      <aside class="sidebar">
+      <aside class="sidebar" aria-label="Dashboard 侧边导航">
         <div class="sidebar-shell">
           <div class="sidebar-header">
             <div class="sidebar-brand">
@@ -149,74 +184,71 @@
             <button id="sidebarToggleBtn" class="sidebar-toggle" aria-expanded="true" aria-label="收起侧边栏">☰</button>
           </div>
           <div class="sidebar-label">导航</div>
-          <div class="sidebar-tabs" role="tablist" aria-label="侧边栏选项卡">
-            <button class="sidebar-tab active" id="sidebarTabActions" data-sidebar-tab="actions" role="tab" aria-selected="true"><span class="sidebar-tab-icon">⚡</span><span class="sidebar-tab-label">操作</span></button>
-            <button class="sidebar-tab" id="sidebarTabGoals" data-sidebar-tab="goals" role="tab" aria-selected="false"><span class="sidebar-tab-icon">🎯</span><span class="sidebar-tab-label">目标</span></button>
-            <button class="sidebar-tab" id="sidebarTabSettings" data-sidebar-tab="settings" role="tab" aria-selected="false"><span class="sidebar-tab-icon">⚙️</span><span class="sidebar-tab-label">设置</span></button>
+          <div class="sidebar-tabs" role="tablist" aria-label="侧边栏选项卡" aria-orientation="vertical">
+            <button class="sidebar-tab" id="sidebarTabDashboard" data-sidebar-tab="dashboard" role="tab" aria-selected="false" aria-controls="mainViewDashboard" tabindex="-1" title="仪表盘"><span class="sidebar-tab-icon" aria-hidden="true">📊</span><span class="sidebar-tab-label">仪表盘</span></button>
+            <button class="sidebar-tab active" id="sidebarTabActions" data-sidebar-tab="actions" role="tab" aria-selected="true" aria-controls="mainViewActions" tabindex="0" title="操作"><span class="sidebar-tab-icon" aria-hidden="true">⚡</span><span class="sidebar-tab-label">操作</span></button>
+            <button class="sidebar-tab" id="sidebarTabGoals" data-sidebar-tab="goals" role="tab" aria-selected="false" aria-controls="mainViewGoals" tabindex="-1" title="目标"><span class="sidebar-tab-icon" aria-hidden="true">🎯</span><span class="sidebar-tab-label">目标</span></button>
+            <button class="sidebar-tab" id="sidebarTabSettings" data-sidebar-tab="settings" role="tab" aria-selected="false" aria-controls="mainViewSettings" tabindex="-1" title="设置"><span class="sidebar-tab-icon" aria-hidden="true">⚙️</span><span class="sidebar-tab-label">设置</span></button>
           </div>
 
           <section class="panel sidebar-panel active" id="sidebarPanelActions" data-sidebar-panel="actions">
-            <div class="section-title"><div><h2>插件操作</h2><p>同步、AI 分析和本地数据管理。</p></div></div>
-            <div class="button-row compact"><button id="syncBtn">立即同步</button><button id="aiBtn" class="secondary">AI 分析</button><button id="exportJsonBtn" class="ghost">导出 JSON</button><button id="clearLocalBtn" class="danger">清空本地数据</button></div>
-            <div class="note" id="operationNote"></div>
-            <div class="log-box" id="logBox" style="margin-top:14px;">等待操作...</div>
+            <div class="section-title"><div><h2>插件操作</h2><p>在主区查看操作日志与执行同步。</p></div></div>
           </section>
 
           <section class="panel sidebar-panel" id="sidebarPanelGoals" data-sidebar-panel="goals">
-            <div class="section-title"><div><h2>今日目标</h2><p>添加或删除今天的目标。</p></div></div>
-            <div class="form-grid">
-              <div><label>目标类型</label><select id="goalTypeSelect"><option value="daily_learning">每日学习时长</option><option value="daily_entertainment">每日娱乐时长限制</option><option value="daily_coding">每日编程时长</option><option value="daily_social">每日社交时长限制</option></select></div>
-              <div><label>分钟</label><input id="goalDurationInput" type="number" min="1" max="1440" value="60"></div>
-              <button id="createGoalBtn">添加</button>
-            </div>
-            <div id="goalList" style="margin-top:14px;"></div>
+            <div class="section-title"><div><h2>今日目标</h2><p>在主区添加、查看和删除目标。</p></div></div>
           </section>
 
           <section class="panel sidebar-panel" id="sidebarPanelSettings" data-sidebar-panel="settings">
-            <div class="section-title"><div><h2>插件设置</h2><p>统一管理同步、分析与通知参数。</p></div></div>
-            <div class="settings-grid">
-              <div class="setting-row"><div><strong>后端 API 地址</strong><p class="muted">用于同步、AI 分析和自动高级分析。</p></div><input id="apiBaseUrlInput" type="url" placeholder="http://119.29.55.112:8000"></div>
-              <div class="toggle-row"><div><strong>启用自动同步</strong><p class="muted">记录变化后自动上传到云端。</p></div><input id="autoSyncEnabledInput" type="checkbox"></div>
-              <div class="toggle-row"><div><strong>启用通知提醒</strong><p class="muted">目标提醒与达成通知。</p></div><input id="notificationsEnabledInput" type="checkbox"></div>
-              <div class="inline-grid">
-                <div><label>自动同步防抖（秒）</label><input id="autoSyncDebounceInput" type="number" min="1" max="3600" value="15"></div>
-                <div><label>最小同步间隔（秒）</label><input id="autoSyncMinIntervalInput" type="number" min="10" max="86400" value="120"></div>
-              </div>
-              <div class="inline-grid">
-                <div><label>本地数据保留（天）</label><input id="dataRetentionDaysInput" type="number" min="1" max="365" value="7"></div>
-                <div><label>最小记录时长（秒）</label><input id="minVisitDurationInput" type="number" min="1" max="600" value="3"></div>
-              </div>
-              <div class="inline-grid">
-                <div><label>高级分析时间黑洞阈值（分钟）</label><input id="blackholeThresholdInput" type="number" min="1" max="600" value="30"></div>
-                <div><label>分析窗口（天）</label><select id="analysisDaysInput"><option value="7">7 天</option><option value="14">14 天</option><option value="30">30 天</option></select></div>
-              </div>
-            </div>
-            <div class="button-row"><button id="saveApiBtn">保存设置</button><button id="resetApiBtn" class="ghost">恢复默认</button><button id="testApiBtn" class="secondary">测试连接</button></div>
+            <div class="section-title"><div><h2>插件设置</h2><p>在主区统一调整同步、分析与通知参数。</p></div></div>
           </section>
         </div>
       </aside>
 
       <section class="analytics-main">
-        <section class="hero">
-          <div class="intro panel"><h2>浏览概览</h2><p>从插件本地记录和云端服务生成最近 7 天的时间分布、分类构成和高频站点。主区域专注展示你的浏览数据，左侧侧边栏集中管理操作、目标和连接设置。</p></div>
-          <aside class="status-panel panel"><div class="section-title"><div><h2>连接状态</h2><p id="todayDate">--</p></div></div><div class="status-note" id="statusNote">正在读取数据...</div></aside>
+        <section class="main-view active" id="mainViewDashboard" data-main-view="dashboard" role="tabpanel" aria-labelledby="sidebarTabDashboard" tabindex="0">
+          <section class="hero">
+            <div class="intro panel"><h2>浏览概览</h2><p>查看最近 7 天的访问、分类、时段和高频站点。</p></div>
+            <aside class="status-panel panel"><div class="section-title"><div><h2>连接状态</h2><p id="todayDate">--</p></div></div><div class="status-note" id="statusNote" aria-live="polite">正在读取数据...</div></aside>
+          </section>
+
+          <section class="metric-grid">
+            <div class="metric"><span>今日访问</span><strong id="metricTodayVisits">0</strong></div>
+            <div class="metric"><span>今日时长</span><strong id="metricTodayDuration">0m</strong></div>
+            <div class="metric"><span>7 天访问</span><strong id="metricWeekVisits">0</strong></div>
+            <div class="metric"><span>独立网站</span><strong id="metricUniqueSites">0</strong></div>
+          </section>
+
+          <section class="dashboard-grid">
+            <div>
+              <div class="panel"><div class="section-title"><h2>7 天趋势</h2><p>时长与访问次数</p></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
+              <div class="panel"><div class="section-title"><h2>分类构成</h2><p>按停留时长排序</p></div><div id="categoryList"></div></div>
+            </div>
+            <div>
+              <div class="panel"><div class="section-title"><h2>时间分布</h2><p>按小时统计</p></div><div class="chart-box small"><canvas id="hourlyChart"></canvas></div></div>
+              <div class="panel"><div class="section-title"><h2>高频站点</h2><p>按总停留时长排序</p></div><div id="domainList"></div></div>
+            </div>
+          </section>
         </section>
 
-        <section class="metric-grid">
-          <div class="metric"><span>今日访问</span><strong id="metricTodayVisits">0</strong></div>
-          <div class="metric"><span>今日时长</span><strong id="metricTodayDuration">0m</strong></div>
-          <div class="metric"><span>7 天访问</span><strong id="metricWeekVisits">0</strong></div>
-          <div class="metric"><span>独立网站</span><strong id="metricUniqueSites">0</strong></div>
-        </section>
-
-        <section class="dashboard-grid">
-          <div>
-            <div class="panel"><div class="section-title"><h2>7 天趋势</h2><p>时长与访问次数</p></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
-            <div class="panel"><div class="section-title"><h2>分类构成</h2><p>按停留时长排序</p></div><div id="categoryList"></div></div>
+        <section class="main-view" id="mainViewActions" data-main-view="actions" role="tabpanel" aria-labelledby="sidebarTabActions" tabindex="0" hidden>
+          <div class="view-shell">
+            <div class="view-header panel"><div class="view-copy"><h2>插件操作</h2><p>同步数据、执行 AI 分析，并查看最近操作日志。</p></div><button id="refreshBtnActions" class="secondary">刷新状态</button></div>
+            <div class="panel"><div class="button-row compact"><button id="syncBtn">立即同步</button><button id="aiBtn" class="secondary">AI 分析</button><button id="exportJsonBtn" class="ghost">导出 JSON</button><button id="clearLocalBtn" class="danger">清空本地数据</button></div><div class="note" id="operationNote" aria-live="polite"></div><div class="log-box" id="logBox" aria-live="polite" style="margin-top:14px;">等待操作...</div></div>
           </div>
-          <div>
-            <div class="panel"><div class="section-title"><h2>时间分布</h2><p>按小时统计</p></div><div class="chart-box small"><canvas id="hourlyChart"></canvas></div></div>
-            <div class="panel"><div class="section-title"><h2>高频站点</h2><p>Top domains</p></div><div id="domainList"></div></div>
+        </section>
+
+        <section class="main-view" id="mainViewGoals" data-main-view="goals" role="tabpanel" aria-labelledby="sidebarTabGoals" tabindex="0" hidden>
+          <div class="view-shell">
+            <div class="view-header panel"><div class="view-copy"><h2>今日目标</h2><p>管理今天的学习、编程和时长限制目标。</p></div></div>
+            <div class="panel"><div class="form-grid"><div><label>目标类型</label><select id="goalTypeSelect"><option value="daily_learning">每日学习时长</option><option value="daily_entertainment">每日娱乐时长限制</option><option value="daily_coding">每日编程时长</option><option value="daily_social">每日社交时长限制</option></select></div><div><label>分钟</label><input id="goalDurationInput" type="number" min="1" max="1440" value="60"></div><button id="createGoalBtn">添加目标</button></div><div id="goalList" aria-live="polite" style="margin-top:14px;"></div></div>
+          </div>
+        </section>
+
+        <section class="main-view" id="mainViewSettings" data-main-view="settings" role="tabpanel" aria-labelledby="sidebarTabSettings" tabindex="0" hidden>
+          <div class="view-shell">
+            <div class="view-header panel"><div class="view-copy"><h2>插件设置</h2><p>统一管理同步、分析窗口和通知参数。</p></div></div>
+            <div class="panel"><div class="settings-grid"><div class="setting-row"><div><strong>后端 API 地址</strong><p class="muted">用于同步、AI 分析和自动高级分析。</p></div><input id="apiBaseUrlInput" type="url" placeholder="http://119.29.55.112:8000"></div><div class="toggle-row"><div><strong>启用自动同步</strong><p class="muted">记录变化后自动上传到云端。</p></div><input id="autoSyncEnabledInput" type="checkbox"></div><div class="toggle-row"><div><strong>启用通知提醒</strong><p class="muted">目标提醒与达成通知。</p></div><input id="notificationsEnabledInput" type="checkbox"></div><div class="inline-grid"><div><label>自动同步防抖（秒）</label><input id="autoSyncDebounceInput" type="number" min="1" max="3600" value="15"></div><div><label>最小同步间隔（秒）</label><input id="autoSyncMinIntervalInput" type="number" min="10" max="86400" value="120"></div></div><div class="inline-grid"><div><label>本地数据保留（天）</label><input id="dataRetentionDaysInput" type="number" min="1" max="365" value="7"></div><div><label>最小记录时长（秒）</label><input id="minVisitDurationInput" type="number" min="1" max="600" value="3"></div></div><div class="inline-grid"><div><label>高级分析时间黑洞阈值（分钟）</label><input id="blackholeThresholdInput" type="number" min="1" max="600" value="30"></div><div><label>分析窗口（天）</label><select id="analysisDaysInput"><option value="7">7 天</option><option value="14">14 天</option><option value="30">30 天</option></select></div></div></div><div class="button-row"><button id="saveApiBtn">保存设置</button><button id="resetApiBtn" class="ghost">恢复默认</button><button id="testApiBtn" class="secondary">测试连接</button></div></div>
           </div>
         </section>
       </section>
