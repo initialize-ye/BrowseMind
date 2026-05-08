@@ -69,8 +69,9 @@ async function loadData() {
     // 绘制默认图表（饼图）
     drawPieChart();
 
-    // 加载目标
+    // 加载目标和高级分析
     loadGoals();
+    loadAdvancedAnalysis({ silent: true });
 
     loading.style.display = 'none';
     content.style.display = 'block';
@@ -528,6 +529,7 @@ async function syncToCloud() {
       }, 2000);
 
       alert(`✅ 同步成功\n${result.message}`);
+      loadAdvancedAnalysis({ silent: true });
     }
 
   } catch (error) {
@@ -633,26 +635,27 @@ document.getElementById('aiAnalysisModal').addEventListener('click', function(e)
   }
 });
 
-// 显示高级分析
-async function showAdvancedAnalysis() {
+// 加载高级分析
+async function loadAdvancedAnalysis({ silent = false } = {}) {
   const advancedBtn = document.getElementById('advancedAnalysisBtn');
   const originalText = advancedBtn.textContent;
 
   try {
-    advancedBtn.textContent = '⏳ 分析中...';
-    advancedBtn.disabled = true;
+    if (!silent) {
+      advancedBtn.textContent = '⏳ 分析中...';
+      advancedBtn.disabled = true;
+    }
 
-    // 检查服务器连接
     const isConnected = await dataSync.checkConnection();
     if (!isConnected) {
-      alert('❌ 无法连接到服务器\n请确保后端服务已启动');
+      if (!silent) {
+        alert('❌ 无法连接到服务器\n请确保后端服务已启动');
+      }
       return;
     }
 
-    // 获取用户ID
     await dataSync.initUserId();
 
-    // 调用高级分析接口
     const response = await fetch(
       `${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=7&blackhole_threshold=30`
     );
@@ -663,29 +666,34 @@ async function showAdvancedAnalysis() {
     }
 
     const analysis = await response.json();
-
-    // 显示时间黑洞
     displayBlackholes(analysis.blackholes);
-
-    // 显示注意力曲线
     displayAttentionCurve(analysis.attention_curve);
 
-    advancedBtn.textContent = '✅ 分析完成';
-    setTimeout(() => {
-      advancedBtn.textContent = originalText;
-    }, 2000);
-
+    if (!silent) {
+      advancedBtn.textContent = '✅ 分析完成';
+      setTimeout(() => {
+        advancedBtn.textContent = originalText;
+      }, 2000);
+    }
   } catch (error) {
     console.error('高级分析失败:', error);
-    advancedBtn.textContent = '❌ 分析失败';
-    setTimeout(() => {
-      advancedBtn.textContent = originalText;
-    }, 2000);
-
-    alert(`❌ 高级分析失败\n${error.message}`);
+    if (!silent) {
+      advancedBtn.textContent = '❌ 分析失败';
+      setTimeout(() => {
+        advancedBtn.textContent = originalText;
+      }, 2000);
+      alert(`❌ 高级分析失败\n${error.message}`);
+    }
   } finally {
-    advancedBtn.disabled = false;
+    if (!silent) {
+      advancedBtn.disabled = false;
+    }
   }
+}
+
+// 显示高级分析
+async function showAdvancedAnalysis() {
+  await loadAdvancedAnalysis({ silent: false });
 }
 
 // 显示时间黑洞
@@ -771,6 +779,8 @@ function drawAttentionChart(hourlyFocus) {
   // 只显示有数据的小时
   const activeHours = hourlyFocus.filter(h => h.total_duration > 0);
   if (activeHours.length === 0) {
+    const statsContainer = document.getElementById('attentionStats');
+    statsContainer.innerHTML = '<p style="text-align: center; color: #999;">暂无足够数据生成注意力曲线</p>';
     return;
   }
 
