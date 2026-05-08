@@ -1,7 +1,7 @@
 // BrowseMind 数据同步模块 - 与后端服务通信
 
 class DataSync {
-  constructor(apiBaseUrl = 'http://localhost:8000') {
+  constructor(apiBaseUrl = 'http://119.29.55.112:8000') {
     this.apiBaseUrl = apiBaseUrl;
     this.userId = null;
   }

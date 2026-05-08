@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BrowseMind 设置</title>
+  <title>BrowseMind Dashboard</title>
   <style>
     :root {
       --bg: #f8fafd;
@@ -18,375 +18,114 @@
       --green-soft: #e6f4ea;
       --red: #d93025;
       --red-soft: #fce8e6;
+      --yellow: #f9ab00;
       --shadow: 0 1px 2px rgba(60,64,67,.16), 0 1px 3px rgba(60,64,67,.12);
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      min-height: 100vh;
-      color: var(--text);
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
-      background: var(--bg);
-    }
-
-    .page {
-      width: min(1080px, calc(100vw - 32px));
-      margin: 0 auto;
-      padding: 28px 0 44px;
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 22px;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .brand-dot {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: conic-gradient(from 0deg, #4285f4, #34a853, #fbbc04, #ea4335, #4285f4);
-    }
-
-    h1 {
-      font-size: clamp(28px, 4vw, 42px);
-      line-height: 1.1;
-      letter-spacing: -0.04em;
-      font-weight: 600;
-    }
-
-    .subtitle {
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 18px;
-      align-items: start;
-    }
-
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 24px;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-    }
-
-    .sidebar {
-      position: sticky;
-      top: 20px;
-      padding: 16px;
-    }
-
-    .nav-item {
-      display: block;
-      width: 100%;
-      margin-bottom: 6px;
-      padding: 11px 12px;
-      border-radius: 999px;
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .nav-item:hover { background: var(--surface-2); }
-    .nav-item.active { color: var(--blue); background: var(--blue-soft); }
-
-    .content { display: grid; gap: 16px; }
-
-    .section {
-      padding: 22px;
-    }
-
-    .section-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-
-    .section-title h2 {
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }
-
-    .section-title p {
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .status-grid, .action-grid, .goal-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-    }
-
-    .status-card, .action-card, .goal-card {
-      padding: 16px;
-      border-radius: 18px;
-      background: var(--surface-2);
-    }
-
-    .status-card strong {
-      display: block;
-      margin-top: 8px;
-      font-size: 24px;
-      line-height: 1;
-      font-weight: 700;
-    }
-
-    .label {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .note {
-      margin-top: 12px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      color: var(--blue);
-      background: var(--blue-soft);
-      font-size: 13px;
-      line-height: 1.6;
-    }
-
-    .success { color: var(--green); background: var(--green-soft); }
-    .danger { color: var(--red); background: var(--red-soft); }
-
-    button {
-      border: 0;
-      cursor: pointer;
-      border-radius: 999px;
-      padding: 10px 16px;
-      color: #fff;
-      background: var(--blue);
-      font-family: inherit;
-      font-weight: 600;
-      transition: background .16s ease, box-shadow .16s ease, transform .16s ease;
-    }
-
+    body { min-height: 100vh; color: var(--text); font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif; background: var(--bg); }
+    .page { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0 44px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-dot { width: 28px; height: 28px; border-radius: 50%; background: conic-gradient(from 0deg, #4285f4, #34a853, #fbbc04, #ea4335, #4285f4); }
+    h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.04em; font-weight: 600; }
+    .subtitle { margin-top: 4px; color: var(--muted); font-size: 14px; }
+    .panel, .metric { border: 1px solid var(--line); border-radius: 24px; background: var(--surface); box-shadow: var(--shadow); }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 16px; margin-bottom: 16px; }
+    .intro, .status-panel, .panel { padding: 20px; }
+    .intro h2 { margin-bottom: 8px; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+    .intro p, .section-title p, .muted { color: var(--muted); line-height: 1.6; font-size: 13px; }
+    .status-note { margin-top: 12px; padding: 12px 14px; border-radius: 14px; color: var(--blue); background: var(--blue-soft); font-size: 13px; line-height: 1.6; }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+    .metric { padding: 18px; min-height: 124px; }
+    .metric span { color: var(--muted); font-size: 13px; font-weight: 500; }
+    .metric strong { display: block; margin-top: 14px; font-size: clamp(30px, 4vw, 44px); line-height: 1; font-weight: 700; letter-spacing: -0.04em; }
+    .dashboard-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; align-items: start; margin-bottom: 16px; }
+    .panel { margin-bottom: 16px; }
+    .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .section-title h2 { font-size: 18px; font-weight: 600; }
+    .chart-box { position: relative; height: 320px; }
+    .chart-box.small { height: 240px; }
+    .category-row, .domain-row, .goal-card, .setting-row { display: grid; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .category-row { grid-template-columns: 120px 1fr auto; }
+    .domain-row, .goal-card { grid-template-columns: 1fr auto; }
+    .setting-row { grid-template-columns: 1fr minmax(240px, 380px); }
+    .category-row:last-child, .domain-row:last-child, .goal-card:last-child, .setting-row:last-child { border-bottom: 0; }
+    .bar-track { height: 8px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+    .bar-fill { height: 100%; border-radius: inherit; background: var(--blue); }
+    .domain-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .domain-meta, .category-meta, .label { color: var(--muted); font-size: 12px; }
+    .empty { padding: 42px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 18px; background: var(--surface-2); }
+    .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    button { border: 0; cursor: pointer; border-radius: 999px; padding: 10px 16px; color: #fff; background: var(--blue); font-family: inherit; font-weight: 600; transition: background .16s ease, box-shadow .16s ease, transform .16s ease; }
     button:hover { background: #1765cc; box-shadow: var(--shadow); transform: translateY(-1px); }
     button.secondary { color: var(--blue); background: var(--blue-soft); }
     button.ghost { color: var(--blue); background: transparent; border: 1px solid var(--line); }
     button.danger { color: var(--red); background: var(--red-soft); }
-
-    .button-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .setting-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 16px;
-      align-items: center;
-      padding: 14px 0;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .setting-row:last-child { border-bottom: 0; }
-    .setting-row h3 { font-size: 15px; font-weight: 600; }
-    .setting-row p { margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 1.5; }
-
-    input, select {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--surface);
-      color: var(--text);
-      outline: none;
-      font: inherit;
-    }
-
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); outline: none; font: inherit; }
     input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 140px auto;
-      gap: 10px;
-      align-items: end;
-      margin-top: 12px;
-    }
-
+    .form-grid { display: grid; grid-template-columns: 1fr 140px auto; gap: 10px; align-items: end; margin-top: 12px; }
     label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; font-weight: 500; }
-
-    .goal-list { display: grid; gap: 10px; margin-top: 14px; }
-    .goal-card { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
-    .goal-card strong { font-size: 14px; }
-    .goal-card p { margin-top: 4px; color: var(--muted); font-size: 12px; }
-
-    .log-box {
-      max-height: 180px;
-      overflow: auto;
-      padding: 12px;
-      border-radius: 14px;
-      background: #202124;
-      color: #e8eaed;
-      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-      font-size: 12px;
-      line-height: 1.6;
-    }
-
-    @media (max-width: 860px) {
-      .layout { grid-template-columns: 1fr; }
-      .sidebar { position: static; }
-      .status-grid, .action-grid, .goal-grid { grid-template-columns: 1fr; }
-      .form-grid { grid-template-columns: 1fr; }
-      .setting-row { grid-template-columns: 1fr; }
-    }
+    .note { display: none; margin-top: 12px; padding: 12px 14px; border-radius: 14px; color: var(--blue); background: var(--blue-soft); font-size: 13px; line-height: 1.6; }
+    .note.success { color: var(--green); background: var(--green-soft); }
+    .note.danger { color: var(--red); background: var(--red-soft); }
+    .log-box { max-height: 160px; overflow: auto; padding: 12px; border-radius: 14px; background: #202124; color: #e8eaed; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; }
+    @media (max-width: 900px) { .hero, .dashboard-grid, .controls-grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } .setting-row, .form-grid { grid-template-columns: 1fr; } .topbar { align-items: flex-start; flex-direction: column; } }
   </style>
 </head>
 <body>
   <main class="page">
     <header class="topbar">
-      <div class="brand">
-        <div class="brand-dot"></div>
-        <div>
-          <h1>BrowseMind 设置</h1>
-          <p class="subtitle">同步、分析、目标和本地数据管理</p>
-        </div>
-      </div>
-      <button id="refreshBtn">刷新状态</button>
+      <div class="brand"><div class="brand-dot"></div><div><h1>BrowseMind Dashboard</h1><p class="subtitle">数据展示为主，设置与操作为辅</p></div></div>
+      <button id="refreshBtn">刷新数据</button>
     </header>
 
-    <div class="layout">
-      <nav class="sidebar panel">
-        <a class="nav-item active" href="#status">状态</a>
-        <a class="nav-item" href="#actions">操作</a>
-        <a class="nav-item" href="#goals">目标</a>
-        <a class="nav-item" href="#settings">设置</a>
-        <a class="nav-item" href="#data">数据</a>
-      </nav>
+    <section class="hero">
+      <div class="intro panel"><h2>浏览概览</h2><p>从插件本地记录和云端服务生成最近 7 天的时间分布、分类构成和高频站点。设置区域在页面下方，可配置服务器和触发操作。</p></div>
+      <aside class="status-panel panel"><div class="section-title"><div><h2>连接状态</h2><p id="todayDate">--</p></div></div><div class="status-note" id="statusNote">正在读取数据...</div></aside>
+    </section>
 
-      <section class="content">
-        <section class="section panel" id="status">
-          <div class="section-title">
-            <div>
-              <h2>运行状态</h2>
-              <p>查看插件、本地数据和后端连接状态。</p>
-            </div>
-          </div>
-          <div class="status-grid">
-            <div class="status-card"><div class="label">本地记录</div><strong id="localCount">0</strong></div>
-            <div class="status-card"><div class="label">用户 ID</div><strong id="userIdShort">--</strong></div>
-            <div class="status-card"><div class="label">后端状态</div><strong id="serverStatus">检查中</strong></div>
-          </div>
-          <div class="note" id="statusNote">正在读取状态...</div>
-        </section>
+    <section class="metric-grid">
+      <div class="metric"><span>今日访问</span><strong id="metricTodayVisits">0</strong></div>
+      <div class="metric"><span>今日时长</span><strong id="metricTodayDuration">0m</strong></div>
+      <div class="metric"><span>7 天访问</span><strong id="metricWeekVisits">0</strong></div>
+      <div class="metric"><span>独立网站</span><strong id="metricUniqueSites">0</strong></div>
+    </section>
 
-        <section class="section panel" id="actions">
-          <div class="section-title">
-            <div>
-              <h2>常用操作</h2>
-              <p>在这里直接控制插件行为。</p>
-            </div>
-          </div>
-          <div class="action-grid">
-            <div class="action-card">
-              <h3>同步云端</h3>
-              <p class="label">上传本地浏览记录到后端。</p>
-              <div class="button-row"><button id="syncBtn">立即同步</button></div>
-            </div>
-            <div class="action-card">
-              <h3>AI 分析</h3>
-              <p class="label">调用后端 AI 分析最近 7 天数据。</p>
-              <div class="button-row"><button id="aiBtn" class="secondary">开始分析</button></div>
-            </div>
-            <div class="action-card">
-              <h3>打开插件</h3>
-              <p class="label">返回插件弹窗查看简要统计。</p>
-              <div class="button-row"><button id="openPopupHelpBtn" class="ghost">查看说明</button></div>
-            </div>
-          </div>
-        </section>
+    <section class="dashboard-grid">
+      <div>
+        <div class="panel"><div class="section-title"><h2>7 天趋势</h2><p>时长与访问次数</p></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
+        <div class="panel"><div class="section-title"><h2>分类构成</h2><p>按停留时长排序</p></div><div id="categoryList"></div></div>
+      </div>
+      <div>
+        <div class="panel"><div class="section-title"><h2>时间分布</h2><p>按小时统计</p></div><div class="chart-box small"><canvas id="hourlyChart"></canvas></div></div>
+        <div class="panel"><div class="section-title"><h2>高频站点</h2><p>Top domains</p></div><div id="domainList"></div></div>
+      </div>
+    </section>
 
-        <section class="section panel" id="goals">
-          <div class="section-title">
-            <div>
-              <h2>今日目标</h2>
-              <p>创建或管理今天的学习、娱乐、编程和社交目标。</p>
-            </div>
-          </div>
-          <div class="form-grid">
-            <div>
-              <label>目标类型</label>
-              <select id="goalTypeSelect">
-                <option value="daily_learning">每日学习时长</option>
-                <option value="daily_entertainment">每日娱乐时长限制</option>
-                <option value="daily_coding">每日编程时长</option>
-                <option value="daily_social">每日社交时长限制</option>
-              </select>
-            </div>
-            <div>
-              <label>时长（分钟）</label>
-              <input id="goalDurationInput" type="number" min="1" max="1440" value="60">
-            </div>
-            <button id="createGoalBtn">添加目标</button>
-          </div>
-          <div class="goal-list" id="goalList"></div>
-        </section>
+    <section class="controls-grid">
+      <div class="panel">
+        <div class="section-title"><div><h2>插件操作</h2><p>同步、AI 分析和本地数据管理。</p></div></div>
+        <div class="button-row"><button id="syncBtn">立即同步</button><button id="aiBtn" class="secondary">AI 分析</button><button id="exportJsonBtn" class="ghost">导出 JSON</button><button id="clearLocalBtn" class="danger">清空本地数据</button></div>
+        <div class="note" id="operationNote"></div>
+        <div class="log-box" id="logBox" style="margin-top:14px;">等待操作...</div>
+      </div>
 
-        <section class="section panel" id="settings">
-          <div class="section-title">
-            <div>
-              <h2>连接设置</h2>
-              <p>配置后端 API 地址，默认是本地服务。</p>
-            </div>
-          </div>
-          <div class="setting-row">
-            <div>
-              <h3>后端地址</h3>
-              <p>用于同步、AI 分析和自动高级分析。</p>
-            </div>
-            <div style="width: min(360px, 100%);">
-              <input id="apiBaseUrlInput" type="url" placeholder="http://localhost:8000">
-            </div>
-          </div>
-          <div class="button-row">
-            <button id="saveApiBtn">保存设置</button>
-            <button id="resetApiBtn" class="ghost">恢复默认</button>
-            <button id="testApiBtn" class="secondary">测试连接</button>
-          </div>
-        </section>
+      <div class="panel">
+        <div class="section-title"><div><h2>今日目标</h2><p>添加或删除今天的目标。</p></div></div>
+        <div class="form-grid"><div><label>目标类型</label><select id="goalTypeSelect"><option value="daily_learning">每日学习时长</option><option value="daily_entertainment">每日娱乐时长限制</option><option value="daily_coding">每日编程时长</option><option value="daily_social">每日社交时长限制</option></select></div><div><label>分钟</label><input id="goalDurationInput" type="number" min="1" max="1440" value="60"></div><button id="createGoalBtn">添加</button></div>
+        <div id="goalList" style="margin-top:14px;"></div>
+      </div>
+    </section>
 
-        <section class="section panel" id="data">
-          <div class="section-title">
-            <div>
-              <h2>数据管理</h2>
-              <p>管理本地记录。清空操作不可恢复。</p>
-            </div>
-          </div>
-          <div class="button-row">
-            <button id="exportJsonBtn" class="ghost">导出 JSON</button>
-            <button id="clearLocalBtn" class="danger">清空本地数据</button>
-          </div>
-          <div class="note" id="operationNote" style="display:none;"></div>
-          <div class="log-box" id="logBox" style="margin-top: 14px;">等待操作...</div>
-        </section>
-      </section>
-    </div>
+    <section class="panel" style="margin-top:16px;">
+      <div class="section-title"><div><h2>连接设置</h2><p>默认云服务器：119.29.55.112</p></div></div>
+      <div class="setting-row"><div><strong>后端 API 地址</strong><p class="muted">用于同步、AI 分析和自动高级分析。</p></div><input id="apiBaseUrlInput" type="url" placeholder="http://119.29.55.112:8000"></div>
+      <div class="button-row"><button id="saveApiBtn">保存设置</button><button id="resetApiBtn" class="ghost">恢复默认</button><button id="testApiBtn" class="secondary">测试连接</button></div>
+    </section>
   </main>
 
+  <script src="chart.min.js"></script>
   <script src="dataProcessor.js"></script>
   <script src="dataSync.js"></script>
   <script src="dashboard.js"></script>

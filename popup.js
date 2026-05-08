@@ -7,7 +7,7 @@ let dataSync = new DataSync();
 
 async function initDataSync() {
   const { apiBaseUrl } = await chrome.storage.local.get('apiBaseUrl');
-  dataSync = new DataSync(apiBaseUrl || 'http://localhost:8000');
+  dataSync = new DataSync(apiBaseUrl || 'http://119.29.55.112:8000');
   return dataSync;
 }
 
