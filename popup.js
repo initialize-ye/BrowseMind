@@ -972,19 +972,19 @@ async function deleteGoal(goalId) {
 
 async function updateGoalsProgress() {
   try {
+    await initDataSync();
     const { userId } = await chrome.storage.local.get('userId');
     if (!userId) return;
 
     const today = new Date().toISOString().split('T')[0];
 
-    const response = await fetch(`${dataSync.baseUrl}/api/goals/${userId}/update-progress`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: today })
+    const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${userId}/update-progress?date=${encodeURIComponent(today)}`, {
+      method: 'POST'
     });
 
     if (!response.ok) {
-      console.error('更新目标进度失败');
+      const errorText = await response.text();
+      console.error('更新目标进度失败:', response.status, errorText);
       return;
     }
 

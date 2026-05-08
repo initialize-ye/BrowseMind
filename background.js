@@ -154,14 +154,13 @@ async function updateGoalsProgress() {
     const baseUrl = apiBaseUrl || 'http://119.29.55.112:8000';
     const today = new Date().toISOString().split('T')[0];
 
-    const response = await fetch(baseUrl + '/api/goals/' + userId + '/update-progress', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: today })
+    const response = await fetch(baseUrl + '/api/goals/' + userId + '/update-progress?date=' + encodeURIComponent(today), {
+      method: 'POST'
     });
 
     if (!response.ok) {
-      console.error('更新目标进度失败');
+      const errorText = await response.text();
+      console.error('更新目标进度失败:', response.status, errorText);
       return;
     }
 
