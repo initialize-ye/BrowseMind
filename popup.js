@@ -560,7 +560,8 @@ async function showAIAnalysis() {
 
     // 调用 AI 分析接口
     const response = await fetch(
-      `${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=7`
+      `${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=7`,
+      { method: 'POST' }
     );
 
     if (!response.ok) {
