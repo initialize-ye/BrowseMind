@@ -14,6 +14,9 @@ document.getElementById('closeModal').addEventListener('click', closeModal);
 document.getElementById('addGoalBtn').addEventListener('click', openGoalModal);
 document.getElementById('closeGoalModal').addEventListener('click', closeGoalModal);
 document.getElementById('saveGoalBtn').addEventListener('click', saveGoal);
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchChart(btn.dataset.chart, btn));
+});
 
 async function loadData() {
   const loading = document.getElementById('loading');
@@ -212,12 +215,14 @@ function updateTodayCategoryStats(todayStats, classifier) {
 }
 
 // 切换图表
-function switchChart(type) {
+function switchChart(type, activeButton) {
   // 更新按钮状态
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.remove('active');
   });
-  event.target.classList.add('active');
+  if (activeButton) {
+    activeButton.classList.add('active');
+  }
 
   // 绘制对应图表
   if (type === 'pie') {

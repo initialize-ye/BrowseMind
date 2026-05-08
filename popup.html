@@ -523,9 +523,9 @@
       <div class="card">
         <div class="card-title">📈 可视化分析</div>
         <div class="tab-buttons">
-          <button class="tab-btn active" onclick="switchChart('pie')">分类占比</button>
-          <button class="tab-btn" onclick="switchChart('bar')">时间分布</button>
-          <button class="tab-btn" onclick="switchChart('line')">每日趋势</button>
+          <button class="tab-btn active" data-chart="pie">分类占比</button>
+          <button class="tab-btn" data-chart="bar">时间分布</button>
+          <button class="tab-btn" data-chart="line">每日趋势</button>
         </div>
         <div class="chart-container">
           <canvas id="mainChart"></canvas>
