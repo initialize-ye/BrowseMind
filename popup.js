@@ -10,6 +10,7 @@ document.getElementById('refreshBtn').addEventListener('click', loadData);
 document.getElementById('syncBtn').addEventListener('click', syncToCloud);
 document.getElementById('advancedAnalysisBtn').addEventListener('click', showAdvancedAnalysis);
 document.getElementById('aiAnalysisBtn').addEventListener('click', showAIAnalysis);
+document.getElementById('dashboardBtn').addEventListener('click', openDashboard);
 document.getElementById('closeModal').addEventListener('click', closeModal);
 document.getElementById('addGoalBtn').addEventListener('click', openGoalModal);
 document.getElementById('closeGoalModal').addEventListener('click', closeGoalModal);
@@ -80,6 +81,10 @@ async function loadData() {
     loading.style.display = 'none';
     emptyState.style.display = 'block';
   }
+}
+
+function openDashboard() {
+  chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
 }
 
 function calculateStats(data) {
