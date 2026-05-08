@@ -1,5 +1,14 @@
 // BrowseMind 后台服务 - 负责监听标签页活动和记录浏览数据
 
+importScripts('dataProcessor.js', 'dataSync.js');
+
+const DEFAULT_API_BASE_URL = 'http://119.29.55.112:8000';
+const AUTO_SYNC_DEBOUNCE_MS = 15000;
+const AUTO_SYNC_MIN_INTERVAL_MS = 2 * 60 * 1000;
+
+let autoSyncTimer = null;
+let isAutoSyncing = false;
+
 // 存储当前活跃标签的信息
 let activeTab = {
   tabId: null,
@@ -136,11 +145,16 @@ chrome.alarms.create('cleanOldData', { periodInMinutes: 60 });
 // 定期更新目标进度（每5分钟）
 chrome.alarms.create('updateGoalsProgress', { periodInMinutes: 5 });
 
+// 定期兜底同步浏览数据（每5分钟）
+chrome.alarms.create('syncBrowsingData', { periodInMinutes: 5 });
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'cleanOldData') {
     collectHistoryData(); // 重新采集并自动清理旧数据
   } else if (alarm.name === 'updateGoalsProgress') {
     updateGoalsProgress();
+  } else if (alarm.name === 'syncBrowsingData') {
+    syncLocalDataInBackground('alarm');
   }
 });
 
@@ -187,12 +201,54 @@ function showNotification(type, message) {
   });
 }
 
-// 监听浏览记录变化，实时检查目标
+async function getDataSync() {
+  const { apiBaseUrl } = await chrome.storage.local.get('apiBaseUrl');
+  return new DataSync(apiBaseUrl || DEFAULT_API_BASE_URL);
+}
+
+function scheduleAutoSync() {
+  if (autoSyncTimer) {
+    clearTimeout(autoSyncTimer);
+  }
+
+  autoSyncTimer = setTimeout(() => {
+    autoSyncTimer = null;
+    syncLocalDataInBackground('storage-change');
+  }, AUTO_SYNC_DEBOUNCE_MS);
+}
+
+async function syncLocalDataInBackground(source) {
+  if (isAutoSyncing) return;
+
+  try {
+    const { browsingData = [], lastSyncTime } = await chrome.storage.local.get(['browsingData', 'lastSyncTime']);
+    if (!browsingData.length) return;
+
+    if (lastSyncTime && Date.now() - lastSyncTime < AUTO_SYNC_MIN_INTERVAL_MS) {
+      return;
+    }
+
+    isAutoSyncing = true;
+    const dataSync = await getDataSync();
+    const isConnected = await dataSync.checkConnection();
+    if (!isConnected) return;
+
+    const result = await dataSync.syncLocalData();
+    console.log('后台自动同步完成:', source, result.message || '成功');
+  } catch (error) {
+    console.error('后台自动同步失败:', source, error);
+  } finally {
+    isAutoSyncing = false;
+  }
+}
+
+// 监听浏览记录变化，实时检查目标与自动同步
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local' && changes.browsingData) {
-    // 延迟1秒后更新目标进度，避免频繁调用
     setTimeout(() => {
       updateGoalsProgress();
     }, 1000);
+
+    scheduleAutoSync();
   }
 });

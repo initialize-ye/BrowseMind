@@ -646,11 +646,25 @@ document.getElementById('aiAnalysisModal').addEventListener('click', function(e)
   }
 });
 
+function displayAdvancedAnalysisEmptyState(message = '同步云端数据后将显示高级分析结果') {
+  const blackholeContainer = document.getElementById('blackholeStats');
+  const attentionStatsContainer = document.getElementById('attentionStats');
+
+  blackholeContainer.innerHTML = `<p style="text-align: center; color: #5f6368; padding: 20px;">${escapeHtml(message)}</p>`;
+  attentionStatsContainer.innerHTML = `<p style="text-align: center; color: #5f6368; padding: 20px;">${escapeHtml(message)}</p>`;
+
+  if (attentionChart) {
+    attentionChart.destroy();
+    attentionChart = null;
+  }
+}
+
 // 自动加载高级分析
 async function loadAdvancedAnalysis() {
   try {
     const isConnected = await dataSync.checkConnection();
     if (!isConnected) {
+      displayAdvancedAnalysisEmptyState('后端未连接，暂时无法加载高级分析');
       return;
     }
 
@@ -659,6 +673,11 @@ async function loadAdvancedAnalysis() {
     const response = await fetch(
       `${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=7&blackhole_threshold=30`
     );
+
+    if (response.status === 404) {
+      displayAdvancedAnalysisEmptyState('云端数据正在准备中，稍后再打开插件即可看到高级分析');
+      return;
+    }
 
     if (!response.ok) {
       const error = await response.json();
@@ -670,6 +689,7 @@ async function loadAdvancedAnalysis() {
     displayAttentionCurve(analysis.attention_curve);
   } catch (error) {
     console.error('高级分析失败:', error);
+    displayAdvancedAnalysisEmptyState('高级分析暂时不可用，请稍后重试');
   }
 }
 
