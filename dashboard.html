@@ -23,24 +23,52 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { min-height: 100vh; color: var(--text); font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif; background: var(--bg); }
-    .page { width: min(1280px, calc(100vw - 32px)); margin: 0 auto; padding: 28px 0 44px; }
+    body.sidebar-collapsed .layout { grid-template-columns: 88px minmax(0, 1fr); }
+    .page { width: min(1440px, calc(100vw - 24px)); margin: 0 auto; padding: 20px 0 28px; }
     .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
     .brand { display: flex; align-items: center; gap: 12px; }
     .brand-dot { width: 28px; height: 28px; border-radius: 50%; background: conic-gradient(from 0deg, #4285f4, #34a853, #fbbc04, #ea4335, #4285f4); }
     h1 { font-size: clamp(28px, 4vw, 42px); line-height: 1.1; letter-spacing: -0.04em; font-weight: 600; }
     .subtitle { margin-top: 4px; color: var(--muted); font-size: 14px; }
     .panel, .metric { border: 1px solid var(--line); border-radius: 24px; background: var(--surface); box-shadow: var(--shadow); }
-    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
-    .analytics-main { min-width: 0; }
-    .sidebar { position: sticky; top: 24px; }
+    .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; transition: grid-template-columns .22s ease; }
+    .analytics-main { min-width: 0; order: 2; }
+    .sidebar { position: sticky; top: 16px; order: 1; min-height: calc(100vh - 32px); padding: 16px; border-radius: 28px; background: #202123; color: #ececf1; box-shadow: 0 12px 32px rgba(15, 23, 42, .18); transition: padding .22s ease, width .22s ease; overflow: hidden; }
     .sidebar-shell { display: grid; gap: 16px; }
-    .sidebar-label { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
-    .sidebar-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 6px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
-    .sidebar-tab { border: 0; border-radius: 12px; padding: 10px 12px; color: var(--muted); background: transparent; font-weight: 600; }
-    .sidebar-tab:hover { color: var(--blue); background: var(--blue-soft); box-shadow: none; transform: none; }
-    .sidebar-tab.active { color: var(--blue); background: var(--blue-soft); }
-    .sidebar-panel { display: none; }
+    .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .sidebar-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .sidebar-brand-copy { min-width: 0; }
+    .sidebar-title { font-size: 15px; font-weight: 700; color: #f7f7f8; white-space: nowrap; }
+    .sidebar-subtitle { margin-top: 2px; color: #a1a1aa; font-size: 12px; white-space: nowrap; }
+    .sidebar-toggle { width: 40px; height: 40px; padding: 0; border-radius: 14px; color: #ececf1; background: rgba(255,255,255,.08); }
+    .sidebar-toggle:hover { background: rgba(255,255,255,.14); box-shadow: none; transform: none; }
+    .sidebar-label { color: #a1a1aa; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .sidebar-tabs { display: grid; gap: 8px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+    .sidebar-tab { display: flex; align-items: center; justify-content: flex-start; gap: 12px; border: 0; border-radius: 16px; padding: 12px 14px; color: #c5c5d2; background: transparent; font-weight: 600; text-align: left; }
+    .sidebar-tab:hover { color: #fff; background: rgba(255,255,255,.08); box-shadow: none; transform: none; }
+    .sidebar-tab.active { color: #fff; background: rgba(255,255,255,.12); }
+    .sidebar-tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; font-size: 15px; flex: 0 0 18px; }
+    .sidebar-tab-label { white-space: nowrap; }
+    .sidebar-panel { display: none; padding: 18px; border: 1px solid rgba(255,255,255,.08); border-radius: 22px; background: rgba(255,255,255,.04); box-shadow: none; }
     .sidebar-panel.active { display: block; }
+    .sidebar .section-title h2, .sidebar .section-title p, .sidebar .muted, .sidebar label, .sidebar .goal-card strong, .sidebar .goal-card .muted, .sidebar .setting-row strong, .sidebar .toggle-row strong { color: inherit; }
+    .sidebar .section-title p, .sidebar .muted, .sidebar label, .sidebar .category-meta, .sidebar .domain-meta { color: #a1a1aa; }
+    .sidebar .note { background: rgba(26,115,232,.16); color: #dbeafe; }
+    .sidebar .note.success { background: rgba(24,128,56,.16); color: #dcfce7; }
+    .sidebar .note.danger { background: rgba(217,48,37,.16); color: #fee2e2; }
+    .sidebar .log-box { background: rgba(0,0,0,.28); color: #e8eaed; }
+    .sidebar input, .sidebar select, .sidebar textarea { border-color: rgba(255,255,255,.12); background: rgba(15,23,42,.45); color: #f7f7f8; }
+    .sidebar input:focus, .sidebar select:focus, .sidebar textarea:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,.18); }
+    body.sidebar-collapsed .sidebar { padding: 16px 10px; }
+    body.sidebar-collapsed .sidebar-label,
+    body.sidebar-collapsed .sidebar-brand-copy,
+    body.sidebar-collapsed .sidebar-tab-label,
+    body.sidebar-collapsed .sidebar-panel { display: none; }
+    body.sidebar-collapsed .sidebar-shell { justify-items: center; }
+    body.sidebar-collapsed .sidebar-header { width: 100%; justify-content: center; }
+    body.sidebar-collapsed .sidebar-toggle { margin: 0 auto; }
+    body.sidebar-collapsed .sidebar-tabs { width: 100%; }
+    body.sidebar-collapsed .sidebar-tab { justify-content: center; padding: 12px; }
     .hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 16px; margin-bottom: 16px; }
     .intro, .status-panel, .panel { padding: 20px; }
     .intro h2 { margin-bottom: 8px; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
@@ -88,10 +116,12 @@
     .log-box { max-height: 180px; overflow: auto; padding: 12px; border-radius: 14px; background: #202124; color: #e8eaed; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; }
     @media (max-width: 1100px) {
       .layout { grid-template-columns: 1fr; }
-      .sidebar { position: static; }
+      .analytics-main { order: 2; }
+      .sidebar { position: static; min-height: auto; }
+      body.sidebar-collapsed .layout { grid-template-columns: 1fr; }
     }
     @media (max-width: 900px) {
-      .hero, .dashboard-grid { grid-template-columns: 1fr; }
+      .hero, .dashboard-grid, .inline-grid { grid-template-columns: 1fr; }
       .metric-grid { grid-template-columns: repeat(2, 1fr); }
       .topbar { align-items: flex-start; flex-direction: column; }
       .category-row { grid-template-columns: 1fr; }
@@ -106,38 +136,23 @@
     </header>
 
     <div class="layout">
-      <section class="analytics-main">
-        <section class="hero">
-          <div class="intro panel"><h2>浏览概览</h2><p>从插件本地记录和云端服务生成最近 7 天的时间分布、分类构成和高频站点。主区域专注展示你的浏览数据，侧边栏集中管理操作、目标和连接设置。</p></div>
-          <aside class="status-panel panel"><div class="section-title"><div><h2>连接状态</h2><p id="todayDate">--</p></div></div><div class="status-note" id="statusNote">正在读取数据...</div></aside>
-        </section>
-
-        <section class="metric-grid">
-          <div class="metric"><span>今日访问</span><strong id="metricTodayVisits">0</strong></div>
-          <div class="metric"><span>今日时长</span><strong id="metricTodayDuration">0m</strong></div>
-          <div class="metric"><span>7 天访问</span><strong id="metricWeekVisits">0</strong></div>
-          <div class="metric"><span>独立网站</span><strong id="metricUniqueSites">0</strong></div>
-        </section>
-
-        <section class="dashboard-grid">
-          <div>
-            <div class="panel"><div class="section-title"><h2>7 天趋势</h2><p>时长与访问次数</p></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
-            <div class="panel"><div class="section-title"><h2>分类构成</h2><p>按停留时长排序</p></div><div id="categoryList"></div></div>
-          </div>
-          <div>
-            <div class="panel"><div class="section-title"><h2>时间分布</h2><p>按小时统计</p></div><div class="chart-box small"><canvas id="hourlyChart"></canvas></div></div>
-            <div class="panel"><div class="section-title"><h2>高频站点</h2><p>Top domains</p></div><div id="domainList"></div></div>
-          </div>
-        </section>
-      </section>
-
       <aside class="sidebar">
         <div class="sidebar-shell">
-          <div class="sidebar-label">操作与设置</div>
+          <div class="sidebar-header">
+            <div class="sidebar-brand">
+              <div class="brand-dot"></div>
+              <div class="sidebar-brand-copy">
+                <div class="sidebar-title">BrowseMind</div>
+                <div class="sidebar-subtitle">工作台</div>
+              </div>
+            </div>
+            <button id="sidebarToggleBtn" class="sidebar-toggle" aria-expanded="true" aria-label="收起侧边栏">☰</button>
+          </div>
+          <div class="sidebar-label">导航</div>
           <div class="sidebar-tabs" role="tablist" aria-label="侧边栏选项卡">
-            <button class="sidebar-tab active" id="sidebarTabActions" data-sidebar-tab="actions" role="tab" aria-selected="true">操作</button>
-            <button class="sidebar-tab" id="sidebarTabGoals" data-sidebar-tab="goals" role="tab" aria-selected="false">目标</button>
-            <button class="sidebar-tab" id="sidebarTabSettings" data-sidebar-tab="settings" role="tab" aria-selected="false">设置</button>
+            <button class="sidebar-tab active" id="sidebarTabActions" data-sidebar-tab="actions" role="tab" aria-selected="true"><span class="sidebar-tab-icon">⚡</span><span class="sidebar-tab-label">操作</span></button>
+            <button class="sidebar-tab" id="sidebarTabGoals" data-sidebar-tab="goals" role="tab" aria-selected="false"><span class="sidebar-tab-icon">🎯</span><span class="sidebar-tab-label">目标</span></button>
+            <button class="sidebar-tab" id="sidebarTabSettings" data-sidebar-tab="settings" role="tab" aria-selected="false"><span class="sidebar-tab-icon">⚙️</span><span class="sidebar-tab-label">设置</span></button>
           </div>
 
           <section class="panel sidebar-panel active" id="sidebarPanelActions" data-sidebar-panel="actions">
@@ -180,6 +195,31 @@
           </section>
         </div>
       </aside>
+
+      <section class="analytics-main">
+        <section class="hero">
+          <div class="intro panel"><h2>浏览概览</h2><p>从插件本地记录和云端服务生成最近 7 天的时间分布、分类构成和高频站点。主区域专注展示你的浏览数据，左侧侧边栏集中管理操作、目标和连接设置。</p></div>
+          <aside class="status-panel panel"><div class="section-title"><div><h2>连接状态</h2><p id="todayDate">--</p></div></div><div class="status-note" id="statusNote">正在读取数据...</div></aside>
+        </section>
+
+        <section class="metric-grid">
+          <div class="metric"><span>今日访问</span><strong id="metricTodayVisits">0</strong></div>
+          <div class="metric"><span>今日时长</span><strong id="metricTodayDuration">0m</strong></div>
+          <div class="metric"><span>7 天访问</span><strong id="metricWeekVisits">0</strong></div>
+          <div class="metric"><span>独立网站</span><strong id="metricUniqueSites">0</strong></div>
+        </section>
+
+        <section class="dashboard-grid">
+          <div>
+            <div class="panel"><div class="section-title"><h2>7 天趋势</h2><p>时长与访问次数</p></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
+            <div class="panel"><div class="section-title"><h2>分类构成</h2><p>按停留时长排序</p></div><div id="categoryList"></div></div>
+          </div>
+          <div>
+            <div class="panel"><div class="section-title"><h2>时间分布</h2><p>按小时统计</p></div><div class="chart-box small"><canvas id="hourlyChart"></canvas></div></div>
+            <div class="panel"><div class="section-title"><h2>高频站点</h2><p>Top domains</p></div><div id="domainList"></div></div>
+          </div>
+        </section>
+      </section>
     </div>
   </main>
 

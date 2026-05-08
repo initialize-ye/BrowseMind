@@ -17,6 +17,7 @@ let dataSync = null;
 let trendChart = null;
 let hourlyChart = null;
 let activeSidebarTab = 'actions';
+let isSidebarCollapsed = false;
 
 function todayString() { return new Date().toISOString().split('T')[0]; }
 function formatDuration(seconds) {
@@ -62,7 +63,30 @@ async function getApiBaseUrl() {
   const { apiBaseUrl } = await getPreferences();
   return apiBaseUrl;
 }
-function switchSidebarTab(tab) {
+async function loadSidebarState() {
+  const { dashboardSidebarCollapsed = false, dashboardActiveSidebarTab = 'actions' } = await chrome.storage.local.get(['dashboardSidebarCollapsed', 'dashboardActiveSidebarTab']);
+  isSidebarCollapsed = Boolean(dashboardSidebarCollapsed);
+  activeSidebarTab = dashboardActiveSidebarTab;
+}
+function applySidebarState() {
+  document.body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
+  const toggleButton = document.getElementById('sidebarToggleBtn');
+  if (toggleButton) {
+    toggleButton.setAttribute('aria-expanded', isSidebarCollapsed ? 'false' : 'true');
+    toggleButton.setAttribute('aria-label', isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏');
+    toggleButton.textContent = isSidebarCollapsed ? '☷' : '☰';
+  }
+}
+async function toggleSidebar() {
+  isSidebarCollapsed = !isSidebarCollapsed;
+  applySidebarState();
+  await chrome.storage.local.set({ dashboardSidebarCollapsed: isSidebarCollapsed });
+  setTimeout(() => {
+    if (trendChart) trendChart.resize();
+    if (hourlyChart) hourlyChart.resize();
+  }, 240);
+}
+async function switchSidebarTab(tab) {
   activeSidebarTab = tab;
   document.querySelectorAll('[data-sidebar-tab]').forEach(button => {
     const isActive = button.dataset.sidebarTab === tab;
@@ -72,6 +96,7 @@ function switchSidebarTab(tab) {
   document.querySelectorAll('[data-sidebar-panel]').forEach(panel => {
     panel.classList.toggle('active', panel.dataset.sidebarPanel === tab);
   });
+  await chrome.storage.local.set({ dashboardActiveSidebarTab: tab });
 }
 function applyPreferencesToForm(preferences) {
   document.getElementById('apiBaseUrlInput').value = preferences.apiBaseUrl;
@@ -243,6 +268,6 @@ async function resetApiBaseUrl() { await chrome.storage.local.set({ ...DEFAULT_P
 async function testApiConnection() { await initDataSync(); const connected = await dataSync.checkConnection(); setNote(connected ? '连接成功' : '连接失败，请检查云服务器服务', connected ? 'success' : 'danger'); log(connected ? '后端连接测试成功' : '后端连接测试失败'); }
 async function exportJson() { const { browsingData = [] } = await chrome.storage.local.get('browsingData'); const blob = new Blob([JSON.stringify(browsingData, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `browsemind-${todayString()}.json`; a.click(); URL.revokeObjectURL(url); setNote('JSON 已导出', 'success'); log(`已导出 ${browsingData.length} 条本地记录`); }
 async function clearLocalData() { if (!confirm('确定清空本地浏览数据吗？此操作不可恢复。')) return; await chrome.storage.local.set({ browsingData: [] }); setNote('本地数据已清空', 'success'); log('本地浏览数据已清空'); await refreshDashboard(); }
-function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.querySelectorAll('[data-sidebar-tab]').forEach(button => button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab))); switchSidebarTab(activeSidebarTab); }
+function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar); document.querySelectorAll('[data-sidebar-tab]').forEach(button => button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab))); }
 
-document.addEventListener('DOMContentLoaded', async () => { bindEvents(); await refreshDashboard(); });
+document.addEventListener('DOMContentLoaded', async () => { await loadSidebarState(); bindEvents(); applySidebarState(); await switchSidebarTab(activeSidebarTab); await refreshDashboard(); });
