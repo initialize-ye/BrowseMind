@@ -3,12 +3,17 @@
 let currentChart = null;
 let chartData = null;
 let attentionChart = null;
-let dataSync = new DataSync('http://localhost:8000');
+let dataSync = new DataSync();
+
+async function initDataSync() {
+  const { apiBaseUrl } = await chrome.storage.local.get('apiBaseUrl');
+  dataSync = new DataSync(apiBaseUrl || 'http://localhost:8000');
+  return dataSync;
+}
 
 document.addEventListener('DOMContentLoaded', loadData);
 document.getElementById('refreshBtn').addEventListener('click', loadData);
 document.getElementById('syncBtn').addEventListener('click', syncToCloud);
-document.getElementById('advancedAnalysisBtn').addEventListener('click', showAdvancedAnalysis);
 document.getElementById('aiAnalysisBtn').addEventListener('click', showAIAnalysis);
 document.getElementById('dashboardBtn').addEventListener('click', openDashboard);
 document.getElementById('closeModal').addEventListener('click', closeModal);
@@ -29,6 +34,7 @@ async function loadData() {
   emptyState.style.display = 'none';
 
   try {
+    await initDataSync();
     // 从 storage 获取数据
     const { browsingData = [] } = await chrome.storage.local.get('browsingData');
 
@@ -72,7 +78,7 @@ async function loadData() {
 
     // 加载目标和高级分析
     loadGoals();
-    loadAdvancedAnalysis({ silent: true });
+    loadAdvancedAnalysis();
 
     loading.style.display = 'none';
     content.style.display = 'block';
@@ -534,7 +540,7 @@ async function syncToCloud() {
       }, 2000);
 
       alert(`✅ 同步成功\n${result.message}`);
-      loadAdvancedAnalysis({ silent: true });
+      loadAdvancedAnalysis();
     }
 
   } catch (error) {
@@ -640,22 +646,11 @@ document.getElementById('aiAnalysisModal').addEventListener('click', function(e)
   }
 });
 
-// 加载高级分析
-async function loadAdvancedAnalysis({ silent = false } = {}) {
-  const advancedBtn = document.getElementById('advancedAnalysisBtn');
-  const originalText = advancedBtn.textContent;
-
+// 自动加载高级分析
+async function loadAdvancedAnalysis() {
   try {
-    if (!silent) {
-      advancedBtn.textContent = '⏳ 分析中...';
-      advancedBtn.disabled = true;
-    }
-
     const isConnected = await dataSync.checkConnection();
     if (!isConnected) {
-      if (!silent) {
-        alert('❌ 无法连接到服务器\n请确保后端服务已启动');
-      }
       return;
     }
 
@@ -673,32 +668,9 @@ async function loadAdvancedAnalysis({ silent = false } = {}) {
     const analysis = await response.json();
     displayBlackholes(analysis.blackholes);
     displayAttentionCurve(analysis.attention_curve);
-
-    if (!silent) {
-      advancedBtn.textContent = '✅ 分析完成';
-      setTimeout(() => {
-        advancedBtn.textContent = originalText;
-      }, 2000);
-    }
   } catch (error) {
     console.error('高级分析失败:', error);
-    if (!silent) {
-      advancedBtn.textContent = '❌ 分析失败';
-      setTimeout(() => {
-        advancedBtn.textContent = originalText;
-      }, 2000);
-      alert(`❌ 高级分析失败\n${error.message}`);
-    }
-  } finally {
-    if (!silent) {
-      advancedBtn.disabled = false;
-    }
   }
-}
-
-// 显示高级分析
-async function showAdvancedAnalysis() {
-  await loadAdvancedAnalysis({ silent: false });
 }
 
 // 显示时间黑洞
