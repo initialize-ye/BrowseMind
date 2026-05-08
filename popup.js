@@ -5,9 +5,27 @@ let chartData = null;
 let attentionChart = null;
 let dataSync = new DataSync();
 
+const DEFAULT_PREFERENCES = {
+  apiBaseUrl: 'http://119.29.55.112:8000',
+  notificationsEnabled: true,
+  blackholeThresholdMinutes: 30,
+  analysisDays: 7
+};
+
+async function getPreferences() {
+  const stored = await chrome.storage.local.get(Object.keys(DEFAULT_PREFERENCES));
+  return {
+    ...DEFAULT_PREFERENCES,
+    ...stored,
+    apiBaseUrl: stored.apiBaseUrl || DEFAULT_PREFERENCES.apiBaseUrl,
+    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes),
+    analysisDays: Number(stored.analysisDays || DEFAULT_PREFERENCES.analysisDays)
+  };
+}
+
 async function initDataSync() {
-  const { apiBaseUrl } = await chrome.storage.local.get('apiBaseUrl');
-  dataSync = new DataSync(apiBaseUrl || 'http://119.29.55.112:8000');
+  const preferences = await getPreferences();
+  dataSync = new DataSync(preferences.apiBaseUrl);
   return dataSync;
 }
 
@@ -576,9 +594,10 @@ async function showAIAnalysis() {
     // 获取用户ID
     await dataSync.initUserId();
 
-    // 调用 AI 分析接口
+    const preferences = await getPreferences();
+
     const response = await fetch(
-      `${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=7`,
+      `${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`,
       { method: 'POST' }
     );
 
@@ -670,8 +689,9 @@ async function loadAdvancedAnalysis() {
 
     await dataSync.initUserId();
 
+    const preferences = await getPreferences();
     const response = await fetch(
-      `${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=7&blackhole_threshold=30`
+      `${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=${preferences.analysisDays}&blackhole_threshold=${preferences.blackholeThresholdMinutes}`
     );
 
     if (response.status === 404) {
@@ -835,7 +855,7 @@ async function loadGoals() {
     if (!userId) return;
 
     const today = new Date().toISOString().split('T')[0];
-    const response = await fetch(`${dataSync.baseUrl}/api/goals/${userId}?date=${today}&is_active=1`);
+    const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${userId}?date=${today}&is_active=1`);
 
     if (!response.ok) {
       console.error('获取目标失败');
@@ -942,7 +962,7 @@ async function saveGoal() {
 
     const today = new Date().toISOString().split('T')[0];
 
-    const response = await fetch(`${dataSync.baseUrl}/api/goals/${userId}`, {
+    const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -974,7 +994,7 @@ async function deleteGoal(goalId) {
   }
 
   try {
-    const response = await fetch(`${dataSync.baseUrl}/api/goals/${goalId}`, {
+    const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, {
       method: 'DELETE'
     });
 
@@ -1023,14 +1043,17 @@ async function updateGoalsProgress() {
   }
 }
 
-function showNotification(type, message) {
-  if (chrome.notifications) {
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icon128.png',
-      title: type === 'achieved' ? '🎉 目标达成' : '⚠️ 时间提醒',
-      message: message,
-      priority: 2
-    });
+async function showNotification(type, message) {
+  const preferences = await getPreferences();
+  if (!preferences.notificationsEnabled || !chrome.notifications) {
+    return;
   }
+
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icon128.png',
+    title: type === 'achieved' ? '🎉 目标达成' : '⚠️ 时间提醒',
+    message: message,
+    priority: 2
+  });
 }

@@ -35,6 +35,12 @@
     .sidebar { position: sticky; top: 24px; }
     .sidebar-shell { display: grid; gap: 16px; }
     .sidebar-label { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    .sidebar-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 6px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+    .sidebar-tab { border: 0; border-radius: 12px; padding: 10px 12px; color: var(--muted); background: transparent; font-weight: 600; }
+    .sidebar-tab:hover { color: var(--blue); background: var(--blue-soft); box-shadow: none; transform: none; }
+    .sidebar-tab.active { color: var(--blue); background: var(--blue-soft); }
+    .sidebar-panel { display: none; }
+    .sidebar-panel.active { display: block; }
     .hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 16px; margin-bottom: 16px; }
     .intro, .status-panel, .panel { padding: 20px; }
     .intro h2 { margin-bottom: 8px; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
@@ -70,6 +76,11 @@
     input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); outline: none; font: inherit; }
     input:focus, select:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
     .form-grid { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: end; margin-top: 12px; }
+    .settings-grid { display: grid; gap: 12px; margin-top: 12px; }
+    .inline-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .toggle-row:last-child { border-bottom: 0; }
+    .toggle-row input[type="checkbox"] { width: 18px; height: 18px; }
     label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; font-weight: 500; }
     .note { display: none; margin-top: 12px; padding: 12px 14px; border-radius: 14px; color: var(--blue); background: var(--blue-soft); font-size: 13px; line-height: 1.6; }
     .note.success { color: var(--green); background: var(--green-soft); }
@@ -123,15 +134,20 @@
       <aside class="sidebar">
         <div class="sidebar-shell">
           <div class="sidebar-label">操作与设置</div>
+          <div class="sidebar-tabs" role="tablist" aria-label="侧边栏选项卡">
+            <button class="sidebar-tab active" id="sidebarTabActions" data-sidebar-tab="actions" role="tab" aria-selected="true">操作</button>
+            <button class="sidebar-tab" id="sidebarTabGoals" data-sidebar-tab="goals" role="tab" aria-selected="false">目标</button>
+            <button class="sidebar-tab" id="sidebarTabSettings" data-sidebar-tab="settings" role="tab" aria-selected="false">设置</button>
+          </div>
 
-          <section class="panel">
+          <section class="panel sidebar-panel active" id="sidebarPanelActions" data-sidebar-panel="actions">
             <div class="section-title"><div><h2>插件操作</h2><p>同步、AI 分析和本地数据管理。</p></div></div>
             <div class="button-row compact"><button id="syncBtn">立即同步</button><button id="aiBtn" class="secondary">AI 分析</button><button id="exportJsonBtn" class="ghost">导出 JSON</button><button id="clearLocalBtn" class="danger">清空本地数据</button></div>
             <div class="note" id="operationNote"></div>
             <div class="log-box" id="logBox" style="margin-top:14px;">等待操作...</div>
           </section>
 
-          <section class="panel">
+          <section class="panel sidebar-panel" id="sidebarPanelGoals" data-sidebar-panel="goals">
             <div class="section-title"><div><h2>今日目标</h2><p>添加或删除今天的目标。</p></div></div>
             <div class="form-grid">
               <div><label>目标类型</label><select id="goalTypeSelect"><option value="daily_learning">每日学习时长</option><option value="daily_entertainment">每日娱乐时长限制</option><option value="daily_coding">每日编程时长</option><option value="daily_social">每日社交时长限制</option></select></div>
@@ -141,9 +157,25 @@
             <div id="goalList" style="margin-top:14px;"></div>
           </section>
 
-          <section class="panel">
-            <div class="section-title"><div><h2>连接设置</h2><p>默认云服务器：119.29.55.112</p></div></div>
-            <div class="setting-row"><div><strong>后端 API 地址</strong><p class="muted">用于同步、AI 分析和自动高级分析。</p></div><input id="apiBaseUrlInput" type="url" placeholder="http://119.29.55.112:8000"></div>
+          <section class="panel sidebar-panel" id="sidebarPanelSettings" data-sidebar-panel="settings">
+            <div class="section-title"><div><h2>插件设置</h2><p>统一管理同步、分析与通知参数。</p></div></div>
+            <div class="settings-grid">
+              <div class="setting-row"><div><strong>后端 API 地址</strong><p class="muted">用于同步、AI 分析和自动高级分析。</p></div><input id="apiBaseUrlInput" type="url" placeholder="http://119.29.55.112:8000"></div>
+              <div class="toggle-row"><div><strong>启用自动同步</strong><p class="muted">记录变化后自动上传到云端。</p></div><input id="autoSyncEnabledInput" type="checkbox"></div>
+              <div class="toggle-row"><div><strong>启用通知提醒</strong><p class="muted">目标提醒与达成通知。</p></div><input id="notificationsEnabledInput" type="checkbox"></div>
+              <div class="inline-grid">
+                <div><label>自动同步防抖（秒）</label><input id="autoSyncDebounceInput" type="number" min="1" max="3600" value="15"></div>
+                <div><label>最小同步间隔（秒）</label><input id="autoSyncMinIntervalInput" type="number" min="10" max="86400" value="120"></div>
+              </div>
+              <div class="inline-grid">
+                <div><label>本地数据保留（天）</label><input id="dataRetentionDaysInput" type="number" min="1" max="365" value="7"></div>
+                <div><label>最小记录时长（秒）</label><input id="minVisitDurationInput" type="number" min="1" max="600" value="3"></div>
+              </div>
+              <div class="inline-grid">
+                <div><label>高级分析时间黑洞阈值（分钟）</label><input id="blackholeThresholdInput" type="number" min="1" max="600" value="30"></div>
+                <div><label>分析窗口（天）</label><select id="analysisDaysInput"><option value="7">7 天</option><option value="14">14 天</option><option value="30">30 天</option></select></div>
+              </div>
+            </div>
             <div class="button-row"><button id="saveApiBtn">保存设置</button><button id="resetApiBtn" class="ghost">恢复默认</button><button id="testApiBtn" class="secondary">测试连接</button></div>
           </section>
         </div>

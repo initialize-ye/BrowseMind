@@ -1,10 +1,22 @@
 const DEFAULT_API_BASE_URL = 'http://119.29.55.112:8000';
+const DEFAULT_PREFERENCES = {
+  apiBaseUrl: DEFAULT_API_BASE_URL,
+  autoSyncEnabled: true,
+  autoSyncDebounceMs: 15000,
+  autoSyncMinIntervalMs: 2 * 60 * 1000,
+  dataRetentionDays: 7,
+  minVisitDurationSeconds: 3,
+  notificationsEnabled: true,
+  blackholeThresholdMinutes: 30,
+  analysisDays: 7
+};
 const palette = ['#1a73e8', '#34a853', '#fbbc04', '#ea4335', '#5f6368', '#9aa0a6'];
 const categoryMap = { daily_learning: 'learning', daily_entertainment: 'entertainment', daily_coding: 'coding', daily_social: 'social' };
 const goalTypeNames = { daily_learning: '每日学习时长', daily_entertainment: '每日娱乐时长限制', daily_coding: '每日编程时长', daily_social: '每日社交时长限制' };
 let dataSync = null;
 let trendChart = null;
 let hourlyChart = null;
+let activeSidebarTab = 'actions';
 
 function todayString() { return new Date().toISOString().split('T')[0]; }
 function formatDuration(seconds) {
@@ -32,13 +44,66 @@ function escapeHtml(text) {
   div.textContent = text || '';
   return div.innerHTML;
 }
+async function getPreferences() {
+  const stored = await chrome.storage.local.get(Object.keys(DEFAULT_PREFERENCES));
+  return {
+    ...DEFAULT_PREFERENCES,
+    ...stored,
+    apiBaseUrl: stored.apiBaseUrl || DEFAULT_API_BASE_URL,
+    analysisDays: Number(stored.analysisDays || DEFAULT_PREFERENCES.analysisDays),
+    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes),
+    autoSyncDebounceMs: Number(stored.autoSyncDebounceMs || DEFAULT_PREFERENCES.autoSyncDebounceMs),
+    autoSyncMinIntervalMs: Number(stored.autoSyncMinIntervalMs || DEFAULT_PREFERENCES.autoSyncMinIntervalMs),
+    dataRetentionDays: Number(stored.dataRetentionDays || DEFAULT_PREFERENCES.dataRetentionDays),
+    minVisitDurationSeconds: Number(stored.minVisitDurationSeconds || DEFAULT_PREFERENCES.minVisitDurationSeconds)
+  };
+}
 async function getApiBaseUrl() {
-  const { apiBaseUrl } = await chrome.storage.local.get('apiBaseUrl');
-  return apiBaseUrl || DEFAULT_API_BASE_URL;
+  const { apiBaseUrl } = await getPreferences();
+  return apiBaseUrl;
+}
+function switchSidebarTab(tab) {
+  activeSidebarTab = tab;
+  document.querySelectorAll('[data-sidebar-tab]').forEach(button => {
+    const isActive = button.dataset.sidebarTab === tab;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-sidebar-panel]').forEach(panel => {
+    panel.classList.toggle('active', panel.dataset.sidebarPanel === tab);
+  });
+}
+function applyPreferencesToForm(preferences) {
+  document.getElementById('apiBaseUrlInput').value = preferences.apiBaseUrl;
+  document.getElementById('autoSyncEnabledInput').checked = Boolean(preferences.autoSyncEnabled);
+  document.getElementById('notificationsEnabledInput').checked = Boolean(preferences.notificationsEnabled);
+  document.getElementById('autoSyncDebounceInput').value = Math.round(preferences.autoSyncDebounceMs / 1000);
+  document.getElementById('autoSyncMinIntervalInput').value = Math.round(preferences.autoSyncMinIntervalMs / 1000);
+  document.getElementById('dataRetentionDaysInput').value = preferences.dataRetentionDays;
+  document.getElementById('minVisitDurationInput').value = preferences.minVisitDurationSeconds;
+  document.getElementById('blackholeThresholdInput').value = preferences.blackholeThresholdMinutes;
+  document.getElementById('analysisDaysInput').value = String(preferences.analysisDays);
+}
+async function loadPreferences() {
+  const preferences = await getPreferences();
+  applyPreferencesToForm(preferences);
+  return preferences;
+}
+function readPreferencesFromForm() {
+  return {
+    apiBaseUrl: document.getElementById('apiBaseUrlInput').value.trim() || DEFAULT_API_BASE_URL,
+    autoSyncEnabled: document.getElementById('autoSyncEnabledInput').checked,
+    notificationsEnabled: document.getElementById('notificationsEnabledInput').checked,
+    autoSyncDebounceMs: Math.max(1000, Number(document.getElementById('autoSyncDebounceInput').value || 15) * 1000),
+    autoSyncMinIntervalMs: Math.max(10000, Number(document.getElementById('autoSyncMinIntervalInput').value || 120) * 1000),
+    dataRetentionDays: Math.max(1, Number(document.getElementById('dataRetentionDaysInput').value || 7)),
+    minVisitDurationSeconds: Math.max(1, Number(document.getElementById('minVisitDurationInput').value || 3)),
+    blackholeThresholdMinutes: Math.max(1, Number(document.getElementById('blackholeThresholdInput').value || 30)),
+    analysisDays: Math.max(1, Number(document.getElementById('analysisDaysInput').value || 7))
+  };
 }
 async function initDataSync() {
   const apiBaseUrl = await getApiBaseUrl();
-  document.getElementById('apiBaseUrlInput').value = apiBaseUrl;
   dataSync = new DataSync(apiBaseUrl);
   return dataSync;
 }
@@ -146,12 +211,13 @@ async function loadAnalytics() {
 }
 
 async function refreshDashboard() {
+  const preferences = await loadPreferences();
   await initDataSync();
   const { userId, lastSyncTime } = await chrome.storage.local.get(['userId', 'lastSyncTime']);
   const analytics = await loadAnalytics();
   const connected = await dataSync.checkConnection();
   const syncText = lastSyncTime ? `上次同步：${new Date(lastSyncTime).toLocaleString('zh-CN')}` : '尚未同步。';
-  document.getElementById('statusNote').textContent = `${connected ? '云服务器连接正常。' : '无法连接云服务器。'} 已载入 ${analytics.count} 条本地记录。${analytics.topCategoryText} ${syncText}`;
+  document.getElementById('statusNote').textContent = `${connected ? '云服务器连接正常。' : '无法连接云服务器。'} 已载入 ${analytics.count} 条本地记录。${analytics.topCategoryText} ${syncText} 当前分析窗口：${preferences.analysisDays} 天。`;
   await loadGoals();
   log(`刷新完成：${analytics.count} 条记录，用户 ${userId ? userId.slice(0, 10) + '…' : '未生成'}`);
 }
@@ -159,7 +225,7 @@ async function syncNow() {
   try { await initDataSync(); log('开始同步本地数据...'); const result = await dataSync.syncLocalData(); setNote(result.message || '同步完成', 'success'); log(`同步完成：${result.message || '成功'}`); await refreshDashboard(); } catch (error) { setNote(`同步失败：${error.message}`, 'danger'); log(`同步失败：${error.message}`); }
 }
 async function runAIAnalysis() {
-  try { await initDataSync(); if (!(await dataSync.checkConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await fetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=7`, { method: 'POST' }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); }
+  try { const preferences = await getPreferences(); await initDataSync(); if (!(await dataSync.checkConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await fetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); }
 }
 async function createGoal() {
   try { await initDataSync(); if (!(await dataSync.checkConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const goalType = document.getElementById('goalTypeSelect').value; const durationMinutes = parseInt(document.getElementById('goalDurationInput').value, 10); if (!durationMinutes || durationMinutes <= 0) throw new Error('请输入有效的目标时长'); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal_type: goalType, category: categoryMap[goalType], target_duration: durationMinutes * 60, date: todayString() }) }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || '创建目标失败'); } setNote('目标已添加', 'success'); log(`已添加目标：${goalTypeNames[goalType]} ${durationMinutes} 分钟`); await loadGoals(); } catch (error) { setNote(`创建目标失败：${error.message}`, 'danger'); log(`创建目标失败：${error.message}`); }
@@ -172,11 +238,11 @@ async function deleteGoal(goalId) {
   if (!confirm('确定删除这个目标吗？')) return;
   try { const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'DELETE' }); if (!response.ok) throw new Error('删除失败'); setNote('目标已删除', 'success'); log(`已删除目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`删除目标失败：${error.message}`, 'danger'); log(`删除目标失败：${error.message}`); }
 }
-async function saveApiBaseUrl() { const value = document.getElementById('apiBaseUrlInput').value.trim() || DEFAULT_API_BASE_URL; await chrome.storage.local.set({ apiBaseUrl: value }); await initDataSync(); setNote('后端地址已保存', 'success'); log(`后端地址已保存：${value}`); await refreshDashboard(); }
-async function resetApiBaseUrl() { await chrome.storage.local.set({ apiBaseUrl: DEFAULT_API_BASE_URL }); await initDataSync(); setNote('已恢复默认云服务器地址', 'success'); log('已恢复默认云服务器地址'); await refreshDashboard(); }
+async function saveApiBaseUrl() { const preferences = readPreferencesFromForm(); await chrome.storage.local.set(preferences); await initDataSync(); setNote('插件设置已保存', 'success'); log(`设置已保存：${preferences.apiBaseUrl}`); await refreshDashboard(); }
+async function resetApiBaseUrl() { await chrome.storage.local.set({ ...DEFAULT_PREFERENCES }); await initDataSync(); await loadPreferences(); setNote('已恢复默认插件设置', 'success'); log('已恢复默认插件设置'); await refreshDashboard(); }
 async function testApiConnection() { await initDataSync(); const connected = await dataSync.checkConnection(); setNote(connected ? '连接成功' : '连接失败，请检查云服务器服务', connected ? 'success' : 'danger'); log(connected ? '后端连接测试成功' : '后端连接测试失败'); }
 async function exportJson() { const { browsingData = [] } = await chrome.storage.local.get('browsingData'); const blob = new Blob([JSON.stringify(browsingData, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `browsemind-${todayString()}.json`; a.click(); URL.revokeObjectURL(url); setNote('JSON 已导出', 'success'); log(`已导出 ${browsingData.length} 条本地记录`); }
 async function clearLocalData() { if (!confirm('确定清空本地浏览数据吗？此操作不可恢复。')) return; await chrome.storage.local.set({ browsingData: [] }); setNote('本地数据已清空', 'success'); log('本地浏览数据已清空'); await refreshDashboard(); }
-function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); }
+function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.querySelectorAll('[data-sidebar-tab]').forEach(button => button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab))); switchSidebarTab(activeSidebarTab); }
 
 document.addEventListener('DOMContentLoaded', async () => { bindEvents(); await refreshDashboard(); });

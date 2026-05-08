@@ -3,11 +3,35 @@
 importScripts('dataProcessor.js', 'dataSync.js');
 
 const DEFAULT_API_BASE_URL = 'http://119.29.55.112:8000';
-const AUTO_SYNC_DEBOUNCE_MS = 15000;
-const AUTO_SYNC_MIN_INTERVAL_MS = 2 * 60 * 1000;
+const DEFAULT_PREFERENCES = {
+  apiBaseUrl: DEFAULT_API_BASE_URL,
+  autoSyncEnabled: true,
+  autoSyncDebounceMs: 15000,
+  autoSyncMinIntervalMs: 2 * 60 * 1000,
+  dataRetentionDays: 7,
+  minVisitDurationSeconds: 3,
+  notificationsEnabled: true,
+  blackholeThresholdMinutes: 30,
+  analysisDays: 7
+};
 
 let autoSyncTimer = null;
 let isAutoSyncing = false;
+
+async function getPreferences() {
+  const stored = await chrome.storage.local.get(Object.keys(DEFAULT_PREFERENCES));
+  return {
+    ...DEFAULT_PREFERENCES,
+    ...stored,
+    apiBaseUrl: stored.apiBaseUrl || DEFAULT_API_BASE_URL,
+    autoSyncDebounceMs: Number(stored.autoSyncDebounceMs || DEFAULT_PREFERENCES.autoSyncDebounceMs),
+    autoSyncMinIntervalMs: Number(stored.autoSyncMinIntervalMs || DEFAULT_PREFERENCES.autoSyncMinIntervalMs),
+    dataRetentionDays: Number(stored.dataRetentionDays || DEFAULT_PREFERENCES.dataRetentionDays),
+    minVisitDurationSeconds: Number(stored.minVisitDurationSeconds || DEFAULT_PREFERENCES.minVisitDurationSeconds),
+    analysisDays: Number(stored.analysisDays || DEFAULT_PREFERENCES.analysisDays),
+    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes)
+  };
+}
 
 // 存储当前活跃标签的信息
 let activeTab = {
@@ -70,8 +94,9 @@ function startTrackingTab(tab) {
 async function saveTabDuration() {
   if (!activeTab.startTime || !activeTab.url) return;
 
+  const preferences = await getPreferences();
   const duration = Math.floor((Date.now() - activeTab.startTime) / 1000); // 秒
-  if (duration < 3) return; // 忽略少于3秒的访问
+  if (duration < preferences.minVisitDurationSeconds) return;
 
   const record = {
     url: activeTab.url,
@@ -87,9 +112,9 @@ async function saveTabDuration() {
 
 // 添加浏览记录到存储
 async function addBrowsingRecord(record) {
+  const preferences = await getPreferences();
   const { browsingData = [] } = await chrome.storage.local.get('browsingData');
 
-  // 检查是否已存在相同URL和时间的记录（避免重复）
   const exists = browsingData.some(r =>
     r.url === record.url && Math.abs(r.visitTime - record.visitTime) < 5000
   );
@@ -97,22 +122,21 @@ async function addBrowsingRecord(record) {
   if (!exists) {
     browsingData.push(record);
 
-    // 只保留最近7天的数据
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const filteredData = browsingData.filter(r => r.visitTime > sevenDaysAgo);
+    const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
+    const filteredData = browsingData.filter(r => r.visitTime > retentionStart);
 
     await chrome.storage.local.set({ browsingData: filteredData });
     console.log('记录已保存:', record);
   }
 }
 
-// 采集历史记录（最近7天）
 async function collectHistoryData() {
-  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const preferences = await getPreferences();
+  const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
 
   chrome.history.search({
     text: '',
-    startTime: sevenDaysAgo,
+    startTime: retentionStart,
     maxResults: 1000
   }, async (historyItems) => {
     const records = historyItems
@@ -162,10 +186,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 async function updateGoalsProgress() {
   try {
-    const { userId, apiBaseUrl } = await chrome.storage.local.get(['userId', 'apiBaseUrl']);
+    const preferences = await getPreferences();
+    const { userId } = await chrome.storage.local.get(['userId']);
     if (!userId) return;
 
-    const baseUrl = apiBaseUrl || 'http://119.29.55.112:8000';
+    const baseUrl = preferences.apiBaseUrl;
     const today = new Date().toISOString().split('T')[0];
 
     const response = await fetch(baseUrl + '/api/goals/' + userId + '/update-progress?date=' + encodeURIComponent(today), {
@@ -191,7 +216,10 @@ async function updateGoalsProgress() {
   }
 }
 
-function showNotification(type, message) {
+async function showNotification(type, message) {
+  const preferences = await getPreferences();
+  if (!preferences.notificationsEnabled) return;
+
   chrome.notifications.create({
     type: 'basic',
     iconUrl: 'icon128.png',
@@ -202,11 +230,14 @@ function showNotification(type, message) {
 }
 
 async function getDataSync() {
-  const { apiBaseUrl } = await chrome.storage.local.get('apiBaseUrl');
-  return new DataSync(apiBaseUrl || DEFAULT_API_BASE_URL);
+  const preferences = await getPreferences();
+  return new DataSync(preferences.apiBaseUrl);
 }
 
-function scheduleAutoSync() {
+async function scheduleAutoSync() {
+  const preferences = await getPreferences();
+  if (!preferences.autoSyncEnabled) return;
+
   if (autoSyncTimer) {
     clearTimeout(autoSyncTimer);
   }
@@ -214,17 +245,20 @@ function scheduleAutoSync() {
   autoSyncTimer = setTimeout(() => {
     autoSyncTimer = null;
     syncLocalDataInBackground('storage-change');
-  }, AUTO_SYNC_DEBOUNCE_MS);
+  }, preferences.autoSyncDebounceMs);
 }
 
 async function syncLocalDataInBackground(source) {
   if (isAutoSyncing) return;
 
   try {
+    const preferences = await getPreferences();
+    if (!preferences.autoSyncEnabled) return;
+
     const { browsingData = [], lastSyncTime } = await chrome.storage.local.get(['browsingData', 'lastSyncTime']);
     if (!browsingData.length) return;
 
-    if (lastSyncTime && Date.now() - lastSyncTime < AUTO_SYNC_MIN_INTERVAL_MS) {
+    if (lastSyncTime && Date.now() - lastSyncTime < preferences.autoSyncMinIntervalMs) {
       return;
     }
 
