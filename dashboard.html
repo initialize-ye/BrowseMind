@@ -186,10 +186,15 @@
           <div class="sidebar-label">导航</div>
           <div class="sidebar-tabs" role="tablist" aria-label="侧边栏选项卡" aria-orientation="vertical">
             <button class="sidebar-tab" id="sidebarTabDashboard" data-sidebar-tab="dashboard" role="tab" aria-selected="false" aria-controls="mainViewDashboard" tabindex="-1" title="仪表盘"><span class="sidebar-tab-icon" aria-hidden="true">📊</span><span class="sidebar-tab-label">仪表盘</span></button>
+            <button class="sidebar-tab" id="sidebarTabInsights" data-sidebar-tab="insights" role="tab" aria-selected="false" aria-controls="mainViewInsights" tabindex="-1" title="洞察"><span class="sidebar-tab-icon" aria-hidden="true">🔎</span><span class="sidebar-tab-label">洞察</span></button>
             <button class="sidebar-tab active" id="sidebarTabActions" data-sidebar-tab="actions" role="tab" aria-selected="true" aria-controls="mainViewActions" tabindex="0" title="操作"><span class="sidebar-tab-icon" aria-hidden="true">⚡</span><span class="sidebar-tab-label">操作</span></button>
             <button class="sidebar-tab" id="sidebarTabGoals" data-sidebar-tab="goals" role="tab" aria-selected="false" aria-controls="mainViewGoals" tabindex="-1" title="目标"><span class="sidebar-tab-icon" aria-hidden="true">🎯</span><span class="sidebar-tab-label">目标</span></button>
             <button class="sidebar-tab" id="sidebarTabSettings" data-sidebar-tab="settings" role="tab" aria-selected="false" aria-controls="mainViewSettings" tabindex="-1" title="设置"><span class="sidebar-tab-icon" aria-hidden="true">⚙️</span><span class="sidebar-tab-label">设置</span></button>
           </div>
+
+          <section class="panel sidebar-panel" id="sidebarPanelInsights" data-sidebar-panel="insights">
+            <div class="section-title"><div><h2>行为洞察</h2><p>查看高级分析、AI 建议与历史报告。</p></div></div>
+          </section>
 
           <section class="panel sidebar-panel active" id="sidebarPanelActions" data-sidebar-panel="actions">
             <div class="section-title"><div><h2>插件操作</h2><p>在主区查看操作日志与执行同步。</p></div></div>
@@ -222,13 +227,25 @@
           <section class="dashboard-grid">
             <div>
               <div class="panel"><div class="section-title"><h2>7 天趋势</h2><p>时长与访问次数</p></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
-              <div class="panel"><div class="section-title"><h2>分类构成</h2><p>按停留时长排序</p></div><div id="categoryList"></div></div>
+              <div class="panel"><div class="section-title"><div><h2>分类构成</h2><p>按停留时长排序</p></div><select id="categoryFilterInput" aria-label="筛选分类"><option value="all">全部分类</option><option value="learning">学习</option><option value="coding">编程</option><option value="entertainment">娱乐</option><option value="social">社交</option><option value="tools">工具</option><option value="other">仅看其他</option></select></div><div id="categoryList"></div></div>
             </div>
             <div>
               <div class="panel"><div class="section-title"><h2>时间分布</h2><p>按小时统计</p></div><div class="chart-box small"><canvas id="hourlyChart"></canvas></div></div>
-              <div class="panel"><div class="section-title"><h2>高频站点</h2><p>按总停留时长排序</p></div><div id="domainList"></div></div>
+              <div class="panel"><div class="section-title"><div><h2>高频站点</h2><p>按总停留时长排序</p></div><input id="domainFilterInput" type="search" placeholder="筛选域名" aria-label="筛选域名"></div><div id="domainList"></div></div>
             </div>
           </section>
+        </section>
+
+        <section class="main-view" id="mainViewInsights" data-main-view="insights" role="tabpanel" aria-labelledby="sidebarTabInsights" tabindex="0" hidden>
+          <div class="view-shell">
+            <div class="view-header panel"><div class="view-copy"><h2>行为洞察</h2><p>结合云端高级分析、AI 建议和历史报告，定位时间黑洞与专注时段。</p></div><button id="refreshInsightsBtn" class="secondary">刷新洞察</button></div>
+            <section class="inline-grid">
+              <div class="panel"><div class="section-title"><div><h2>时间黑洞</h2><p>超过阈值的长时间访问</p></div></div><div id="blackholeStats" aria-live="polite"><div class="empty">同步云端数据后显示时间黑洞。</div></div></div>
+              <div class="panel"><div class="section-title"><div><h2>专注曲线</h2><p>按小时估算专注度</p></div></div><div id="attentionStats" aria-live="polite"><div class="empty">同步云端数据后显示专注曲线。</div></div><div class="chart-box small"><canvas id="attentionChart"></canvas></div></div>
+            </section>
+            <section class="panel"><div class="section-title"><div><h2>AI 分析结果</h2><p>完整总结、问题和建议</p></div></div><div id="aiAnalysisResult" aria-live="polite"><div class="empty">点击“AI 分析”或刷新洞察后显示结果。</div></div></section>
+            <section class="panel"><div class="section-title"><div><h2>历史报告</h2><p>最近保存的 AI 分析</p></div></div><div id="reportList" aria-live="polite"><div class="empty">暂无历史报告。</div></div></section>
+          </div>
         </section>
 
         <section class="main-view" id="mainViewActions" data-main-view="actions" role="tabpanel" aria-labelledby="sidebarTabActions" tabindex="0" hidden>
@@ -240,7 +257,7 @@
 
         <section class="main-view" id="mainViewGoals" data-main-view="goals" role="tabpanel" aria-labelledby="sidebarTabGoals" tabindex="0" hidden>
           <div class="view-shell">
-            <div class="view-header panel"><div class="view-copy"><h2>今日目标</h2><p>管理今天的学习、编程和时长限制目标。</p></div></div>
+            <div class="view-header panel"><div class="view-copy"><h2>今日目标</h2><p>管理今天的学习、编程和时长限制目标。</p></div><button id="refreshGoalsBtn" class="secondary">刷新进度</button></div>
             <div class="panel"><div class="form-grid"><div><label>目标类型</label><select id="goalTypeSelect"><option value="daily_learning">每日学习时长</option><option value="daily_entertainment">每日娱乐时长限制</option><option value="daily_coding">每日编程时长</option><option value="daily_social">每日社交时长限制</option></select></div><div><label>分钟</label><input id="goalDurationInput" type="number" min="1" max="1440" value="60"></div><button id="createGoalBtn">添加目标</button></div><div id="goalList" aria-live="polite" style="margin-top:14px;"></div></div>
           </div>
         </section>

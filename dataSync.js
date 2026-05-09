@@ -124,7 +124,7 @@ class DataSync {
       const records = browsingData.map(record => {
         const domain = this.extractDomain(record.url);
         const title = record.title || '';
-        const category = record.category || classifier.classify(domain || '', title);
+        const category = record.category || classifier.classify(domain || '', title, record.url || '');
 
         return {
           url: record.url,
@@ -157,7 +157,7 @@ class DataSync {
   extractDomain(url) {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname.replace('www.', '');
+      return WebsiteClassifier.normalizeDomain(urlObj.hostname);
     } catch {
       return null;
     }

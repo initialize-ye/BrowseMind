@@ -18,7 +18,9 @@ let trendChart = null;
 let hourlyChart = null;
 let activeSidebarTab = 'actions';
 let isSidebarCollapsed = false;
-const SIDEBAR_TABS = ['dashboard', 'actions', 'goals', 'settings'];
+let attentionChart = null;
+let currentClassifiedData = [];
+const SIDEBAR_TABS = ['dashboard', 'insights', 'actions', 'goals', 'settings'];
 
 function todayString() { return new Date().toISOString().split('T')[0]; }
 function formatDuration(seconds) {
@@ -227,7 +229,23 @@ function renderDomainList(domains) {
     container.innerHTML = '<div class="empty">暂无站点数据。</div>';
     return;
   }
-  container.innerHTML = domains.map(domain => `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问</div></div><div class="domain-meta">${formatDuration(domain.duration)}</div></div>`).join('');
+  container.innerHTML = domains.map(domain => `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta">${formatDuration(domain.duration)}</div></div>`).join('');
+}
+function renderFilteredDomains() {
+  const categoryFilter = document.getElementById('categoryFilterInput').value;
+  const domainFilter = document.getElementById('domainFilterInput').value.trim().toLowerCase();
+  const classifier = new WebsiteClassifier();
+  const categories = classifier.getAllCategories();
+  const filtered = currentClassifiedData.filter(record => {
+    const matchesCategory = categoryFilter === 'all' || record.category === categoryFilter;
+    const matchesDomain = !domainFilter || (record.domain || '').includes(domainFilter);
+    return matchesCategory && matchesDomain;
+  });
+  const domains = calculateTopDomains(filtered).map(domain => {
+    const firstRecord = filtered.find(record => record.domain === domain.domain);
+    return { ...domain, categoryName: categories[firstRecord?.category || 'other']?.name || '其他' };
+  });
+  renderDomainList(domains);
 }
 function renderTrendChart(dailyTrend) {
   if (trendChart) trendChart.destroy();
@@ -250,12 +268,105 @@ function renderHourlyChart(hourlyDist) {
   const ctx = document.getElementById('hourlyChart').getContext('2d');
   hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: active.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: active.map(item => Math.round(item.duration / 60)), backgroundColor: active.map((_, index) => palette[index % palette.length]), borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(32,33,36,.08)' } }, x: { grid: { display: false } } } } });
 }
+function renderBlackholes(blackholes) {
+  const container = document.getElementById('blackholeStats');
+  if (!blackholes || !blackholes.top_blackholes || !blackholes.top_blackholes.length) {
+    container.innerHTML = '<div class="empty">没有发现明显时间黑洞。</div>';
+    return;
+  }
+  const items = blackholes.top_blackholes.slice(0, 5).map(item => `<div class="domain-row"><div><div class="domain-name">${escapeHtml(item.domain)}</div><div class="domain-meta">${item.long_sessions_count} 次长访问 · 最长 ${formatDuration(item.longest_session)}</div></div><div class="domain-meta">${formatDuration(item.total_duration)}</div></div>`).join('');
+  container.innerHTML = `<div class="status-note danger">浪费时间占比 ${Number(blackholes.waste_percentage || 0).toFixed(1)}% · 共 ${formatDuration(blackholes.total_wasted_time)}</div>${items}`;
+}
+function renderAttentionCurve(attentionCurve) {
+  const statsContainer = document.getElementById('attentionStats');
+  if (!attentionCurve || !attentionCurve.hourly_focus) {
+    statsContainer.innerHTML = '<div class="empty">暂无足够数据生成专注曲线。</div>';
+    return;
+  }
+  const recommendation = attentionCurve.recommendations && attentionCurve.recommendations[0] ? `<div class="status-note">${escapeHtml(attentionCurve.recommendations[0])}</div>` : '';
+  statsContainer.innerHTML = `<div class="metric-grid"><div class="metric"><span>专注分数</span><strong>${Math.round(attentionCurve.focus_score || 0)}</strong></div><div class="metric"><span>高效时段</span><strong>${(attentionCurve.peak_hours || []).length}</strong></div></div>${recommendation}`;
+  if (attentionChart) attentionChart.destroy();
+  const activeHours = attentionCurve.hourly_focus.filter(item => item.total_duration > 0);
+  if (!activeHours.length) return;
+  const ctx = document.getElementById('attentionChart').getContext('2d');
+  attentionChart = new Chart(ctx, { type: 'line', data: { labels: activeHours.map(item => `${item.hour}:00`), datasets: [{ label: '专注度', data: activeHours.map(item => item.score), borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,.10)', tension: .36, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: 'rgba(32,33,36,.08)' } }, x: { grid: { display: false } } } } });
+}
+function renderAIAnalysis(analysis) {
+  const container = document.getElementById('aiAnalysisResult');
+  const issues = (analysis.issues || []).map(issue => `<li>${escapeHtml(issue)}</li>`).join('') || '<li>暂未发现明显问题。</li>';
+  const suggestions = (analysis.suggestions || []).map(suggestion => `<li>${escapeHtml(suggestion)}</li>`).join('') || '<li>暂无建议。</li>';
+  container.innerHTML = `<div class="setting-row"><div><strong>行为总结</strong><p class="muted">${escapeHtml(analysis.summary || '暂无总结。')}</p></div></div><div class="inline-grid"><div><strong>发现的问题</strong><ul class="muted">${issues}</ul></div><div><strong>优化建议</strong><ul class="muted">${suggestions}</ul></div></div>`;
+}
+function renderReports(reports) {
+  const container = document.getElementById('reportList');
+  if (!reports || !reports.length) {
+    container.innerHTML = '<div class="empty">暂无历史报告。</div>';
+    return;
+  }
+  container.innerHTML = reports.slice(0, 5).map(report => `<div class="domain-row"><div><div class="domain-name">${escapeHtml(report.report_date || report.created_at || '未知日期')}</div><div class="domain-meta">${escapeHtml(report.ai_summary || '无总结')}</div></div><div class="domain-meta">${formatDuration(report.total_duration)}</div></div>`).join('');
+}
+function renderAdvancedEmpty(message) {
+  document.getElementById('blackholeStats').innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+  document.getElementById('attentionStats').innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
+  if (attentionChart) {
+    attentionChart.destroy();
+    attentionChart = null;
+  }
+}
+async function loadAdvancedInsights() {
+  const preferences = await getPreferences();
+  await initDataSync();
+  if (!(await dataSync.checkConnection())) {
+    renderAdvancedEmpty('后端未连接，暂时无法加载高级分析。');
+    return;
+  }
+  await dataSync.initUserId();
+  const response = await fetch(`${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=${preferences.analysisDays}&blackhole_threshold=${preferences.blackholeThresholdMinutes}`);
+  if (response.status === 404) {
+    renderAdvancedEmpty('云端数据正在准备中，同步后再刷新洞察。');
+    return;
+  }
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || '高级分析失败');
+  }
+  const analysis = await response.json();
+  renderBlackholes(analysis.blackholes);
+  renderAttentionCurve(analysis.attention_curve);
+}
+async function loadReports() {
+  await initDataSync();
+  if (!(await dataSync.checkConnection())) {
+    renderReports([]);
+    return;
+  }
+  await dataSync.initUserId();
+  const response = await fetch(`${dataSync.apiBaseUrl}/api/reports/${dataSync.userId}?limit=5`);
+  if (!response.ok) throw new Error('历史报告加载失败');
+  renderReports(await response.json());
+}
+async function refreshInsights() {
+  const button = document.getElementById('refreshInsightsBtn');
+  setButtonBusy(button, true, '刷新中...');
+  try {
+    await loadAdvancedInsights();
+    await loadReports();
+    setNote('洞察已刷新', 'success');
+    log('洞察页已刷新');
+  } catch (error) {
+    setNote(`洞察刷新失败：${error.message}`, 'danger');
+    log(`洞察刷新失败：${error.message}`);
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
 
 async function loadAnalytics() {
   const { browsingData = [] } = await chrome.storage.local.get('browsingData');
   if (!browsingData.length) {
     renderMetrics([]);
     renderCategoryList([], new WebsiteClassifier());
+    currentClassifiedData = [];
     renderDomainList([]);
     renderTrendChart([]);
     renderHourlyChart([]);
@@ -269,10 +380,10 @@ async function loadAnalytics() {
   const categoryStats = analyzer.analyzeByCategory();
   const hourlyDist = analyzer.getHourlyDistribution();
   const dailyTrend = calculateDailyTrend(classifiedData);
-  const topDomains = calculateTopDomains(classifiedData);
+  currentClassifiedData = classifiedData;
   renderMetrics(classifiedData);
   renderCategoryList(categoryStats, classifier);
-  renderDomainList(topDomains);
+  renderFilteredDomains();
   renderTrendChart(dailyTrend);
   renderHourlyChart(hourlyDist);
   const topCategoryText = categoryStats[0] ? `${classifier.getCategoryInfo(categoryStats[0].category).name}占比最高，约 ${Number(categoryStats[0].percentage).toFixed(1)}%。` : '分类数据正在积累。';
@@ -288,6 +399,10 @@ async function refreshDashboard() {
   const syncText = lastSyncTime ? `上次同步：${new Date(lastSyncTime).toLocaleString('zh-CN')}` : '尚未同步。';
   document.getElementById('statusNote').textContent = `${connected ? '云服务器连接正常。' : '无法连接云服务器。'} 已载入 ${analytics.count} 条本地记录。${analytics.topCategoryText} ${syncText} 当前分析窗口：${preferences.analysisDays} 天。`;
   await loadGoals();
+  if (activeSidebarTab === 'insights') {
+    await loadAdvancedInsights();
+    await loadReports();
+  }
   log(`刷新完成：${analytics.count} 条记录，用户 ${userId ? userId.slice(0, 10) + '…' : '未生成'}`);
 }
 async function syncNow() {
@@ -298,7 +413,7 @@ async function syncNow() {
 async function runAIAnalysis() {
   const button = document.getElementById('aiBtn');
   setButtonBusy(button, true, '分析中...');
-  try { const preferences = await getPreferences(); await initDataSync(); if (!(await dataSync.checkConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await fetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); } finally { setButtonBusy(button, false); }
+  try { const preferences = await getPreferences(); await initDataSync(); if (!(await dataSync.checkConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await fetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); renderAIAnalysis(analysis); await loadReports(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); await switchSidebarTab('insights', { focusPanel: true }); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
 async function createGoal() {
   const button = document.getElementById('createGoalBtn');
@@ -307,7 +422,23 @@ async function createGoal() {
 }
 async function loadGoals() {
   const list = document.getElementById('goalList');
-  try { await initDataSync(); if (!(await dataSync.checkConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>暂无目标</strong><p class="muted">添加一个今日目标开始追踪。</p></div></div>'; return; } list.innerHTML = goals.map(goal => `<div class="goal-card"><div><strong>${goalTypeNames[goal.goal_type] || goal.goal_type}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${goal.progress_percentage.toFixed(1)}%</p></div><button class="danger" data-goal-id="${goal.id}">删除</button></div>`).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
+  try { await initDataSync(); if (!(await dataSync.checkConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>暂无目标</strong><p class="muted">添加一个今日目标开始追踪。</p></div></div>'; return; } list.innerHTML = goals.map(goal => `<div class="goal-card"><div><strong>${goalTypeNames[goal.goal_type] || goal.goal_type}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${Number(goal.progress_percentage || 0).toFixed(1)}%</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${goal.id}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${goal.id}">停用</button><button class="danger" data-goal-id="${goal.id}">删除</button></div></div>`).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
+}
+async function refreshGoalProgress() {
+  const button = document.getElementById('refreshGoalsBtn');
+  setButtonBusy(button, true, '刷新中...');
+  try { await initDataSync(); if (!(await dataSync.checkConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}/update-progress?date=${encodeURIComponent(todayString())}`, { method: 'POST' }); if (!response.ok) throw new Error('刷新目标进度失败'); setNote('目标进度已刷新', 'success'); log('目标进度已刷新'); await loadGoals(); } catch (error) { setNote(`目标刷新失败：${error.message}`, 'danger'); log(`目标刷新失败：${error.message}`); } finally { setButtonBusy(button, false); }
+}
+async function editGoalDuration(goalId, currentMinutes) {
+  const value = prompt('新的目标时长（分钟）', currentMinutes);
+  if (value === null) return;
+  const minutes = Number(value);
+  if (!minutes || minutes <= 0) { setNote('请输入有效的目标时长', 'danger'); return; }
+  try { const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_duration: Math.round(minutes * 60) }) }); if (!response.ok) throw new Error('编辑失败'); setNote('目标已更新', 'success'); log(`已更新目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标编辑失败：${error.message}`, 'danger'); log(`目标编辑失败：${error.message}`); }
+}
+async function deactivateGoal(goalId) {
+  if (!confirm('确定停用这个目标吗？停用后不会继续统计今日进度。')) return;
+  try { const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: 0 }) }); if (!response.ok) throw new Error('停用失败'); setNote('目标已停用', 'success'); log(`已停用目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标停用失败：${error.message}`, 'danger'); log(`目标停用失败：${error.message}`); }
 }
 async function deleteGoal(goalId) {
   if (!confirm('确定删除这个目标吗？')) return;
@@ -328,7 +459,7 @@ function moveSidebarTabFocus(currentTab, direction) {
     nextButton.focus();
   }
 }
-function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar); document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
+function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', renderFilteredDomains); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar); document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
 
 document.addEventListener('DOMContentLoaded', async () => { await loadSidebarState(); bindEvents(); applySidebarState(); await switchSidebarTab(activeSidebarTab); await refreshDashboard(); });
 window.addEventListener('resize', () => {
