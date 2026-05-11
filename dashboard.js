@@ -169,7 +169,7 @@ async function switchSidebarTab(tab, options = {}) {
     });
   }
   if (tab === 'settings') {
-    loadPreferences();
+    await loadPreferences();
     renderOverrideRules();
   }
   if (tab === 'insights') {
