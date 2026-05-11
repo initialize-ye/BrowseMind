@@ -142,12 +142,27 @@ async function collectHistoryData() {
   const preferences = await getPreferences();
   const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
 
-  const historyItems = await new Promise((resolve) => {
-    chrome.history.search({
-      text: '',
-      startTime: retentionStart,
-      maxResults: 1000
-    }, (items) => resolve(items || []));
+  // 避免每次 onInstalled 和 alarm 都重复拉取
+  const { lastCollectTime = 0 } = await chrome.storage.local.get('lastCollectTime');
+  if (lastCollectTime > retentionStart) return;
+
+  const historyItems = await new Promise((resolve, reject) => {
+    try {
+      chrome.history.search({
+        text: '',
+        startTime: retentionStart,
+        maxResults: 1000,
+        maxItems: 1000
+      }, (items) => {
+        if (chrome.runtime.lastError) {
+          resolve([]);
+          return;
+        }
+        resolve(items || []);
+      });
+    } catch {
+      resolve([]);
+    }
   });
 
   const records = historyItems
@@ -167,7 +182,7 @@ async function collectHistoryData() {
     new Map(merged.map(r => [`${r.url}-${r.visitTime}`, r])).values()
   );
 
-  await chrome.storage.local.set({ browsingData: unique });
+  await chrome.storage.local.set({ browsingData: unique, lastCollectTime: Date.now() });
   console.log(`已采集 ${records.length} 条历史记录`);
 }
 
@@ -194,6 +209,11 @@ async function cleanOldData() {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'cleanOldData') {
     cleanOldData();
+  } else if (alarm.name === 'pruneCooldowns') {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    for (const key of Object.keys(interventionCooldowns)) {
+      if (interventionCooldowns[key] < cutoff) delete interventionCooldowns[key];
+    }
   } else if (alarm.name === 'updateGoalsProgress') {
     updateGoalsProgress();
   } else if (alarm.name === 'syncBrowsingData') {
@@ -295,10 +315,13 @@ async function syncLocalDataInBackground(source) {
   }
 }
 
+// 定期清理过期的干预冷却记录（每天一次）
+chrome.alarms.create('pruneCooldowns', { periodInMinutes: 1440 });
+
 // ==================== 主动干预 ====================
 
 function parseListString(str) {
-  return (str || '').split(/[,，\n\r]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  return (str || '').split(/[,，\n\r]+/).map(s => s.trim().toLowerCase().replace(/^\*\./, '')).filter(Boolean);
 }
 
 function parseCategoryTimeLimits(str) {

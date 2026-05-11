@@ -265,7 +265,8 @@ function renderOverrideRules() {
     const categories = classifier.getAllCategories();
     container.innerHTML = entries.map(([domain, category]) => {
       const info = categories[category] || { name: '其他', icon: '📦' };
-      return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain)}</div><div class="domain-meta">${info.icon} ${escapeHtml(info.name)}</div></div><button class="danger" data-override-remove="${escapeHtml(domain)}">移除</button></div>`;
+      const encDomain = domain.replace(/"/g, '&quot;');
+      return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain)}</div><div class="domain-meta">${info.icon} ${escapeHtml(info.name)}</div></div><button class="danger" data-override-remove="${encDomain}">移除</button></div>`;
     }).join('');
     container.querySelectorAll('[data-override-remove]').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -286,7 +287,12 @@ function showCategoryPicker(domain, currentCategory) {
     Object.entries(categories).map(([key, info]) =>
       `<button class="picker-option${key === currentCategory ? ' active' : ''}" data-pick-cat="${key}">${info.icon} ${escapeHtml(info.name)}</button>`
     ).join('');
-  document.getElementById('closePickerBtn').addEventListener('click', () => { picker.style.display = 'none'; });
+  function closePicker() { picker.style.display = 'none'; }
+  document.getElementById('closePickerBtn').addEventListener('click', closePicker);
+  document.addEventListener('keydown', onPickerKey);
+  picker.addEventListener('click', onPickerBackdrop);
+  function onPickerKey(e) { if (e.key === 'Escape') { closePicker(); document.removeEventListener('keydown', onPickerKey); } }
+  function onPickerBackdrop(e) { if (e.target === picker) { closePicker(); picker.removeEventListener('click', onPickerBackdrop); } }
   picker.querySelectorAll('[data-pick-cat]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const newCat = btn.dataset.pickCat;
@@ -349,7 +355,10 @@ function renderDomainList(domains) {
     container.innerHTML = '<div class="empty">暂无站点数据。</div>';
     return;
   }
-  container.innerHTML = domains.map(domain => `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta"><span>${formatDuration(domain.duration)}</span> <button class="ghost" data-correct-domain="${escapeHtml(domain.domain)}" data-correct-cat="${domain.category || 'other'}" style="min-height:28px;padding:2px 8px;font-size:11px;">修改分类</button></div></div>`).join('');
+  container.innerHTML = domains.map(domain => {
+    const encDomain = (domain.domain || '').replace(/"/g, '&quot;');
+    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta"><span>${formatDuration(domain.duration)}</span> <button class="ghost" data-correct-domain="${encDomain}" data-correct-cat="${domain.category || 'other'}" style="min-height:28px;padding:2px 8px;font-size:11px;">修改分类</button></div></div>`;
+  }).join('');
   container.querySelectorAll('[data-correct-domain]').forEach(btn => {
     btn.addEventListener('click', () => {
       showCategoryPicker(btn.dataset.correctDomain, btn.dataset.correctCat);
