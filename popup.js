@@ -37,6 +37,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 async function loadData() {
+  // Apply theme from storage
+  const { themeMode = 'light' } = await chrome.storage.local.get('themeMode');
+  const html = document.documentElement;
+  if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    html.setAttribute('data-theme', 'dark');
+  } else {
+    html.removeAttribute('data-theme');
+  }
   const loading = document.getElementById('loading');
   const content = document.getElementById('content');
   const emptyState = document.getElementById('emptyState');
@@ -71,6 +79,9 @@ async function loadData() {
     const hourlyDist = analyzer.getHourlyDistribution();
     const preferences = await getPreferences();
     const dailyTrend = calculateDailyTrend(classifiedData, preferences.analysisDays);
+    // Update analysis window labels
+    document.getElementById('categoryStatsLabel').textContent = `${preferences.analysisDays} 天`;
+    document.getElementById('weeklyStatsLabel').textContent = `${preferences.analysisDays} 天`;
 
     // 保存数据供图表使用
     chartData = {

@@ -29,6 +29,42 @@ function log(message) {
   if (lines.length > 200) lines.length = 200;
   box.textContent = `[${time}] ${message}\n${lines.join('\n')}`;
 }
+// ==================== 主题切换 ====================
+function applyTheme(themeMode) {
+  const html = document.documentElement;
+  if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    html.setAttribute('data-theme', 'dark');
+  } else {
+    html.removeAttribute('data-theme');
+  }
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) {
+    const labels = { light: '☀ 亮色', dark: '🌙 深色', system: '🔄 跟随系统' };
+    btn.textContent = labels[themeMode] || labels.light;
+    btn.dataset.theme = themeMode;
+  }
+  // Re-render charts with new grid color
+  setTimeout(() => {
+    if (trendChart) { trendChart.destroy(); trendChart = null; }
+    if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
+    loadAnalytics();
+  }, 80);
+}
+async function cycleTheme() {
+  const current = document.getElementById('themeToggleBtn')?.dataset?.theme || 'light';
+  const next = { light: 'dark', dark: 'system', system: 'light' };
+  const themeMode = next[current];
+  await chrome.storage.local.set({ themeMode });
+  applyTheme(themeMode);
+  log(`主题已切换：${themeMode}`);
+}
+async function loadTheme() {
+  const { themeMode = 'light' } = await chrome.storage.local.get('themeMode');
+  applyTheme(themeMode);
+  // Listen for system theme changes
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme(themeMode));
+}
+
 function setButtonBusy(button, busy, busyText) {
   if (!button) return;
   if (busy) {
@@ -337,9 +373,13 @@ function renderFilteredDomains() {
   });
   renderDomainList(domains);
 }
+function getGridColor() {
+  return getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim() || 'rgba(32,33,36,.08)';
+}
 function renderTrendChart(dailyTrend) {
   if (trendChart) trendChart.destroy();
   const ctx = document.getElementById('trendChart').getContext('2d');
+  const gridColor = getGridColor();
   trendChart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -349,14 +389,15 @@ function renderTrendChart(dailyTrend) {
         { label: '访问次数', data: dailyTrend.map(item => item.visits), borderColor: '#34a853', backgroundColor: 'rgba(52,168,83,.10)', tension: .36, fill: true, yAxisID: 'y1' }
       ]
     },
-    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(32,33,36,.08)' } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }, x: { grid: { display: false } } } }
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }, x: { grid: { display: false } } } }
   });
 }
 function renderHourlyChart(hourlyDist) {
   if (hourlyChart) hourlyChart.destroy();
   const active = hourlyDist.filter(item => item.duration > 0);
+  const gridColor = getGridColor();
   const ctx = document.getElementById('hourlyChart').getContext('2d');
-  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: active.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: active.map(item => Math.round(item.duration / 60)), backgroundColor: active.map((_, index) => palette[index % palette.length]), borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(32,33,36,.08)' } }, x: { grid: { display: false } } } } });
+  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: active.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: active.map(item => Math.round(item.duration / 60)), backgroundColor: active.map((_, index) => palette[index % palette.length]), borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
 }
 function renderBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
@@ -379,7 +420,8 @@ function renderAttentionCurve(attentionCurve) {
   const activeHours = attentionCurve.hourly_focus.filter(item => item.total_duration > 0);
   if (!activeHours.length) return;
   const ctx = document.getElementById('attentionChart').getContext('2d');
-  attentionChart = new Chart(ctx, { type: 'line', data: { labels: activeHours.map(item => `${item.hour}:00`), datasets: [{ label: '专注度', data: activeHours.map(item => item.score), borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,.10)', tension: .36, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: 'rgba(32,33,36,.08)' } }, x: { grid: { display: false } } } } });
+  const gridColor = getGridColor();
+  attentionChart = new Chart(ctx, { type: 'line', data: { labels: activeHours.map(item => `${item.hour}:00`), datasets: [{ label: '专注度', data: activeHours.map(item => item.score), borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,.10)', tension: .36, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
 }
 function renderAIAnalysis(analysis) {
   const container = document.getElementById('aiAnalysisResult');
@@ -565,9 +607,10 @@ function moveSidebarTabFocus(currentTab, direction) {
 function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', () => {
   clearTimeout(domainFilterTimer);
   domainFilterTimer = setTimeout(renderFilteredDomains, 250);
-}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar); document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
+}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
+document.getElementById('themeToggleBtn').addEventListener('click', cycleTheme); document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
 
-document.addEventListener('DOMContentLoaded', async () => { await loadSidebarState(); bindEvents(); applySidebarState(); await switchSidebarTab(activeSidebarTab); await refreshDashboard(); });
+document.addEventListener('DOMContentLoaded', async () => { await loadSidebarState(); bindEvents(); applySidebarState(); await loadTheme(); await switchSidebarTab(activeSidebarTab); await refreshDashboard(); });
 window.addEventListener('resize', () => {
   if (activeSidebarTab === 'dashboard') {
     if (trendChart) trendChart.resize();
