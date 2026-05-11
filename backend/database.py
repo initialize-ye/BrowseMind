@@ -69,6 +69,9 @@ class AnalysisReport(Base):
     ai_issues = Column(Text)  # AI识别的问题
     ai_suggestions = Column(Text)  # AI建议
 
+    # 热门网站（JSON格式存储）
+    top_domains = Column(Text)  # JSON string
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -85,6 +88,7 @@ class AnalysisReport(Base):
             'ai_summary': self.ai_summary,
             'ai_issues': self.ai_issues,
             'ai_suggestions': self.ai_suggestions,
+            'top_domains': json.loads(self.top_domains) if self.top_domains else [],
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

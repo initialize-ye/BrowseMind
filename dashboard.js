@@ -427,9 +427,49 @@ function renderAttentionCurve(attentionCurve) {
 }
 function renderAIAnalysis(analysis) {
   const container = document.getElementById('aiAnalysisResult');
-  const issues = (analysis.issues || []).map(issue => `<li>${escapeHtml(issue)}</li>`).join('') || '<li>暂未发现明显问题。</li>';
-  const suggestions = (analysis.suggestions || []).map(suggestion => `<li>${escapeHtml(suggestion)}</li>`).join('') || '<li>暂无建议。</li>';
-  container.innerHTML = `<div class="setting-row"><div><strong>行为总结</strong><p class="muted">${escapeHtml(analysis.summary || '暂无总结。')}</p></div></div><div class="inline-grid"><div><strong>发现的问题</strong><ul class="muted">${issues}</ul></div><div><strong>优化建议</strong><ul class="muted">${suggestions}</ul></div></div>`;
+
+  const categoryColors = {
+    learning: '#6366f1', coding: '#34d399', entertainment: '#f87171',
+    social: '#fbbf24', tools: '#818cf8', other: '#a1a1aa'
+  };
+  const categoryNames = {
+    learning: '学习', coding: '编程', entertainment: '娱乐',
+    social: '社交', tools: '工具', other: '其他'
+  };
+
+  // 1. 总结卡片
+  let html = `<div class="ai-summary-card"><div class="ai-summary-label">行为总结</div><p>${escapeHtml(analysis.summary || '暂无总结')}</p></div>`;
+
+  // 2. 分类占比条
+  const stats = analysis.category_stats || [];
+  if (stats.length > 0) {
+    const segments = stats.map(s => {
+      const color = categoryColors[s.category] || '#a1a1aa';
+      return `<div class="ai-stacked-segment" style="width:${s.percentage}%;background:${color}"></div>`;
+    }).join('');
+    const legend = stats.map(s => {
+      const color = categoryColors[s.category] || '#a1a1aa';
+      const name = categoryNames[s.category] || s.category;
+      return `<span class="ai-legend-item"><span class="ai-legend-dot" style="background:${color}"></span>${name} <span class="ai-legend-pct">${s.percentage}%</span></span>`;
+    }).join('');
+    html += `<div class="ai-bar-chart"><div class="ai-bar-chart-title">时间分布</div><div class="ai-stacked-bar">${segments}</div><div class="ai-bar-legend">${legend}</div></div>`;
+  }
+
+  // 3. 热门网站表格
+  const domains = analysis.top_domains || [];
+  if (domains.length > 0) {
+    const rows = domains.slice(0, 8).map((d, i) => `<tr><td style="color:var(--muted);font-size:11px;">${i + 1}</td><td class="domain-name">${escapeHtml(d.domain)}</td><td>${d.visits} 次</td><td class="domain-dur">${formatDuration(d.total_duration)}</td></tr>`).join('');
+    html += `<div class="ai-table-wrap"><div class="ai-table-title">热门网站</div><table class="ai-table"><thead><tr><th>#</th><th>网站</th><th>访问</th><th>时长</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  // 4. 问题卡片
+  const issues = (analysis.issues || []).map(issue => `<li class="ai-issue-card">${escapeHtml(issue)}</li>`).join('') || '<li class="ai-issue-card">暂未发现明显问题。</li>';
+
+  // 5. 建议卡片
+  const suggestions = (analysis.suggestions || []).map(s => `<li class="ai-suggestion-card">${escapeHtml(s)}</li>`).join('') || '<li class="ai-suggestion-card">暂无建议。</li>';
+
+  html += `<ul class="ai-card-list">${issues}</ul><ul class="ai-card-list">${suggestions}</ul>`;
+  container.innerHTML = html;
 }
 function renderReports(reports) {
   const container = document.getElementById('reportList');
@@ -497,7 +537,7 @@ async function loadLatestAIAnalysis() {
       if (latest.ai_summary || latest.ai_issues || latest.ai_suggestions) {
         const issues = (() => { try { return JSON.parse(latest.ai_issues); } catch { return [latest.ai_issues]; } })();
         const suggestions = (() => { try { return JSON.parse(latest.ai_suggestions); } catch { return [latest.ai_suggestions]; } })();
-        renderAIAnalysis({ summary: latest.ai_summary || '', issues: Array.isArray(issues) ? issues : [], suggestions: Array.isArray(suggestions) ? suggestions : [] });
+        renderAIAnalysis({ summary: latest.ai_summary || '', issues: Array.isArray(issues) ? issues : [], suggestions: Array.isArray(suggestions) ? suggestions : [], category_stats: Array.isArray(latest.category_stats) ? latest.category_stats : [], top_domains: latest.top_domains || [] });
         return;
       }
     }

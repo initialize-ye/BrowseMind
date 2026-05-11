@@ -75,6 +75,8 @@ class AIAnalysisResponse(BaseModel):
     summary: str
     issues: List[str]
     suggestions: List[str]
+    category_stats: Optional[List[CategoryStat]] = None
+    top_domains: Optional[List[dict]] = None
 
 
 class SuccessResponse(BaseModel):

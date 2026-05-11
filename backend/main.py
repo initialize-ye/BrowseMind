@@ -428,7 +428,8 @@ async def get_ai_analysis(
             category_stats=json.dumps(category_stats, ensure_ascii=False),
             ai_summary=result['summary'],
             ai_issues=json.dumps(result['issues'], ensure_ascii=False),
-            ai_suggestions=json.dumps(result['suggestions'], ensure_ascii=False)
+            ai_suggestions=json.dumps(result['suggestions'], ensure_ascii=False),
+            top_domains=json.dumps(top_domains, ensure_ascii=False)
         )
 
         db.add(report)
@@ -437,7 +438,9 @@ async def get_ai_analysis(
         return AIAnalysisResponse(
             summary=result['summary'],
             issues=result['issues'],
-            suggestions=result['suggestions']
+            suggestions=result['suggestions'],
+            category_stats=[CategoryStat(**s) for s in category_stats],
+            top_domains=top_domains
         )
 
     except Exception as e:
