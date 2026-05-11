@@ -42,7 +42,8 @@ jobs:
 
           # 拉取最新代码
           echo "📥 拉取最新代码..."
-          git pull origin main || { echo "❌ Git 拉取失败"; exit 1; }
+          git fetch origin main
+          git reset --hard origin/main || { echo "❌ Git 同步失败"; exit 1; }
 
           # 进入 backend 目录
           echo "📂 进入 backend 目录..."
