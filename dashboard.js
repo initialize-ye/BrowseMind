@@ -169,6 +169,7 @@ async function switchSidebarTab(tab, options = {}) {
     });
   }
   if (tab === 'settings') {
+    loadPreferences();
     renderOverrideRules();
   }
   if (tab === 'insights') {
@@ -401,8 +402,12 @@ function renderBlackholes(blackholes) {
     container.innerHTML = '<div class="empty">没有发现明显时间黑洞。</div>';
     return;
   }
-  const items = blackholes.top_blackholes.slice(0, 5).map(item => `<div class="domain-row"><div><div class="domain-name">${escapeHtml(item.domain)}</div><div class="domain-meta">${item.long_sessions_count} 次长访问 · 最长 ${formatDuration(item.longest_session)}</div></div><div class="domain-meta">${formatDuration(item.total_duration)}</div></div>`).join('');
-  container.innerHTML = `<div class="status-note danger">浪费时间占比 ${Number(blackholes.waste_percentage || 0).toFixed(1)}% · 共 ${formatDuration(blackholes.total_wasted_time)}</div>${items}`;
+  const items = blackholes.top_blackholes.slice(0, 5).map((item, i) => {
+    const pct = blackholes.total_wasted_time > 0 ? Math.round(item.total_duration / blackholes.total_wasted_time * 100) : 0;
+    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(item.domain)}</div><div class="domain-meta">${item.long_sessions_count} 次长访问 · 最长 ${formatDuration(item.longest_session)}</div></div><div style="text-align:right"><div class="domain-meta">${formatDuration(item.total_duration)}</div><div class="domain-meta" style="font-size:11px">${pct}%</div></div></div>`;
+  }).join('');
+  const wp = Number(blackholes.waste_percentage || 0).toFixed(1);
+  container.innerHTML = `<div class="status-note danger"><strong>${wp}%</strong> 的时间陷入黑洞 · 共浪费 ${formatDuration(blackholes.total_wasted_time)}</div>${items}`;
 }
 function renderAttentionCurve(attentionCurve) {
   const statsContainer = document.getElementById('attentionStats');
@@ -410,8 +415,9 @@ function renderAttentionCurve(attentionCurve) {
     statsContainer.innerHTML = '<div class="empty">暂无足够数据生成专注曲线。</div>';
     return;
   }
+  const peakLabels = (attentionCurve.peak_hours || []).map(h => `${h}:00`).join('、') || '—';
   const recommendation = attentionCurve.recommendations && attentionCurve.recommendations[0] ? `<div class="status-note">${escapeHtml(attentionCurve.recommendations[0])}</div>` : '';
-  statsContainer.innerHTML = `<div class="metric-grid"><div class="metric"><span>专注分数</span><strong>${Math.round(attentionCurve.focus_score || 0)}</strong></div><div class="metric"><span>高效时段</span><strong>${(attentionCurve.peak_hours || []).length}</strong></div></div>${recommendation}`;
+  statsContainer.innerHTML = `<div class="insight-cards"><div class="insight-card"><span>专注分数</span><strong>${Math.round(attentionCurve.focus_score || 0)}</strong></div><div class="insight-card"><span>高效时段</span><strong>${(attentionCurve.peak_hours || []).length}</strong><small>${peakLabels}</small></div></div>${recommendation}`;
   if (attentionChart) attentionChart.destroy();
   const activeHours = attentionCurve.hourly_focus.filter(item => item.total_duration > 0);
   if (!activeHours.length) return;

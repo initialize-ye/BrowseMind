@@ -62,10 +62,10 @@
       background: var(--bg);
       line-height: 1.5;
     }
-    body.sidebar-collapsed .layout { grid-template-columns: 88px minmax(0, 1fr); }
+    body.sidebar-collapsed .layout { grid-template-columns: 72px minmax(0, 1fr); }
     .page { width: min(1440px, calc(100vw - 24px)); margin: 0 auto; padding: var(--space-5) 0 28px; }
     .topbar { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); margin-bottom: 16px; min-height: 0; }
-    .brand-dot { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); }
+    .brand-dot { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); flex-shrink: 0; }
     h1 { font-size: clamp(26px, 3.5vw, 38px); line-height: 1.1; letter-spacing: -0.04em; font-weight: 700; }
     .subtitle { margin-top: var(--space-1); color: var(--muted); font-size: 14px; }
     .panel { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow); }
@@ -97,16 +97,17 @@
     .sidebar .log-box { background: var(--surface-3); color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
     .sidebar input, .sidebar select, .sidebar textarea { border-color: var(--line); background: var(--surface-2); color: var(--text); }
     .sidebar input:focus, .sidebar select:focus, .sidebar textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-    body.sidebar-collapsed .sidebar { padding: 16px 10px; }
+    body.sidebar-collapsed .sidebar { padding: 16px 0; }
     body.sidebar-collapsed .sidebar-label,
     body.sidebar-collapsed .sidebar-brand-copy,
     body.sidebar-collapsed .sidebar-tab-label,
     body.sidebar-collapsed .sidebar-panel { display: none; }
     body.sidebar-collapsed .sidebar-shell { justify-items: center; }
-    body.sidebar-collapsed .sidebar-header { width: 100%; justify-content: center; }
-    body.sidebar-collapsed .sidebar-toggle { margin: 0 auto; }
-    body.sidebar-collapsed .sidebar-tabs { width: 100%; }
-    body.sidebar-collapsed .sidebar-tab { justify-content: center; padding: 12px; }
+    body.sidebar-collapsed .sidebar-header { width: 100%; flex-direction: column; gap: 8px; padding: 0; }
+    body.sidebar-collapsed .sidebar-brand { gap: 0; }
+    body.sidebar-collapsed .sidebar-toggle { margin: 0; width: 36px; height: 36px; font-size: 14px; }
+    body.sidebar-collapsed .sidebar-tabs { width: 100%; align-items: center; }
+    body.sidebar-collapsed .sidebar-tab { justify-content: center; padding: 10px; margin: 0 6px; border-radius: 8px; }
     .main-view { display: none; }
     .main-view.active { display: block; animation: fadeSlideUp 0.35s var(--ease-out) both; }
     @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -137,6 +138,11 @@
     .domain-row, .goal-card { grid-template-columns: 1fr auto; }
     .setting-row { grid-template-columns: 1fr; }
     .category-row:last-child, .domain-row:last-child, .goal-card:last-child, .setting-row:last-child { border-bottom: 0; }
+    .insight-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: var(--space-3); }
+    .insight-card { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+    .insight-card span { display: block; color: var(--muted); font-size: 11px; font-weight: 500; }
+    .insight-card strong { display: block; margin-top: 6px; font-size: 28px; line-height: 1; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+    .insight-card small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
     .bar-track { height: 6px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
     .bar-fill { height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.4s var(--ease-out); }
     .domain-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
@@ -167,7 +173,7 @@
     input:disabled, select:disabled, textarea:disabled { opacity: 0.7; cursor: not-allowed; }
     .form-grid { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: end; margin-top: 12px; }
     .settings-grid { display: grid; gap: 12px; margin-top: 12px; }
-    .inline-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .inline-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
     .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
     .toggle-row:last-child { border-bottom: 0; }
     .toggle-row input[type="checkbox"] { width: 18px; min-height: 18px; height: 18px; accent-color: var(--accent); }
