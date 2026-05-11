@@ -64,7 +64,7 @@
     }
     body.sidebar-collapsed .layout { grid-template-columns: 88px minmax(0, 1fr); }
     .page { width: min(1440px, calc(100vw - 24px)); margin: 0 auto; padding: var(--space-5) 0 28px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: 22px; }
+    .topbar { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); margin-bottom: 16px; min-height: 0; }
     .brand-dot { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); }
     h1 { font-size: clamp(26px, 3.5vw, 38px); line-height: 1.1; letter-spacing: -0.04em; font-weight: 700; }
     .subtitle { margin-top: var(--space-1); color: var(--muted); font-size: 14px; }
@@ -196,7 +196,7 @@
     @media (max-width: 900px) {
       .hero, .dashboard-grid, .inline-grid { grid-template-columns: 1fr; }
       .metric-grid { grid-template-columns: repeat(2, 1fr); }
-      .topbar { flex-direction: column; align-items: flex-start; }
+      .topbar { flex-direction: row; justify-content: flex-end; }
       .view-header { flex-direction: column; }
       .view-header > button { width: 100%; }
       .category-row { grid-template-columns: 1fr; }
@@ -207,9 +207,7 @@
   <div id="toastContainer" aria-live="polite" style="position:fixed;top:16px;right:16px;z-index:9999;max-width:380px;pointer-events:none;"></div>
   <div id="categoryPicker" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9998;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:0 12px 40px rgba(0,0,0,.18);padding:20px;min-width:280px;max-width:360px;"></div>
   <main class="page">
-    <header class="topbar">
-      <button id="refreshBtn">刷新数据</button>
-    </header>
+    <header class="topbar"></header>
 
     <div class="layout">
       <aside class="sidebar" aria-label="Dashboard 侧边导航">

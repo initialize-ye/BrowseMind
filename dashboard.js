@@ -171,6 +171,9 @@ async function switchSidebarTab(tab, options = {}) {
   if (tab === 'settings') {
     renderOverrideRules();
   }
+  if (tab === 'insights') {
+    loadLatestAIAnalysis().catch(() => {});
+  }
 }
 function applyPreferencesToForm(preferences) {
   document.getElementById('apiBaseUrlInput').value = preferences.apiBaseUrl;
@@ -472,12 +475,36 @@ async function loadReports() {
   if (!response.ok) throw new Error('历史报告加载失败');
   renderReports(await response.json());
 }
+async function loadLatestAIAnalysis() {
+  const container = document.getElementById('aiAnalysisResult');
+  try {
+    await initDataSync();
+    if (!(await dataSync.checkConnection())) return;
+    await dataSync.initUserId();
+    const response = await fetch(`${dataSync.apiBaseUrl}/api/reports/${dataSync.userId}?limit=1`);
+    if (!response.ok) return;
+    const reports = await response.json();
+    if (reports && reports.length > 0) {
+      const latest = reports[0];
+      if (latest.ai_summary || latest.ai_issues || latest.ai_suggestions) {
+        const issues = (() => { try { return JSON.parse(latest.ai_issues); } catch { return [latest.ai_issues]; } })();
+        const suggestions = (() => { try { return JSON.parse(latest.ai_suggestions); } catch { return [latest.ai_suggestions]; } })();
+        renderAIAnalysis({ summary: latest.ai_summary || '', issues: Array.isArray(issues) ? issues : [], suggestions: Array.isArray(suggestions) ? suggestions : [] });
+        return;
+      }
+    }
+    container.innerHTML = '<div class="empty">尚未生成 AI 分析，前往"操作"页执行 AI 分析。</div>';
+  } catch {
+    container.innerHTML = '<div class="empty">尚未生成 AI 分析，前往"操作"页执行 AI 分析。</div>';
+  }
+}
 async function refreshInsights() {
   const button = document.getElementById('refreshInsightsBtn');
   setButtonBusy(button, true, '刷新中...');
   try {
     await loadAdvancedInsights();
     await loadReports();
+    await loadLatestAIAnalysis();
     setNote('洞察已刷新', 'success');
     log('洞察页已刷新');
   } catch (error) {
@@ -596,7 +623,7 @@ function moveSidebarTabFocus(currentTab, direction) {
     nextButton.focus();
   }
 }
-function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', () => {
+function bindEvents() { document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', () => {
   clearTimeout(domainFilterTimer);
   domainFilterTimer = setTimeout(renderFilteredDomains, 250);
 }); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
