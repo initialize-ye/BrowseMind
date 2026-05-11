@@ -8,7 +8,13 @@ const DEFAULT_PREFERENCES = {
   minVisitDurationSeconds: 3,
   notificationsEnabled: true,
   blackholeThresholdMinutes: 30,
-  analysisDays: 7
+  analysisDays: 7,
+  interventionsEnabled: false,
+  focusModeEnabled: false,
+  domainAllowlist: '',
+  domainBlocklist: '',
+  categoryTimeLimits: '',
+  interventionCooldownMinutes: 30
 };
 const palette = ['#1a73e8', '#34a853', '#fbbc04', '#ea4335', '#5f6368', '#9aa0a6'];
 const categoryMap = { daily_learning: 'learning', daily_entertainment: 'entertainment', daily_coding: 'coding', daily_social: 'social' };
@@ -175,6 +181,12 @@ function applyPreferencesToForm(preferences) {
   document.getElementById('minVisitDurationInput').value = preferences.minVisitDurationSeconds;
   document.getElementById('blackholeThresholdInput').value = preferences.blackholeThresholdMinutes;
   document.getElementById('analysisDaysInput').value = String(preferences.analysisDays);
+  document.getElementById('interventionsEnabledInput').checked = Boolean(preferences.interventionsEnabled);
+  document.getElementById('focusModeEnabledInput').checked = Boolean(preferences.focusModeEnabled);
+  document.getElementById('domainAllowlistInput').value = preferences.domainAllowlist || '';
+  document.getElementById('domainBlocklistInput').value = preferences.domainBlocklist || '';
+  document.getElementById('categoryTimeLimitsInput').value = preferences.categoryTimeLimits || '';
+  document.getElementById('interventionCooldownInput').value = preferences.interventionCooldownMinutes;
 }
 async function loadPreferences() {
   const preferences = await getPreferences();
@@ -191,7 +203,13 @@ function readPreferencesFromForm() {
     dataRetentionDays: Math.max(1, Number(document.getElementById('dataRetentionDaysInput').value || 7)),
     minVisitDurationSeconds: Math.max(1, Number(document.getElementById('minVisitDurationInput').value || 3)),
     blackholeThresholdMinutes: Math.max(1, Number(document.getElementById('blackholeThresholdInput').value || 30)),
-    analysisDays: Math.max(1, Number(document.getElementById('analysisDaysInput').value || 7))
+    analysisDays: Math.max(1, Number(document.getElementById('analysisDaysInput').value || 7)),
+    interventionsEnabled: document.getElementById('interventionsEnabledInput').checked,
+    focusModeEnabled: document.getElementById('focusModeEnabledInput').checked,
+    domainAllowlist: document.getElementById('domainAllowlistInput').value.trim(),
+    domainBlocklist: document.getElementById('domainBlocklistInput').value.trim(),
+    categoryTimeLimits: document.getElementById('categoryTimeLimitsInput').value.trim(),
+    interventionCooldownMinutes: Math.max(1, Number(document.getElementById('interventionCooldownInput').value || 30))
   };
 }
 async function initDataSync() {

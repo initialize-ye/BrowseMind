@@ -9,7 +9,13 @@ const DEFAULT_PREFERENCES = {
   apiBaseUrl: 'http://119.29.55.112:8000',
   notificationsEnabled: true,
   blackholeThresholdMinutes: 30,
-  analysisDays: 7
+  analysisDays: 7,
+  interventionsEnabled: false,
+  focusModeEnabled: false,
+  domainAllowlist: '',
+  domainBlocklist: '',
+  categoryTimeLimits: '',
+  interventionCooldownMinutes: 30
 };
 
 async function getPreferences() {

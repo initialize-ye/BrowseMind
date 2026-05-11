@@ -12,11 +12,20 @@ const DEFAULT_PREFERENCES = {
   minVisitDurationSeconds: 3,
   notificationsEnabled: true,
   blackholeThresholdMinutes: 30,
-  analysisDays: 7
+  analysisDays: 7,
+  interventionsEnabled: false,
+  focusModeEnabled: false,
+  domainAllowlist: '',
+  domainBlocklist: '',
+  categoryTimeLimits: '',
+  interventionCooldownMinutes: 30
 };
 
 let autoSyncTimer = null;
 let isAutoSyncing = false;
+
+// 干预冷却追踪 { key: lastTriggerTime }
+const interventionCooldowns = {};
 
 async function getPreferences() {
   const stored = await chrome.storage.local.get(Object.keys(DEFAULT_PREFERENCES));
@@ -29,7 +38,8 @@ async function getPreferences() {
     dataRetentionDays: Number(stored.dataRetentionDays || DEFAULT_PREFERENCES.dataRetentionDays),
     minVisitDurationSeconds: Number(stored.minVisitDurationSeconds || DEFAULT_PREFERENCES.minVisitDurationSeconds),
     analysisDays: Number(stored.analysisDays || DEFAULT_PREFERENCES.analysisDays),
-    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes)
+    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes),
+    interventionCooldownMinutes: Number(stored.interventionCooldownMinutes || DEFAULT_PREFERENCES.interventionCooldownMinutes)
   };
 }
 
@@ -55,6 +65,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   // 获取新激活标签的信息
   const tab = await chrome.tabs.get(activeInfo.tabId);
   startTrackingTab(tab);
+  checkTabIntervention(tab);
 });
 
 // 监听标签页更新（URL变化）
@@ -62,6 +73,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.active) {
     await saveTabDuration();
     startTrackingTab(tab);
+    checkTabIntervention(tab);
   }
 });
 
@@ -88,6 +100,20 @@ function startTrackingTab(tab) {
     title: tab.title,
     startTime: Date.now()
   };
+}
+
+// 检查当前标签是否需要干预提醒
+async function checkTabIntervention(tab) {
+  try {
+    if (!tab.url || tab.url.startsWith('chrome://')) return;
+    const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
+    const classifier = new WebsiteClassifier(classificationOverrides);
+    const domain = WebsiteClassifier.normalizeDomain(new URL(tab.url).hostname);
+    const category = classifier.classify(domain, tab.title || '', tab.url);
+    await checkInterventions(domain, category);
+  } catch {
+    // ignore intervention check errors
+  }
 }
 
 // 保存标签页停留时间
@@ -284,6 +310,79 @@ async function syncLocalDataInBackground(source) {
     console.error('后台自动同步失败:', source, error);
   } finally {
     isAutoSyncing = false;
+  }
+}
+
+// ==================== 主动干预 ====================
+
+function parseListString(str) {
+  return (str || '').split(/[,，\n\r]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+}
+
+function parseCategoryTimeLimits(str) {
+  // Format: "entertainment:30,social:20" (minutes)
+  const limits = {};
+  (str || '').split(/[,，\n\r]+/).forEach(pair => {
+    const [cat, min] = pair.split(':').map(s => s.trim());
+    if (cat && min && !isNaN(Number(min))) {
+      limits[cat.toLowerCase()] = Number(min) * 60; // convert to seconds
+    }
+  });
+  return limits;
+}
+
+async function checkInterventions(domain, category) {
+  const preferences = await getPreferences();
+  if (!preferences.interventionsEnabled || !preferences.notificationsEnabled) return;
+
+  const normalizedDomain = (domain || '').toLowerCase();
+  const allowlist = parseListString(preferences.domainAllowlist);
+  const blocklist = parseListString(preferences.domainBlocklist);
+  const cooldownMs = preferences.interventionCooldownMinutes * 60 * 1000;
+  const now = Date.now();
+
+  // 白名单跳过
+  if (allowlist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) return;
+
+  // 黑名单提醒
+  const blockKey = `block:${normalizedDomain}`;
+  if (blocklist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) {
+    if (!interventionCooldowns[blockKey] || now - interventionCooldowns[blockKey] > cooldownMs) {
+      interventionCooldowns[blockKey] = now;
+      showNotification('warning', `你正在访问黑名单站点：${domain}`);
+    }
+    return;
+  }
+
+  // 专注模式提醒（娱乐/社交类）
+  if (preferences.focusModeEnabled && (category === 'entertainment' || category === 'social')) {
+    const focusKey = `focus:${category}`;
+    if (!interventionCooldowns[focusKey] || now - interventionCooldowns[focusKey] > cooldownMs) {
+      interventionCooldowns[focusKey] = now;
+      const catNames = { entertainment: '娱乐', social: '社交' };
+      showNotification('warning', `专注模式已开启，当前正在访问${catNames[category] || category}类站点。`);
+    }
+    return;
+  }
+
+  // 分类时长限制提醒
+  const timeLimits = parseCategoryTimeLimits(preferences.categoryTimeLimits);
+  if (timeLimits[category]) {
+    const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+    const today = new Date().toISOString().split('T')[0];
+    const todayCategoryDuration = browsingData
+      .filter(r => r.date === today && r.category === category)
+      .reduce((sum, r) => sum + (r.duration || 0), 0);
+
+    if (todayCategoryDuration >= timeLimits[category]) {
+      const limitKey = `limit:${category}:${today}`;
+      if (!interventionCooldowns[limitKey] || now - interventionCooldowns[limitKey] > cooldownMs) {
+        interventionCooldowns[limitKey] = now;
+        const catNames = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具' };
+        const limitMin = Math.round(timeLimits[category] / 60);
+        showNotification('warning', `${catNames[category] || category}类今日已使用 ${Math.round(todayCategoryDuration / 60)} 分钟，超过 ${limitMin} 分钟限制。`);
+      }
+    }
   }
 }
 
