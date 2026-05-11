@@ -1,21 +1,4 @@
-const DEFAULT_API_BASE_URL = 'http://119.29.55.112:8000';
-const DEFAULT_PREFERENCES = {
-  apiBaseUrl: DEFAULT_API_BASE_URL,
-  autoSyncEnabled: true,
-  autoSyncDebounceMs: 15000,
-  autoSyncMinIntervalMs: 2 * 60 * 1000,
-  dataRetentionDays: 7,
-  minVisitDurationSeconds: 3,
-  notificationsEnabled: true,
-  blackholeThresholdMinutes: 30,
-  analysisDays: 7,
-  interventionsEnabled: false,
-  focusModeEnabled: false,
-  domainAllowlist: '',
-  domainBlocklist: '',
-  categoryTimeLimits: '',
-  interventionCooldownMinutes: 30
-};
+// DEFAULT_API_BASE_URL and DEFAULT_PREFERENCES are defined in dataSync.js
 const palette = ['#1a73e8', '#34a853', '#fbbc04', '#ea4335', '#5f6368', '#9aa0a6'];
 const categoryMap = { daily_learning: 'learning', daily_entertainment: 'entertainment', daily_coding: 'coding', daily_social: 'social' };
 const goalTypeNames = { daily_learning: '每日学习时长', daily_entertainment: '每日娱乐时长限制', daily_coding: '每日编程时长', daily_social: '每日社交时长限制' };

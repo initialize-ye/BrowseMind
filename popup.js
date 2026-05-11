@@ -4,19 +4,7 @@ let currentChart = null;
 let chartData = null;
 let attentionChart = null;
 let dataSync = new DataSync();
-
-const DEFAULT_PREFERENCES = {
-  apiBaseUrl: 'http://119.29.55.112:8000',
-  notificationsEnabled: true,
-  blackholeThresholdMinutes: 30,
-  analysisDays: 7,
-  interventionsEnabled: false,
-  focusModeEnabled: false,
-  domainAllowlist: '',
-  domainBlocklist: '',
-  categoryTimeLimits: '',
-  interventionCooldownMinutes: 30
-};
+// DEFAULT_PREFERENCES is defined in dataSync.js
 
 async function getPreferences() {
   const stored = await chrome.storage.local.get(Object.keys(DEFAULT_PREFERENCES));

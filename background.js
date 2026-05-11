@@ -1,25 +1,7 @@
 // BrowseMind 后台服务 - 负责监听标签页活动和记录浏览数据
 
 importScripts('dataProcessor.js', 'dataSync.js');
-
-const DEFAULT_API_BASE_URL = 'http://119.29.55.112:8000';
-const DEFAULT_PREFERENCES = {
-  apiBaseUrl: DEFAULT_API_BASE_URL,
-  autoSyncEnabled: true,
-  autoSyncDebounceMs: 15000,
-  autoSyncMinIntervalMs: 2 * 60 * 1000,
-  dataRetentionDays: 7,
-  minVisitDurationSeconds: 3,
-  notificationsEnabled: true,
-  blackholeThresholdMinutes: 30,
-  analysisDays: 7,
-  interventionsEnabled: false,
-  focusModeEnabled: false,
-  domainAllowlist: '',
-  domainBlocklist: '',
-  categoryTimeLimits: '',
-  interventionCooldownMinutes: 30
-};
+// DEFAULT_API_BASE_URL and DEFAULT_PREFERENCES are defined in dataSync.js
 
 let autoSyncTimer = null;
 let isAutoSyncing = false;
