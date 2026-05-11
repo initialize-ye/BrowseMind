@@ -88,7 +88,15 @@ async def upload_browsing_data(
                 # 更新停留时间（取最大值）
                 if record_data.duration > existing.duration:
                     existing.duration = record_data.duration
-                    db.commit()
+                # 刷新分类（用户可能在本地修正了分类）
+                if record_data.category and record_data.category != existing.category:
+                    existing.category = record_data.category
+                # 补充缺失的标题和域名
+                if record_data.title and not existing.title:
+                    existing.title = record_data.title
+                if record_data.domain and not existing.domain:
+                    existing.domain = record_data.domain
+                db.commit()
                 continue
 
             # 创建新记录

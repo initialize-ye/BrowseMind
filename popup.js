@@ -66,7 +66,8 @@ async function loadData() {
     const processor = new DataProcessor(browsingData);
     const cleanedData = processor.clean().getData();
 
-    const classifier = new WebsiteClassifier();
+    const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
+    const classifier = new WebsiteClassifier(classificationOverrides);
     const classifiedData = classifier.classifyBatch(cleanedData);
 
     // 统计分析

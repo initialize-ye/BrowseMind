@@ -142,6 +142,11 @@
     label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; font-weight: 500; }
     .note { display: none; margin-top: var(--space-3); padding: 12px 14px; border-radius: var(--radius-sm); color: var(--blue); background: var(--blue-soft); font-size: 13px; line-height: 1.6; }
     .note.success { color: var(--green); background: var(--green-soft); }
+    .picker-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .picker-header strong { font-size: 14px; }
+    .picker-option { display: block; width: 100%; text-align: left; padding: 10px 14px; margin-bottom: 4px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 13px; }
+    .picker-option:hover { background: var(--blue-soft); border-color: var(--blue); box-shadow: none; transform: none; }
+    .picker-option.active { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); font-weight: 600; }
     .note.danger { color: var(--red); background: var(--red-soft); }
     .log-box { max-height: 180px; overflow: auto; padding: 12px; border-radius: 2px; background: #202124; color: #e8eaed; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
     @media (prefers-reduced-motion: reduce) {
@@ -165,6 +170,7 @@
 </head>
 <body>
   <div id="toastContainer" aria-live="polite" style="position:fixed;top:16px;right:16px;z-index:9999;max-width:380px;pointer-events:none;"></div>
+  <div id="categoryPicker" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9998;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:0 12px 40px rgba(0,0,0,.18);padding:20px;min-width:280px;max-width:360px;"></div>
   <main class="page">
     <header class="topbar">
       <div class="brand"><div class="brand-dot"></div><div><h1>BrowseMind Dashboard</h1><p class="subtitle">本地浏览数据、同步操作与插件设置</p></div></div>
@@ -267,6 +273,7 @@
           <div class="view-shell">
             <div class="view-header panel"><div class="view-copy"><h2>插件设置</h2><p>统一管理同步、分析窗口和通知参数。</p></div></div>
             <div class="panel"><div class="settings-grid"><div class="setting-row"><div><strong>后端 API 地址</strong><p class="muted">用于同步、AI 分析和自动高级分析。</p></div><input id="apiBaseUrlInput" type="url" placeholder="http://119.29.55.112:8000"></div><div class="toggle-row"><div><strong>启用自动同步</strong><p class="muted">记录变化后自动上传到云端。</p></div><input id="autoSyncEnabledInput" type="checkbox"></div><div class="toggle-row"><div><strong>启用通知提醒</strong><p class="muted">目标提醒与达成通知。</p></div><input id="notificationsEnabledInput" type="checkbox"></div><div class="inline-grid"><div><label>自动同步防抖（秒）</label><input id="autoSyncDebounceInput" type="number" min="1" max="3600" value="15"></div><div><label>最小同步间隔（秒）</label><input id="autoSyncMinIntervalInput" type="number" min="10" max="86400" value="120"></div></div><div class="inline-grid"><div><label>本地数据保留（天）</label><input id="dataRetentionDaysInput" type="number" min="1" max="365" value="7"></div><div><label>最小记录时长（秒）</label><input id="minVisitDurationInput" type="number" min="1" max="600" value="3"></div></div><div class="inline-grid"><div><label>高级分析时间黑洞阈值（分钟）</label><input id="blackholeThresholdInput" type="number" min="1" max="600" value="30"></div><div><label>分析窗口（天）</label><select id="analysisDaysInput"><option value="7">7 天</option><option value="14">14 天</option><option value="30">30 天</option></select></div></div></div><div class="button-row"><button id="saveApiBtn">保存设置</button><button id="resetApiBtn" class="ghost">恢复默认</button><button id="testApiBtn" class="secondary">测试连接</button></div></div>
+          <div class="panel"><div class="section-title"><div><h2>自定义分类规则</h2><p>修正误分类的站点，规则优先于内置分类。</p></div></div><div id="overrideRuleList"><div class="empty">暂无自定义分类规则。</div></div></div>
           </div>
         </section>
       </section>

@@ -104,7 +104,8 @@ class DataProcessor {
  * 网站分类器 - 基于规则的分类系统
  */
 class WebsiteClassifier {
-  constructor() {
+  constructor(overrides = {}) {
+    this.overrides = overrides; // { normalizedDomain: category, ... }
     this.rules = {
       learning: {
         name: '学习',
@@ -323,6 +324,13 @@ class WebsiteClassifier {
 
     if (!hostname) {
       return { category: 'other', confidence: 0, matchedBy: 'none', reason: 'invalid-domain' };
+    }
+
+    // Check user overrides first (exact domain or parent domain match)
+    for (const [overrideDomain, overrideCategory] of Object.entries(this.overrides)) {
+      if (this.matchesDomain(hostname, overrideDomain)) {
+        return { category: overrideCategory, confidence: 100, matchedBy: 'user-override', reason: overrideDomain };
+      }
     }
 
     const scores = {};

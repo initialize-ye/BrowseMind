@@ -161,6 +161,9 @@ async function switchSidebarTab(tab, options = {}) {
       if (hourlyChart) hourlyChart.resize();
     });
   }
+  if (tab === 'settings') {
+    renderOverrideRules();
+  }
 }
 function applyPreferencesToForm(preferences) {
   document.getElementById('apiBaseUrlInput').value = preferences.apiBaseUrl;
@@ -195,6 +198,68 @@ async function initDataSync() {
   const apiBaseUrl = await getApiBaseUrl();
   dataSync = new DataSync(apiBaseUrl);
   return dataSync;
+}
+
+// ==================== 分类纠错 ====================
+async function getClassificationOverrides() {
+  const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
+  return classificationOverrides;
+}
+async function saveClassificationOverride(domain, category) {
+  const overrides = await getClassificationOverrides();
+  overrides[domain] = category;
+  await chrome.storage.local.set({ classificationOverrides: overrides });
+}
+async function removeClassificationOverride(domain) {
+  const overrides = await getClassificationOverrides();
+  delete overrides[domain];
+  await chrome.storage.local.set({ classificationOverrides: overrides });
+}
+function renderOverrideRules() {
+  const container = document.getElementById('overrideRuleList');
+  if (!container) return;
+  getClassificationOverrides().then(overrides => {
+    const entries = Object.entries(overrides);
+    if (!entries.length) {
+      container.innerHTML = '<div class="empty">暂无自定义分类规则。</div>';
+      return;
+    }
+    const classifier = new WebsiteClassifier();
+    const categories = classifier.getAllCategories();
+    container.innerHTML = entries.map(([domain, category]) => {
+      const info = categories[category] || { name: '其他', icon: '📦' };
+      return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain)}</div><div class="domain-meta">${info.icon} ${escapeHtml(info.name)}</div></div><button class="danger" data-override-remove="${escapeHtml(domain)}">移除</button></div>`;
+    }).join('');
+    container.querySelectorAll('[data-override-remove]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await removeClassificationOverride(btn.dataset.overrideRemove);
+        renderOverrideRules();
+        await loadAnalytics();
+        log(`已移除分类规则：${btn.dataset.overrideRemove}`);
+      });
+    });
+  });
+}
+function showCategoryPicker(domain, currentCategory) {
+  const classifier = new WebsiteClassifier();
+  const categories = classifier.getAllCategories();
+  const picker = document.getElementById('categoryPicker');
+  picker.style.display = 'block';
+  picker.innerHTML = `<div class="picker-header"><strong>修改分类：${escapeHtml(domain)}</strong><button class="ghost" id="closePickerBtn" style="min-height:32px;padding:4px 10px;">取消</button></div>` +
+    Object.entries(categories).map(([key, info]) =>
+      `<button class="picker-option${key === currentCategory ? ' active' : ''}" data-pick-cat="${key}">${info.icon} ${escapeHtml(info.name)}</button>`
+    ).join('');
+  document.getElementById('closePickerBtn').addEventListener('click', () => { picker.style.display = 'none'; });
+  picker.querySelectorAll('[data-pick-cat]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const newCat = btn.dataset.pickCat;
+      await saveClassificationOverride(domain, newCat);
+      picker.style.display = 'none';
+      log(`已将 ${domain} 分类为 ${categories[newCat]?.name || newCat}`);
+      await loadAnalytics();
+      renderOverrideRules();
+    });
+  });
 }
 
 function calculateDailyTrend(data) {
@@ -247,7 +312,12 @@ function renderDomainList(domains) {
     container.innerHTML = '<div class="empty">暂无站点数据。</div>';
     return;
   }
-  container.innerHTML = domains.map(domain => `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta">${formatDuration(domain.duration)}</div></div>`).join('');
+  container.innerHTML = domains.map(domain => `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta"><span>${formatDuration(domain.duration)}</span> <button class="ghost" data-correct-domain="${escapeHtml(domain.domain)}" data-correct-cat="${domain.category || 'other'}" style="min-height:28px;padding:2px 8px;font-size:11px;">修改分类</button></div></div>`).join('');
+  container.querySelectorAll('[data-correct-domain]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showCategoryPicker(btn.dataset.correctDomain, btn.dataset.correctCat);
+    });
+  });
 }
 function renderFilteredDomains() {
   const categoryFilter = document.getElementById('categoryFilterInput').value;
@@ -261,7 +331,8 @@ function renderFilteredDomains() {
   });
   const domains = calculateTopDomains(filtered).map(domain => {
     const firstRecord = filtered.find(record => record.domain === domain.domain);
-    return { ...domain, categoryName: categories[firstRecord?.category || 'other']?.name || '其他' };
+    const cat = firstRecord?.category || 'other';
+    return { ...domain, category: cat, categoryName: categories[cat]?.name || '其他' };
   });
   renderDomainList(domains);
 }
@@ -392,7 +463,8 @@ async function loadAnalytics() {
   }
   const processor = new DataProcessor(browsingData);
   const cleanedData = processor.clean().getData();
-  const classifier = new WebsiteClassifier();
+  const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
+  const classifier = new WebsiteClassifier(classificationOverrides);
   const classifiedData = classifier.classifyBatch(cleanedData);
   const analyzer = new StatisticsAnalyzer(classifiedData);
   const categoryStats = analyzer.analyzeByCategory();
@@ -420,6 +492,9 @@ async function refreshDashboard() {
   if (activeSidebarTab === 'insights') {
     await loadAdvancedInsights();
     await loadReports();
+  }
+  if (activeSidebarTab === 'settings') {
+    renderOverrideRules();
   }
   log(`刷新完成：${analytics.count} 条记录，用户 ${userId ? userId.slice(0, 10) + '…' : '未生成'}`);
 }

@@ -109,16 +109,16 @@ class DataSync {
   // 同步本地数据到服务器
   async syncLocalData() {
     try {
-      // 获取本地数据
-      const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+      // 获取本地数据和分类覆盖规则
+      const { browsingData = [], classificationOverrides = {} } = await chrome.storage.local.get(['browsingData', 'classificationOverrides']);
 
       if (browsingData.length === 0) {
         console.log('没有需要同步的数据');
         return { success: true, message: '没有需要同步的数据' };
       }
 
-      // 初始化分类器
-      const classifier = new WebsiteClassifier();
+      // 初始化分类器（带用户覆盖规则）
+      const classifier = new WebsiteClassifier(classificationOverrides);
 
       // 转换数据格式并分类
       const records = browsingData.map(record => {
