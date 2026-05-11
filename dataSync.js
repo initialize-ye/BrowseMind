@@ -25,17 +25,23 @@ const ALL_PREF_KEYS = Object.keys(DEFAULT_PREFERENCES);
 // 统一获取偏好设置（供 popup/dashboard/background 共用）
 async function getPreferences() {
   const stored = await chrome.storage.local.get(ALL_PREF_KEYS);
+  const defaults = DEFAULT_PREFERENCES;
   return {
-    ...DEFAULT_PREFERENCES,
-    ...stored,
-    apiBaseUrl: stored.apiBaseUrl || DEFAULT_API_BASE_URL,
-    autoSyncDebounceMs: Number(stored.autoSyncDebounceMs || DEFAULT_PREFERENCES.autoSyncDebounceMs),
-    autoSyncMinIntervalMs: Number(stored.autoSyncMinIntervalMs || DEFAULT_PREFERENCES.autoSyncMinIntervalMs),
-    dataRetentionDays: Number(stored.dataRetentionDays || DEFAULT_PREFERENCES.dataRetentionDays),
-    minVisitDurationSeconds: Number(stored.minVisitDurationSeconds || DEFAULT_PREFERENCES.minVisitDurationSeconds),
-    analysisDays: Number(stored.analysisDays || DEFAULT_PREFERENCES.analysisDays),
-    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes),
-    interventionCooldownMinutes: Number(stored.interventionCooldownMinutes || DEFAULT_PREFERENCES.interventionCooldownMinutes)
+    apiBaseUrl: (stored.apiBaseUrl != null && stored.apiBaseUrl !== '') ? stored.apiBaseUrl : defaults.apiBaseUrl,
+    autoSyncEnabled: stored.autoSyncEnabled != null ? stored.autoSyncEnabled : defaults.autoSyncEnabled,
+    autoSyncDebounceMs: stored.autoSyncDebounceMs != null ? Number(stored.autoSyncDebounceMs) : defaults.autoSyncDebounceMs,
+    autoSyncMinIntervalMs: stored.autoSyncMinIntervalMs != null ? Number(stored.autoSyncMinIntervalMs) : defaults.autoSyncMinIntervalMs,
+    dataRetentionDays: stored.dataRetentionDays != null ? Number(stored.dataRetentionDays) : defaults.dataRetentionDays,
+    minVisitDurationSeconds: stored.minVisitDurationSeconds != null ? Number(stored.minVisitDurationSeconds) : defaults.minVisitDurationSeconds,
+    notificationsEnabled: stored.notificationsEnabled != null ? stored.notificationsEnabled : defaults.notificationsEnabled,
+    blackholeThresholdMinutes: stored.blackholeThresholdMinutes != null ? Number(stored.blackholeThresholdMinutes) : defaults.blackholeThresholdMinutes,
+    analysisDays: stored.analysisDays != null ? Number(stored.analysisDays) : defaults.analysisDays,
+    interventionsEnabled: stored.interventionsEnabled != null ? stored.interventionsEnabled : defaults.interventionsEnabled,
+    focusModeEnabled: stored.focusModeEnabled != null ? stored.focusModeEnabled : defaults.focusModeEnabled,
+    domainAllowlist: stored.domainAllowlist != null ? stored.domainAllowlist : defaults.domainAllowlist,
+    domainBlocklist: stored.domainBlocklist != null ? stored.domainBlocklist : defaults.domainBlocklist,
+    categoryTimeLimits: stored.categoryTimeLimits != null ? stored.categoryTimeLimits : defaults.categoryTimeLimits,
+    interventionCooldownMinutes: stored.interventionCooldownMinutes != null ? Number(stored.interventionCooldownMinutes) : defaults.interventionCooldownMinutes
   };
 }
 
