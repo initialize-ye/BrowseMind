@@ -173,6 +173,8 @@ async function switchSidebarTab(tab, options = {}) {
   }
   if (tab === 'insights') {
     loadLatestAIAnalysis().catch(() => {});
+    loadAdvancedInsights().catch(() => {});
+    loadReports().catch(() => {});
   }
 }
 function applyPreferencesToForm(preferences) {
