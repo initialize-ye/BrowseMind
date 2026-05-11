@@ -20,6 +20,7 @@ let activeSidebarTab = 'actions';
 let isSidebarCollapsed = false;
 let attentionChart = null;
 let currentClassifiedData = [];
+let domainFilterTimer = null;
 const SIDEBAR_TABS = ['dashboard', 'insights', 'actions', 'goals', 'settings'];
 
 function todayString() { return new Date().toISOString().split('T')[0]; }
@@ -35,7 +36,9 @@ function formatDuration(seconds) {
 function log(message) {
   const box = document.getElementById('logBox');
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-  box.textContent = `[${time}] ${message}\n${box.textContent}`;
+  const lines = box.textContent.split('\n');
+  if (lines.length > 200) lines.length = 200;
+  box.textContent = `[${time}] ${message}\n${lines.join('\n')}`;
 }
 function setButtonBusy(button, busy, busyText) {
   if (!button) return;
@@ -56,10 +59,25 @@ function setButtonBusy(button, busy, busyText) {
   }
 }
 function setNote(message, type = 'info') {
+  // Update the inline note in Actions view
   const note = document.getElementById('operationNote');
   note.style.display = 'block';
   note.className = `note ${type === 'success' ? 'success' : type === 'danger' ? 'danger' : ''}`;
   note.textContent = message;
+
+  // Also show a toast visible from any tab
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  const bgMap = { success: 'var(--green-soft)', danger: 'var(--red-soft)', info: 'var(--blue-soft)' };
+  const colorMap = { success: 'var(--green)', danger: 'var(--red)', info: 'var(--blue)' };
+  toast.style.cssText = `pointer-events:auto;margin-bottom:8px;padding:12px 16px;border-radius:var(--radius-sm);background:${bgMap[type] || bgMap.info};color:${colorMap[type] || colorMap.info};font-size:13px;line-height:1.5;box-shadow:var(--shadow);opacity:0;transition:opacity .2s ease;`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(() => { toast.style.opacity = '1'; });
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
 }
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -434,15 +452,15 @@ async function editGoalDuration(goalId, currentMinutes) {
   if (value === null) return;
   const minutes = Number(value);
   if (!minutes || minutes <= 0) { setNote('请输入有效的目标时长', 'danger'); return; }
-  try { const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_duration: Math.round(minutes * 60) }) }); if (!response.ok) throw new Error('编辑失败'); setNote('目标已更新', 'success'); log(`已更新目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标编辑失败：${error.message}`, 'danger'); log(`目标编辑失败：${error.message}`); }
+  try { await initDataSync(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_duration: Math.round(minutes * 60) }) }); if (!response.ok) throw new Error('编辑失败'); setNote('目标已更新', 'success'); log(`已更新目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标编辑失败：${error.message}`, 'danger'); log(`目标编辑失败：${error.message}`); }
 }
 async function deactivateGoal(goalId) {
   if (!confirm('确定停用这个目标吗？停用后不会继续统计今日进度。')) return;
-  try { const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: 0 }) }); if (!response.ok) throw new Error('停用失败'); setNote('目标已停用', 'success'); log(`已停用目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标停用失败：${error.message}`, 'danger'); log(`目标停用失败：${error.message}`); }
+  try { await initDataSync(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: 0 }) }); if (!response.ok) throw new Error('停用失败'); setNote('目标已停用', 'success'); log(`已停用目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标停用失败：${error.message}`, 'danger'); log(`目标停用失败：${error.message}`); }
 }
 async function deleteGoal(goalId) {
   if (!confirm('确定删除这个目标吗？')) return;
-  try { const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'DELETE' }); if (!response.ok) throw new Error('删除失败'); setNote('目标已删除', 'success'); log(`已删除目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`删除目标失败：${error.message}`, 'danger'); log(`删除目标失败：${error.message}`); }
+  try { await initDataSync(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'DELETE' }); if (!response.ok) throw new Error('删除失败'); setNote('目标已删除', 'success'); log(`已删除目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`删除目标失败：${error.message}`, 'danger'); log(`删除目标失败：${error.message}`); }
 }
 async function saveApiBaseUrl() { const button = document.getElementById('saveApiBtn'); setButtonBusy(button, true, '保存中...'); try { const preferences = readPreferencesFromForm(); await chrome.storage.local.set(preferences); await initDataSync(); setNote('插件设置已保存', 'success'); log(`设置已保存：${preferences.apiBaseUrl}`); await refreshDashboard(); } finally { setButtonBusy(button, false); } }
 async function resetApiBaseUrl() { const button = document.getElementById('resetApiBtn'); setButtonBusy(button, true, '恢复中...'); try { await chrome.storage.local.set({ ...DEFAULT_PREFERENCES }); await initDataSync(); await loadPreferences(); setNote('已恢复默认插件设置', 'success'); log('已恢复默认插件设置'); await refreshDashboard(); } finally { setButtonBusy(button, false); } }
@@ -459,7 +477,10 @@ function moveSidebarTabFocus(currentTab, direction) {
     nextButton.focus();
   }
 }
-function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', renderFilteredDomains); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar); document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
+function bindEvents() { document.getElementById('refreshBtn').addEventListener('click', refreshDashboard); document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', () => {
+  clearTimeout(domainFilterTimer);
+  domainFilterTimer = setTimeout(renderFilteredDomains, 250);
+}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('saveApiBtn').addEventListener('click', saveApiBaseUrl); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar); document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
 
 document.addEventListener('DOMContentLoaded', async () => { await loadSidebarState(); bindEvents(); applySidebarState(); await switchSidebarTab(activeSidebarTab); await refreshDashboard(); });
 window.addEventListener('resize', () => {

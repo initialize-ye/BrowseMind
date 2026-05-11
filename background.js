@@ -134,33 +134,33 @@ async function collectHistoryData() {
   const preferences = await getPreferences();
   const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
 
-  chrome.history.search({
-    text: '',
-    startTime: retentionStart,
-    maxResults: 1000
-  }, async (historyItems) => {
-    const records = historyItems
-      .filter(item => item.url && !item.url.startsWith('chrome://'))
-      .map(item => ({
-        url: item.url,
-        title: item.title,
-        visitTime: item.lastVisitTime,
-        duration: 0, // 历史记录无法获取停留时间
-        date: new Date(item.lastVisitTime).toISOString().split('T')[0]
-      }));
-
-    // 合并到现有数据
-    const { browsingData = [] } = await chrome.storage.local.get('browsingData');
-    const merged = [...browsingData, ...records];
-
-    // 去重
-    const unique = Array.from(
-      new Map(merged.map(r => [`${r.url}-${r.visitTime}`, r])).values()
-    );
-
-    await chrome.storage.local.set({ browsingData: unique });
-    console.log(`已采集 ${records.length} 条历史记录`);
+  const historyItems = await new Promise((resolve) => {
+    chrome.history.search({
+      text: '',
+      startTime: retentionStart,
+      maxResults: 1000
+    }, (items) => resolve(items || []));
   });
+
+  const records = historyItems
+    .filter(item => item.url && !item.url.startsWith('chrome://'))
+    .map(item => ({
+      url: item.url,
+      title: item.title,
+      visitTime: item.lastVisitTime,
+      duration: 0,
+      date: new Date(item.lastVisitTime).toISOString().split('T')[0]
+    }));
+
+  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+  const merged = [...browsingData, ...records];
+
+  const unique = Array.from(
+    new Map(merged.map(r => [`${r.url}-${r.visitTime}`, r])).values()
+  );
+
+  await chrome.storage.local.set({ browsingData: unique });
+  console.log(`已采集 ${records.length} 条历史记录`);
 }
 
 // 定期清理旧数据（每小时执行一次）
@@ -172,9 +172,20 @@ chrome.alarms.create('updateGoalsProgress', { periodInMinutes: 5 });
 // 定期兜底同步浏览数据（每5分钟）
 chrome.alarms.create('syncBrowsingData', { periodInMinutes: 5 });
 
+async function cleanOldData() {
+  const preferences = await getPreferences();
+  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+  const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
+  const filtered = browsingData.filter(r => r.visitTime > retentionStart);
+  if (filtered.length !== browsingData.length) {
+    await chrome.storage.local.set({ browsingData: filtered });
+    console.log(`清理旧数据：${browsingData.length - filtered.length} 条已移除`);
+  }
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'cleanOldData') {
-    collectHistoryData(); // 重新采集并自动清理旧数据
+    cleanOldData();
   } else if (alarm.name === 'updateGoalsProgress') {
     updateGoalsProgress();
   } else if (alarm.name === 'syncBrowsingData') {
@@ -222,7 +233,7 @@ async function showNotification(type, message) {
 
   chrome.notifications.create({
     type: 'basic',
-    iconUrl: 'icon128.png',
+    iconUrl: 'icons/icon128.png',
     title: type === 'achieved' ? '🎉 目标达成' : '⚠️ 时间提醒',
     message: message,
     priority: 2
@@ -250,6 +261,7 @@ async function scheduleAutoSync() {
 
 async function syncLocalDataInBackground(source) {
   if (isAutoSyncing) return;
+  isAutoSyncing = true;
 
   try {
     const preferences = await getPreferences();
@@ -262,7 +274,6 @@ async function syncLocalDataInBackground(source) {
       return;
     }
 
-    isAutoSyncing = true;
     const dataSync = await getDataSync();
     const isConnected = await dataSync.checkConnection();
     if (!isConnected) return;

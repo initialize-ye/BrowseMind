@@ -166,11 +166,13 @@ class DataSync {
   // 检查服务器连接
   async checkConnection() {
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
       const response = await fetch(`${this.apiBaseUrl}/`, {
         method: 'GET',
-        timeout: 5000
+        signal: controller.signal
       });
-
+      clearTimeout(timer);
       return response.ok;
     } catch (error) {
       console.error('服务器连接失败:', error);

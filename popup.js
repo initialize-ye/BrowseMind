@@ -95,8 +95,8 @@ async function loadData() {
     drawPieChart();
 
     // 加载目标和高级分析
-    loadGoals();
-    loadAdvancedAnalysis();
+    await loadGoals();
+    await loadAdvancedAnalysis();
 
     loading.style.display = 'none';
     content.style.display = 'block';
@@ -553,24 +553,19 @@ async function syncToCloud() {
 
     if (result.success) {
       syncBtn.textContent = '✅ 同步成功';
-      setTimeout(() => {
-        syncBtn.textContent = originalText;
-      }, 2000);
-
       alert(`✅ 同步成功\n${result.message}`);
-      loadAdvancedAnalysis();
+      await loadAdvancedAnalysis();
     }
 
   } catch (error) {
     console.error('同步失败:', error);
     syncBtn.textContent = '❌ 同步失败';
-    setTimeout(() => {
-      syncBtn.textContent = originalText;
-    }, 2000);
-
     alert(`❌ 同步失败\n${error.message}\n\n请确保后端服务已启动`);
   } finally {
-    syncBtn.disabled = false;
+    setTimeout(() => {
+      syncBtn.textContent = originalText;
+      syncBtn.disabled = false;
+    }, 2000);
   }
 }
 
@@ -602,8 +597,9 @@ async function showAIAnalysis() {
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || '分析失败');
+      let detail = '分析失败';
+      try { const err = await response.json(); detail = err.detail || detail; } catch {}
+      throw new Error(detail);
     }
 
     const analysis = await response.json();
@@ -627,13 +623,13 @@ async function showAIAnalysis() {
 function displayAIAnalysis(analysis) {
   const content = document.getElementById('aiAnalysisContent');
 
-  const issuesHtml = analysis.issues.map(issue =>
+  const issuesHtml = (analysis.issues || []).map(issue =>
     `<li>• ${escapeHtml(issue)}</li>`
-  ).join('');
+  ).join('') || '<li>暂未发现明显问题。</li>';
 
-  const suggestionsHtml = analysis.suggestions.map(suggestion =>
+  const suggestionsHtml = (analysis.suggestions || []).map(suggestion =>
     `<li>✓ ${escapeHtml(suggestion)}</li>`
-  ).join('');
+  ).join('') || '<li>暂无建议。</li>';
 
   content.innerHTML = `
     <div class="ai-section">
@@ -700,8 +696,9 @@ async function loadAdvancedAnalysis() {
     }
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || '分析失败');
+      let detail = '分析失败';
+      try { const err = await response.json(); detail = err.detail || detail; } catch {}
+      throw new Error(detail);
     }
 
     const analysis = await response.json();
@@ -1043,17 +1040,10 @@ async function updateGoalsProgress() {
   }
 }
 
-async function showNotification(type, message) {
-  const preferences = await getPreferences();
-  if (!preferences.notificationsEnabled || !chrome.notifications) {
-    return;
-  }
-
-  chrome.notifications.create({
-    type: 'basic',
-    iconUrl: 'icon128.png',
-    title: type === 'achieved' ? '🎉 目标达成' : '⚠️ 时间提醒',
-    message: message,
-    priority: 2
-  });
+function showNotification(type, message) {
+  // Popup context cannot use chrome.notifications (MV3 restriction).
+  // Log the notification so the user can see it in console, and
+  // the background service worker handles actual system notifications.
+  const prefix = type === 'achieved' ? '🎉 目标达成' : '⚠️ 时间提醒';
+  console.log(`${prefix}: ${message}`);
 }
