@@ -220,20 +220,20 @@
       <section class="analytics-main">
         <section class="main-view active" id="mainViewDashboard" data-main-view="dashboard" role="tabpanel" aria-labelledby="sidebarTabDashboard" tabindex="0">
           <section class="hero">
-            <div class="intro panel"><h2>浏览概览</h2><p>查看最近 7 天的访问、分类、时段和高频站点。</p></div>
+            <div class="intro panel"><h2>浏览概览</h2><p id="analysisWindowDesc">查看最近 7 天的访问、分类、时段和高频站点。</p></div>
             <aside class="status-panel panel"><div class="section-title"><div><h2>连接状态</h2><p id="todayDate">--</p></div></div><div class="status-note" id="statusNote" aria-live="polite">正在读取数据...</div></aside>
           </section>
 
           <section class="metric-grid">
             <div class="metric"><span>今日访问</span><strong id="metricTodayVisits">0</strong></div>
             <div class="metric"><span>今日时长</span><strong id="metricTodayDuration">0m</strong></div>
-            <div class="metric"><span>7 天访问</span><strong id="metricWeekVisits">0</strong></div>
+            <div class="metric"><span id="weekVisitsLabel">7 天访问</span><strong id="metricWeekVisits">0</strong></div>
             <div class="metric"><span>独立网站</span><strong id="metricUniqueSites">0</strong></div>
           </section>
 
           <section class="dashboard-grid">
             <div>
-              <div class="panel"><div class="section-title"><h2>7 天趋势</h2><p>时长与访问次数</p></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
+              <div class="panel"><div class="section-title"><h2 id="trendChartTitle">趋势</h2><p>时长与访问次数</p></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
               <div class="panel"><div class="section-title"><div><h2>分类构成</h2><p>按停留时长排序</p></div><select id="categoryFilterInput" aria-label="筛选分类"><option value="all">全部分类</option><option value="learning">学习</option><option value="coding">编程</option><option value="entertainment">娱乐</option><option value="social">社交</option><option value="tools">工具</option><option value="other">仅看其他</option></select></div><div id="categoryList"></div></div>
             </div>
             <div>

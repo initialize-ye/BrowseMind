@@ -262,7 +262,7 @@ function showCategoryPicker(domain, currentCategory) {
   });
 }
 
-function calculateDailyTrend(data) {
+function calculateDailyTrend(data, days = 7) {
   const dailyStats = {};
   data.forEach(record => {
     const date = record.date;
@@ -270,7 +270,7 @@ function calculateDailyTrend(data) {
     dailyStats[date].visits++;
     dailyStats[date].duration += record.duration || 0;
   });
-  return Object.values(dailyStats).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-7);
+  return Object.values(dailyStats).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-days);
 }
 function calculateTopDomains(data) {
   const domainMap = {};
@@ -392,7 +392,11 @@ function renderReports(reports) {
     container.innerHTML = '<div class="empty">暂无历史报告。</div>';
     return;
   }
-  container.innerHTML = reports.slice(0, 5).map(report => `<div class="domain-row"><div><div class="domain-name">${escapeHtml(report.report_date || report.created_at || '未知日期')}</div><div class="domain-meta">${escapeHtml(report.ai_summary || '无总结')}</div></div><div class="domain-meta">${formatDuration(report.total_duration)}</div></div>`).join('');
+  const typeLabels = { ai_analysis: 'AI 分析', ai_7d: '7 天 AI 分析', ai_14d: '14 天 AI 分析', ai_30d: '30 天 AI 分析' };
+  container.innerHTML = reports.slice(0, 5).map(report => {
+    const typeLabel = typeLabels[report.report_type] || report.report_type || '';
+    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(report.report_date || report.created_at || '未知日期')}${typeLabel ? ` <span style="font-weight:400;color:var(--muted);font-size:11px;">${escapeHtml(typeLabel)}</span>` : ''}</div><div class="domain-meta">${escapeHtml(report.ai_summary || '无总结')}</div></div><div class="domain-meta">${formatDuration(report.total_duration)}</div></div>`;
+  }).join('');
 }
 function renderAdvancedEmpty(message) {
   document.getElementById('blackholeStats').innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
@@ -469,7 +473,8 @@ async function loadAnalytics() {
   const analyzer = new StatisticsAnalyzer(classifiedData);
   const categoryStats = analyzer.analyzeByCategory();
   const hourlyDist = analyzer.getHourlyDistribution();
-  const dailyTrend = calculateDailyTrend(classifiedData);
+  const { analysisDays } = await getPreferences();
+  const dailyTrend = calculateDailyTrend(classifiedData, analysisDays);
   currentClassifiedData = classifiedData;
   renderMetrics(classifiedData);
   renderCategoryList(categoryStats, classifier);
@@ -487,7 +492,11 @@ async function refreshDashboard() {
   const analytics = await loadAnalytics();
   const connected = await dataSync.checkConnection();
   const syncText = lastSyncTime ? `上次同步：${new Date(lastSyncTime).toLocaleString('zh-CN')}` : '尚未同步。';
-  document.getElementById('statusNote').textContent = `${connected ? '云服务器连接正常。' : '无法连接云服务器。'} 已载入 ${analytics.count} 条本地记录。${analytics.topCategoryText} ${syncText} 当前分析窗口：${preferences.analysisDays} 天。`;
+  const days = preferences.analysisDays;
+  document.getElementById('statusNote').textContent = `${connected ? '云服务器连接正常。' : '无法连接云服务器。'} 已载入 ${analytics.count} 条本地记录。${analytics.topCategoryText} ${syncText} 当前分析窗口：${days} 天。`;
+  document.getElementById('analysisWindowDesc').textContent = `查看最近 ${days} 天的访问、分类、时段和高频站点。`;
+  document.getElementById('weekVisitsLabel').textContent = `${days} 天访问`;
+  document.getElementById('trendChartTitle').textContent = `${days} 天趋势`;
   await loadGoals();
   if (activeSidebarTab === 'insights') {
     await loadAdvancedInsights();

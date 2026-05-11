@@ -419,7 +419,7 @@ async def get_ai_analysis(
         report = AnalysisReport(
             user_id=user_id,
             report_date=datetime.now().date().isoformat(),
-            report_type='ai_analysis',
+            report_type=f'ai_{days}d',
             total_visits=len(records),
             total_duration=total_duration,
             unique_domains=len(set(r.domain for r in records if r.domain)),
@@ -446,6 +446,7 @@ async def get_ai_analysis(
 async def get_user_reports(
     user_id: str,
     limit: int = 10,
+    report_type: str = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -453,10 +454,12 @@ async def get_user_reports(
 
     - user_id: 用户ID
     - limit: 返回数量（默认10条）
+    - report_type: 可选筛选报告类型（如 ai_7d, ai_30d）
     """
-    reports = db.query(AnalysisReport).filter(
-        AnalysisReport.user_id == user_id
-    ).order_by(AnalysisReport.created_at.desc()).limit(limit).all()
+    query = db.query(AnalysisReport).filter(AnalysisReport.user_id == user_id)
+    if report_type:
+        query = query.filter(AnalysisReport.report_type == report_type)
+    reports = query.order_by(AnalysisReport.created_at.desc()).limit(limit).all()
 
     return [report.to_dict() for report in reports]
 

@@ -75,7 +75,8 @@ async function loadData() {
     const categoryStats = analyzer.analyzeByCategory();
     const todayStats = analyzer.getTodayStats();
     const hourlyDist = analyzer.getHourlyDistribution();
-    const dailyTrend = calculateDailyTrend(classifiedData);
+    const preferences = await getPreferences();
+    const dailyTrend = calculateDailyTrend(classifiedData, preferences.analysisDays);
 
     // 保存数据供图表使用
     chartData = {
@@ -139,7 +140,7 @@ function calculateStats(data) {
 }
 
 // 计算每日趋势
-function calculateDailyTrend(data) {
+function calculateDailyTrend(data, days = 7) {
   const dailyStats = {};
 
   data.forEach(record => {
@@ -158,7 +159,7 @@ function calculateDailyTrend(data) {
   // 转换为数组并排序
   return Object.values(dailyStats)
     .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(-7); // 最近7天
+    .slice(-days);
 }
 
 function updateUI(stats, data, categoryStats, todayStats, classifier) {
