@@ -251,20 +251,22 @@ async def get_analysis(
 @app.delete("/api/records/{user_id}")
 async def delete_user_records(
     user_id: str,
-    days: int = None,
+    days: int = -1,
     db: Session = Depends(get_db)
 ):
     """
     删除用户的浏览记录
 
     - user_id: 用户ID
-    - days: 删除N天前的数据（不传则删除全部）
+    - days: 删除N天前的数据（传-1或省略则删除全部）
     """
     query = db.query(BrowsingRecord).filter(BrowsingRecord.user_id == user_id)
 
-    if days:
+    if days > 0:
         cutoff_date = datetime.now() - timedelta(days=days)
         query = query.filter(BrowsingRecord.visit_time < cutoff_date)
+    elif days == 0:
+        raise HTTPException(status_code=400, detail="days 参数必须大于0，传-1以删除全部记录")
 
     deleted_count = query.delete()
     db.commit()

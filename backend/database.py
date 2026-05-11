@@ -2,7 +2,9 @@
 BrowseMind 后端服务 - 数据库模型
 """
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text
+import json
+
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -13,6 +15,10 @@ Base = declarative_base()
 class BrowsingRecord(Base):
     """浏览记录模型"""
     __tablename__ = 'browsing_records'
+    __table_args__ = (
+        Index('ix_browsing_records_user_time', 'user_id', 'visit_time'),
+        Index('ix_browsing_records_user_date', 'user_id', 'date'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String(100), nullable=False, index=True)  # 用户标识
@@ -67,7 +73,6 @@ class AnalysisReport(Base):
 
     def to_dict(self):
         """转换为字典"""
-        import json
         return {
             'id': self.id,
             'user_id': self.user_id,
@@ -87,6 +92,9 @@ class AnalysisReport(Base):
 class UserGoal(Base):
     """用户目标模型"""
     __tablename__ = 'user_goals'
+    __table_args__ = (
+        Index('ix_user_goals_user_date_active', 'user_id', 'date', 'is_active'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String(100), nullable=False, index=True)

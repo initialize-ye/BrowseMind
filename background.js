@@ -1,29 +1,14 @@
 // BrowseMind 后台服务 - 负责监听标签页活动和记录浏览数据
 
 importScripts('dataProcessor.js', 'dataSync.js');
-// DEFAULT_API_BASE_URL and DEFAULT_PREFERENCES are defined in dataSync.js
+// getPreferences(), DEFAULT_API_BASE_URL, DEFAULT_PREFERENCES are defined in dataSync.js
 
 let autoSyncTimer = null;
 let isAutoSyncing = false;
+let _recentRecordKeys = null; // Set-based dedup cache for addBrowsingRecord
 
 // 干预冷却追踪 { key: lastTriggerTime }
 const interventionCooldowns = {};
-
-async function getPreferences() {
-  const stored = await chrome.storage.local.get(Object.keys(DEFAULT_PREFERENCES));
-  return {
-    ...DEFAULT_PREFERENCES,
-    ...stored,
-    apiBaseUrl: stored.apiBaseUrl || DEFAULT_API_BASE_URL,
-    autoSyncDebounceMs: Number(stored.autoSyncDebounceMs || DEFAULT_PREFERENCES.autoSyncDebounceMs),
-    autoSyncMinIntervalMs: Number(stored.autoSyncMinIntervalMs || DEFAULT_PREFERENCES.autoSyncMinIntervalMs),
-    dataRetentionDays: Number(stored.dataRetentionDays || DEFAULT_PREFERENCES.dataRetentionDays),
-    minVisitDurationSeconds: Number(stored.minVisitDurationSeconds || DEFAULT_PREFERENCES.minVisitDurationSeconds),
-    analysisDays: Number(stored.analysisDays || DEFAULT_PREFERENCES.analysisDays),
-    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes),
-    interventionCooldownMinutes: Number(stored.interventionCooldownMinutes || DEFAULT_PREFERENCES.interventionCooldownMinutes)
-  };
-}
 
 // 存储当前活跃标签的信息
 let activeTab = {
@@ -93,8 +78,8 @@ async function checkTabIntervention(tab) {
     const domain = WebsiteClassifier.normalizeDomain(new URL(tab.url).hostname);
     const category = classifier.classify(domain, tab.title || '', tab.url);
     await checkInterventions(domain, category);
-  } catch {
-    // ignore intervention check errors
+  } catch (e) {
+    console.error('checkTabIntervention error:', e);
   }
 }
 
@@ -118,24 +103,36 @@ async function saveTabDuration() {
   await addBrowsingRecord(record);
 }
 
-// 添加浏览记录到存储
+// 构建记录指纹键（5秒窗口内视为同一条）
+function recordKey(r) {
+  const bucket = Math.floor(r.visitTime / 5000) * 5000;
+  return r.url + '|' + bucket;
+}
+
+// 初始化记录指纹缓存
+function ensureRecordCache(browsingData) {
+  if (!_recentRecordKeys) {
+    _recentRecordKeys = new Set(browsingData.map(recordKey));
+  }
+}
+
+// 添加浏览记录到存储（O(1) 去重，避免全量扫描）
 async function addBrowsingRecord(record) {
   const preferences = await getPreferences();
   const { browsingData = [] } = await chrome.storage.local.get('browsingData');
 
-  const exists = browsingData.some(r =>
-    r.url === record.url && Math.abs(r.visitTime - record.visitTime) < 5000
-  );
+  ensureRecordCache(browsingData);
+  const key = recordKey(record);
+  if (_recentRecordKeys.has(key)) return;
 
-  if (!exists) {
-    browsingData.push(record);
+  _recentRecordKeys.add(key);
+  browsingData.push(record);
 
-    const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
-    const filteredData = browsingData.filter(r => r.visitTime > retentionStart);
+  const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
+  const filteredData = browsingData.filter(r => r.visitTime > retentionStart);
 
-    await chrome.storage.local.set({ browsingData: filteredData });
-    console.log('记录已保存:', record);
-  }
+  await chrome.storage.local.set({ browsingData: filteredData });
+  console.log('记录已保存:', record);
 }
 
 async function collectHistoryData() {
@@ -207,17 +204,21 @@ async function cleanOldData() {
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'cleanOldData') {
-    cleanOldData();
-  } else if (alarm.name === 'pruneCooldowns') {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    for (const key of Object.keys(interventionCooldowns)) {
-      if (interventionCooldowns[key] < cutoff) delete interventionCooldowns[key];
+  try {
+    if (alarm.name === 'cleanOldData') {
+      cleanOldData().catch(e => console.error('cleanOldData failed:', e));
+    } else if (alarm.name === 'pruneCooldowns') {
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      for (const key of Object.keys(interventionCooldowns)) {
+        if (interventionCooldowns[key] < cutoff) delete interventionCooldowns[key];
+      }
+    } else if (alarm.name === 'updateGoalsProgress') {
+      updateGoalsProgress().catch(e => console.error('updateGoalsProgress failed:', e));
+    } else if (alarm.name === 'syncBrowsingData') {
+      syncLocalDataInBackground('alarm');
     }
-  } else if (alarm.name === 'updateGoalsProgress') {
-    updateGoalsProgress();
-  } else if (alarm.name === 'syncBrowsingData') {
-    syncLocalDataInBackground('alarm');
+  } catch (e) {
+    console.error('alarm handler error:', e);
   }
 });
 
@@ -392,11 +393,13 @@ async function checkInterventions(domain, category) {
 }
 
 // 监听浏览记录变化，实时检查目标与自动同步
+let _goalsDebounceTimer = null;
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local' && changes.browsingData) {
-    setTimeout(() => {
-      updateGoalsProgress();
-    }, 1000);
+    clearTimeout(_goalsDebounceTimer);
+    _goalsDebounceTimer = setTimeout(() => {
+      updateGoalsProgress().catch(e => console.error('updateGoalsProgress failed:', e));
+    }, 3000);
 
     scheduleAutoSync();
   }

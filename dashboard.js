@@ -1,5 +1,5 @@
-// DEFAULT_API_BASE_URL and DEFAULT_PREFERENCES are defined in dataSync.js
-const palette = ['#1a73e8', '#34a853', '#fbbc04', '#ea4335', '#5f6368', '#9aa0a6'];
+// getPreferences(), DEFAULT_API_BASE_URL, DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
+const palette = ['#6366f1', '#34d399', '#fbbf24', '#f87171', '#a1a1aa', '#818cf8'];
 const categoryMap = { daily_learning: 'learning', daily_entertainment: 'entertainment', daily_coding: 'coding', daily_social: 'social' };
 const goalTypeNames = { daily_learning: '每日学习时长', daily_entertainment: '每日娱乐时长限制', daily_coding: '每日编程时长', daily_social: '每日社交时长限制' };
 let dataSync = null;
@@ -93,8 +93,8 @@ function setNote(message, type = 'info') {
   // Also show a toast visible from any tab
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
-  const bgMap = { success: 'var(--green-soft)', danger: 'var(--red-soft)', info: 'var(--blue-soft)' };
-  const colorMap = { success: 'var(--green)', danger: 'var(--red)', info: 'var(--blue)' };
+  const bgMap = { success: 'var(--green-soft)', danger: 'var(--red-soft)', info: 'var(--accent-soft)' };
+  const colorMap = { success: 'var(--green)', danger: 'var(--red)', info: 'var(--accent)' };
   toast.style.cssText = `pointer-events:auto;margin-bottom:8px;padding:12px 16px;border-radius:var(--radius-sm);background:${bgMap[type] || bgMap.info};color:${colorMap[type] || colorMap.info};font-size:13px;line-height:1.5;box-shadow:var(--shadow);opacity:0;transition:opacity .2s ease;`;
   toast.textContent = message;
   container.appendChild(toast);
@@ -104,25 +104,7 @@ function setNote(message, type = 'info') {
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text || '';
-  return div.innerHTML;
-}
-async function getPreferences() {
-  const stored = await chrome.storage.local.get(Object.keys(DEFAULT_PREFERENCES));
-  return {
-    ...DEFAULT_PREFERENCES,
-    ...stored,
-    apiBaseUrl: stored.apiBaseUrl || DEFAULT_API_BASE_URL,
-    analysisDays: Number(stored.analysisDays || DEFAULT_PREFERENCES.analysisDays),
-    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes),
-    autoSyncDebounceMs: Number(stored.autoSyncDebounceMs || DEFAULT_PREFERENCES.autoSyncDebounceMs),
-    autoSyncMinIntervalMs: Number(stored.autoSyncMinIntervalMs || DEFAULT_PREFERENCES.autoSyncMinIntervalMs),
-    dataRetentionDays: Number(stored.dataRetentionDays || DEFAULT_PREFERENCES.dataRetentionDays),
-    minVisitDurationSeconds: Number(stored.minVisitDurationSeconds || DEFAULT_PREFERENCES.minVisitDurationSeconds)
-  };
-}
+// getPreferences() 由 dataSync.js 提供
 async function getApiBaseUrl() {
   const { apiBaseUrl } = await getPreferences();
   return apiBaseUrl;
@@ -383,7 +365,7 @@ function renderFilteredDomains() {
   renderDomainList(domains);
 }
 function getGridColor() {
-  return getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim() || 'rgba(32,33,36,.08)';
+  return getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim() || 'oklch(0% 0 0 / 0.06)';
 }
 function renderTrendChart(dailyTrend) {
   if (trendChart) trendChart.destroy();
@@ -394,7 +376,7 @@ function renderTrendChart(dailyTrend) {
     data: {
       labels: dailyTrend.map(item => { const date = new Date(item.date); return `${date.getMonth() + 1}/${date.getDate()}`; }),
       datasets: [
-        { label: '时长（分钟）', data: dailyTrend.map(item => Math.round((item.duration || 0) / 60)), borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,.10)', tension: .36, fill: true, yAxisID: 'y' },
+        { label: '时长（分钟）', data: dailyTrend.map(item => Math.round((item.duration || 0) / 60)), borderColor: '#6366f1', backgroundColor: 'oklch(55% 0.14 275 / 0.08)', tension: .36, fill: true, yAxisID: 'y' },
         { label: '访问次数', data: dailyTrend.map(item => item.visits), borderColor: '#34a853', backgroundColor: 'rgba(52,168,83,.10)', tension: .36, fill: true, yAxisID: 'y1' }
       ]
     },
@@ -430,7 +412,7 @@ function renderAttentionCurve(attentionCurve) {
   if (!activeHours.length) return;
   const ctx = document.getElementById('attentionChart').getContext('2d');
   const gridColor = getGridColor();
-  attentionChart = new Chart(ctx, { type: 'line', data: { labels: activeHours.map(item => `${item.hour}:00`), datasets: [{ label: '专注度', data: activeHours.map(item => item.score), borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,.10)', tension: .36, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
+  attentionChart = new Chart(ctx, { type: 'line', data: { labels: activeHours.map(item => `${item.hour}:00`), datasets: [{ label: '专注度', data: activeHours.map(item => item.score), borderColor: '#6366f1', backgroundColor: 'oklch(55% 0.14 275 / 0.08)', tension: .36, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
 }
 function renderAIAnalysis(analysis) {
   const container = document.getElementById('aiAnalysisResult');
@@ -507,7 +489,8 @@ async function refreshInsights() {
 }
 
 async function loadAnalytics() {
-  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+  const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', ...Object.keys(DEFAULT_PREFERENCES)]);
+  const browsingData = storage.browsingData || [];
   if (!browsingData.length) {
     renderMetrics([]);
     renderCategoryList([], new WebsiteClassifier());
@@ -519,13 +502,13 @@ async function loadAnalytics() {
   }
   const processor = new DataProcessor(browsingData);
   const cleanedData = processor.clean().getData();
-  const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
+  const classificationOverrides = storage.classificationOverrides || {};
   const classifier = new WebsiteClassifier(classificationOverrides);
   const classifiedData = classifier.classifyBatch(cleanedData);
   const analyzer = new StatisticsAnalyzer(classifiedData);
   const categoryStats = analyzer.analyzeByCategory();
   const hourlyDist = analyzer.getHourlyDistribution();
-  const { analysisDays } = await getPreferences();
+  const analysisDays = Number(storage.analysisDays || DEFAULT_PREFERENCES.analysisDays);
   const dailyTrend = calculateDailyTrend(classifiedData, analysisDays);
   currentClassifiedData = classifiedData;
   renderMetrics(classifiedData);

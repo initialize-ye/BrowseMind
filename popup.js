@@ -4,18 +4,7 @@ let currentChart = null;
 let chartData = null;
 let attentionChart = null;
 let dataSync = new DataSync();
-// DEFAULT_PREFERENCES is defined in dataSync.js
-
-async function getPreferences() {
-  const stored = await chrome.storage.local.get(Object.keys(DEFAULT_PREFERENCES));
-  return {
-    ...DEFAULT_PREFERENCES,
-    ...stored,
-    apiBaseUrl: stored.apiBaseUrl || DEFAULT_PREFERENCES.apiBaseUrl,
-    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes),
-    analysisDays: Number(stored.analysisDays || DEFAULT_PREFERENCES.analysisDays)
-  };
-}
+// getPreferences(), DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
 
 async function initDataSync() {
   const preferences = await getPreferences();
@@ -32,19 +21,11 @@ document.getElementById('closeModal').addEventListener('click', closeModal);
 document.getElementById('addGoalBtn').addEventListener('click', openGoalModal);
 document.getElementById('closeGoalModal').addEventListener('click', closeGoalModal);
 document.getElementById('saveGoalBtn').addEventListener('click', saveGoal);
-document.querySelectorAll('.tab-btn').forEach(btn => {
+document.querySelectorAll('.chart-tab').forEach(btn => {
   btn.addEventListener('click', () => switchChart(btn.dataset.chart, btn));
 });
 
 async function loadData() {
-  // Apply theme from storage
-  const { themeMode = 'light' } = await chrome.storage.local.get('themeMode');
-  const html = document.documentElement;
-  if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    html.setAttribute('data-theme', 'dark');
-  } else {
-    html.removeAttribute('data-theme');
-  }
   const loading = document.getElementById('loading');
   const content = document.getElementById('content');
   const emptyState = document.getElementById('emptyState');
@@ -55,8 +36,16 @@ async function loadData() {
 
   try {
     await initDataSync();
-    // 从 storage 获取数据
-    const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+    // Batch all storage reads into one call
+    const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'themeMode']);
+    const { themeMode = 'light' } = storage;
+    const html = document.documentElement;
+    if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      html.setAttribute('data-theme', 'dark');
+    } else {
+      html.removeAttribute('data-theme');
+    }
+    const browsingData = storage.browsingData || [];
 
     if (browsingData.length === 0) {
       loading.style.display = 'none';
@@ -68,7 +57,7 @@ async function loadData() {
     const processor = new DataProcessor(browsingData);
     const cleanedData = processor.clean().getData();
 
-    const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
+    const classificationOverrides = storage.classificationOverrides || {};
     const classifier = new WebsiteClassifier(classificationOverrides);
     const classifiedData = classifier.classifyBatch(cleanedData);
 
@@ -107,6 +96,10 @@ async function loadData() {
 
     loading.style.display = 'none';
     content.style.display = 'block';
+    content.querySelectorAll('.stat-bar, .chart-card, .section').forEach((el, i) => {
+      el.style.animationDelay = `${i * 0.06}s`;
+      el.classList.add('fade-in');
+    });
   } catch (error) {
     console.error('加载数据失败:', error);
     loading.style.display = 'none';
@@ -206,22 +199,20 @@ function updateCategoryStats(categoryStats, classifier) {
   const categories = classifier.getAllCategories();
 
   container.innerHTML = categoryStats.map(stat => {
-    const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦' };
+    const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦', color: '#90919e' };
     const percentage = parseFloat(stat.percentage);
 
     return `
       <div class="category-item">
-        <div class="category-header">
-          <span class="category-icon">${categoryInfo.icon}</span>
-          <span class="category-name">${categoryInfo.name}</span>
-          <span class="category-percentage">${percentage}%</span>
+        <span class="category-dot" style="background:${categoryInfo.color || '#90919e'}"></span>
+        <span class="category-name">${categoryInfo.name}</span>
+        <span class="category-meta">${percentage}%</span>
+        <div style="flex:0 0 auto;text-align:right;">
+          <div class="category-meta">${formatDuration(stat.totalDuration)}</div>
         </div>
-        <div class="category-bar">
-          <div class="category-bar-fill" style="width: ${percentage}%"></div>
-        </div>
-        <div class="category-meta">
-          ${formatDuration(stat.totalDuration)} · ${stat.visits}次访问
-        </div>
+      </div>
+      <div class="category-bar" style="margin:0 0 4px 17px;">
+        <div class="category-bar-fill" style="width: ${percentage}%"></div>
       </div>
     `;
   }).join('');
@@ -233,17 +224,17 @@ function updateTodayCategoryStats(todayStats, classifier) {
   const categories = classifier.getAllCategories();
 
   if (todayStats.length === 0) {
-    container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">今日暂无数据</div>';
+    container.innerHTML = '<div class="empty-line">今日暂无数据</div>';
     return;
   }
 
   container.innerHTML = todayStats.slice(0, 5).map(stat => {
-    const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦' };
+    const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦', color: '#90919e' };
     const percentage = parseFloat(stat.percentage);
 
     return `
       <div class="category-item-compact">
-        <span class="category-icon">${categoryInfo.icon}</span>
+        <span class="category-dot" style="background:${categoryInfo.color || '#90919e'};width:6px;height:6px;border-radius:50%;flex-shrink:0;"></span>
         <span class="category-name">${categoryInfo.name}</span>
         <span class="category-value">${percentage}%</span>
       </div>
@@ -254,7 +245,7 @@ function updateTodayCategoryStats(todayStats, classifier) {
 // 切换图表
 function switchChart(type, activeButton) {
   // 更新按钮状态
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  document.querySelectorAll('.chart-tab').forEach(btn => {
     btn.classList.remove('active');
   });
   if (activeButton) {
@@ -287,12 +278,12 @@ function drawPieChart() {
   const data = categoryStats.map(stat => stat.totalDuration / 60); // 转换为分钟
 
   const colors = [
-    '#1a73e8',
-    '#34a853',
-    '#fbbc04',
-    '#ea4335',
-    '#5f6368',
-    '#9aa0a6'
+    '#6366f1', // indigo
+    '#34d399', // emerald
+    '#fbbf24', // amber
+    '#f87171', // coral
+    '#a1a1aa', // neutral
+    '#818cf8'  // lighter indigo
   ];
 
   destroyChart();
@@ -340,13 +331,9 @@ function drawBarChart() {
   const { hourlyDist } = chartData;
 
   // 准备数据（只显示有数据的小时）
-  const labels = hourlyDist
-    .filter(h => h.duration > 0)
-    .map(h => `${h.hour}:00`);
-
-  const data = hourlyDist
-    .filter(h => h.duration > 0)
-    .map(h => h.duration / 60); // 转换为分钟
+  const activeHours = hourlyDist.filter(h => h.duration > 0);
+  const labels = activeHours.map(h => `${h.hour}:00`);
+  const data = activeHours.map(h => h.duration / 60); // 转换为分钟
 
   destroyChart();
 
@@ -358,8 +345,8 @@ function drawBarChart() {
       datasets: [{
         label: '浏览时长（分钟）',
         data: data,
-        backgroundColor: 'rgba(102, 126, 234, 0.8)',
-        borderRadius: 4
+        backgroundColor: 'oklch(55% 0.14 275 / 0.7)',
+        borderRadius: 6
       }]
     },
     options: {
@@ -418,18 +405,18 @@ function drawLineChart() {
         {
           label: '浏览时长（分钟）',
           data: durationData,
-          borderColor: '#1a73e8',
-          backgroundColor: 'rgba(26, 115, 232, 0.10)',
-          tension: 0.4,
+          borderColor: '#6366f1',
+          backgroundColor: 'oklch(55% 0.14 275 / 0.08)',
+          tension: 0.35,
           fill: true,
           yAxisID: 'y'
         },
         {
           label: '访问次数',
           data: visitsData,
-          borderColor: '#34a853',
-          backgroundColor: 'rgba(52, 168, 83, 0.10)',
-          tension: 0.4,
+          borderColor: '#34d399',
+          backgroundColor: 'oklch(65% 0.14 150 / 0.08)',
+          tension: 0.35,
           fill: true,
           yAxisID: 'y1'
         }
@@ -532,12 +519,7 @@ function formatTime(timestamp) {
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 }
 
-// HTML转义
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+// HTML转义 — 使用 dataSync.js 中的 escapeHtml()
 
 // 同步到云端
 async function syncToCloud() {
@@ -589,7 +571,7 @@ async function showAIAnalysis() {
     // 检查服务器连接
     const isConnected = await dataSync.checkConnection();
     if (!isConnected) {
-      content.innerHTML = '<p style="color: #d93025; text-align: center;">❌ 无法连接到服务器<br>请确保后端服务已启动</p>';
+      content.innerHTML = '<p style="color: var(--red); text-align: center;">无法连接到服务器<br>请确保后端服务已启动</p>';
       return;
     }
 
@@ -617,8 +599,8 @@ async function showAIAnalysis() {
   } catch (error) {
     console.error('AI 分析失败:', error);
     content.innerHTML = `
-      <p style="color: #d93025; text-align: center;">
-        ❌ AI 分析失败<br>
+      <p style="color: var(--red); text-align: center;">
+        AI 分析失败<br>
         ${error.message}<br><br>
         ${error.message.includes('API') ? '请配置 AI_API_KEY 环境变量' : ''}
       </p>
@@ -672,8 +654,8 @@ function displayAdvancedAnalysisEmptyState(message = '同步云端数据后将�
   const blackholeContainer = document.getElementById('blackholeStats');
   const attentionStatsContainer = document.getElementById('attentionStats');
 
-  blackholeContainer.innerHTML = `<p style="text-align: center; color: #5f6368; padding: 20px;">${escapeHtml(message)}</p>`;
-  attentionStatsContainer.innerHTML = `<p style="text-align: center; color: #5f6368; padding: 20px;">${escapeHtml(message)}</p>`;
+  blackholeContainer.innerHTML = `<p class="empty-line">${escapeHtml(message)}</p>`;
+  attentionStatsContainer.innerHTML = `<p class="empty-line">${escapeHtml(message)}</p>`;
 
   if (attentionChart) {
     attentionChart.destroy();
@@ -722,7 +704,7 @@ function displayBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
 
   if (!blackholes.top_blackholes || blackholes.top_blackholes.length === 0) {
-    container.innerHTML = '<p style="text-align: center; color: #188038; padding: 20px;">🎉 太棒了！没有发现时间黑洞</p>';
+    container.innerHTML = '<p class="empty-line" style="color:var(--green);">没有发现时间黑洞</p>';
     return;
   }
 
@@ -730,9 +712,9 @@ function displayBlackholes(blackholes) {
   const totalWasted = formatDuration(blackholes.total_wasted_time);
 
   let html = `
-    <div style="text-align: center; margin-bottom: 12px; padding: 8px; background: #fff5f5; border-radius: 6px;">
-      <div style="font-size: 20px; font-weight: 700; color: #d93025;">${wastePercentage}%</div>
-      <div style="font-size: 11px; color: #999;">浪费时间占比 · 共 ${totalWasted}</div>
+    <div style="text-align: center; margin-bottom: 12px; padding: 8px; background: var(--red-soft); border-radius: 8px;">
+      <div style="font-size: 20px; font-weight: 700; color: var(--red);">${wastePercentage}%</div>
+      <div style="font-size: 11px; color: var(--muted);">浪费时间占比 · 共 ${totalWasted}</div>
     </div>
   `;
 
@@ -777,8 +759,8 @@ function displayAttentionCurve(attentionCurve) {
 
   if (recommendations && recommendations.length > 0) {
     statsHtml += `
-      <div style="margin-top: 12px; padding: 10px; background: #f7f9fc; border-radius: 6px; font-size: 11px; color: #666;">
-        💡 ${escapeHtml(recommendations[0])}
+      <div style="margin-top: 12px; padding: 10px; background: var(--accent-soft); border-radius: 8px; font-size: 11px; color: var(--muted);">
+        ${escapeHtml(recommendations[0])}
       </div>
     `;
   }
@@ -801,7 +783,7 @@ function drawAttentionChart(hourlyFocus) {
   const activeHours = hourlyFocus.filter(h => h.total_duration > 0);
   if (activeHours.length === 0) {
     const statsContainer = document.getElementById('attentionStats');
-    statsContainer.innerHTML = '<p style="text-align: center; color: #999;">暂无足够数据生成注意力曲线</p>';
+    statsContainer.innerHTML = '<p class="empty-line">暂无足够数据生成注意力曲线</p>';
     return;
   }
 
@@ -816,9 +798,9 @@ function drawAttentionChart(hourlyFocus) {
       datasets: [{
         label: '专注度',
         data: data,
-        borderColor: '#667eea',
-        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-        tension: 0.4,
+        borderColor: '#6366f1',
+        backgroundColor: 'oklch(55% 0.14 275 / 0.08)',
+        tension: 0.35,
         fill: true,
         pointRadius: 3,
         pointHoverRadius: 5
@@ -877,7 +859,7 @@ function displayGoals(goals) {
   const container = document.getElementById('goalsContainer');
 
   if (!goals || goals.length === 0) {
-    container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">暂无目标</p>';
+    container.innerHTML = '<p class="empty-line">暂无目标</p>';
     return;
   }
 

@@ -19,27 +19,60 @@ const DEFAULT_PREFERENCES = {
   interventionCooldownMinutes: 30
 };
 
+// 模块级缓存：避免每次调用都重新计算 Object.keys
+const ALL_PREF_KEYS = Object.keys(DEFAULT_PREFERENCES);
+
+// 统一获取偏好设置（供 popup/dashboard/background 共用）
+async function getPreferences() {
+  const stored = await chrome.storage.local.get(ALL_PREF_KEYS);
+  return {
+    ...DEFAULT_PREFERENCES,
+    ...stored,
+    apiBaseUrl: stored.apiBaseUrl || DEFAULT_API_BASE_URL,
+    autoSyncDebounceMs: Number(stored.autoSyncDebounceMs || DEFAULT_PREFERENCES.autoSyncDebounceMs),
+    autoSyncMinIntervalMs: Number(stored.autoSyncMinIntervalMs || DEFAULT_PREFERENCES.autoSyncMinIntervalMs),
+    dataRetentionDays: Number(stored.dataRetentionDays || DEFAULT_PREFERENCES.dataRetentionDays),
+    minVisitDurationSeconds: Number(stored.minVisitDurationSeconds || DEFAULT_PREFERENCES.minVisitDurationSeconds),
+    analysisDays: Number(stored.analysisDays || DEFAULT_PREFERENCES.analysisDays),
+    blackholeThresholdMinutes: Number(stored.blackholeThresholdMinutes || DEFAULT_PREFERENCES.blackholeThresholdMinutes),
+    interventionCooldownMinutes: Number(stored.interventionCooldownMinutes || DEFAULT_PREFERENCES.interventionCooldownMinutes)
+  };
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML;
+}
+
 class DataSync {
   constructor(apiBaseUrl = 'http://119.29.55.112:8000') {
     this.apiBaseUrl = apiBaseUrl;
     this.userId = null;
+    this._initPromise = null; // mutex for concurrent initUserId() calls
   }
 
-  // 初始化用户ID
+  // 初始化用户ID（带互斥锁，防止并发生成重复ID）
   async initUserId() {
     if (this.userId) return this.userId;
+    if (this._initPromise) return this._initPromise;
 
-    // 从 storage 获取或生成用户ID
+    this._initPromise = this._initUserIdImpl();
+    try {
+      return await this._initPromise;
+    } finally {
+      this._initPromise = null;
+    }
+  }
+
+  async _initUserIdImpl() {
     const { userId } = await chrome.storage.local.get('userId');
-
     if (userId) {
       this.userId = userId;
     } else {
-      // 生成新的用户ID
       this.userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
       await chrome.storage.local.set({ userId: this.userId });
     }
-
     return this.userId;
   }
 
