@@ -32,7 +32,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   // 获取新激活标签的信息
   const tab = await chrome.tabs.get(activeInfo.tabId);
   startTrackingTab(tab);
-  checkTabIntervention(tab);
+  await checkTabIntervention(tab);
 });
 
 // 监听标签页更新（URL变化）
@@ -40,7 +40,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.active) {
     await saveTabDuration();
     startTrackingTab(tab);
-    checkTabIntervention(tab);
+    await checkTabIntervention(tab);
   }
 });
 
@@ -73,10 +73,13 @@ function startTrackingTab(tab) {
 async function checkTabIntervention(tab) {
   try {
     if (!tab.url || tab.url.startsWith('chrome://')) return;
+    const preferences = await getPreferences();
+    if (!preferences.interventionsEnabled) return;
     const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
     const classifier = new WebsiteClassifier(classificationOverrides);
     const domain = WebsiteClassifier.normalizeDomain(new URL(tab.url).hostname);
     const category = classifier.classify(domain, tab.title || '', tab.url);
+    console.log('干预检查:', domain, '→', category, 'focusMode:', preferences.focusModeEnabled, 'notifications:', preferences.notificationsEnabled);
     await checkInterventions(domain, category);
   } catch (e) {
     console.error('checkTabIntervention error:', e);
@@ -91,9 +94,17 @@ async function saveTabDuration() {
   const duration = Math.floor((Date.now() - activeTab.startTime) / 1000); // 秒
   if (duration < preferences.minVisitDurationSeconds) return;
 
+  const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
+  const classifier = new WebsiteClassifier(classificationOverrides);
+  let domain = null;
+  try { domain = WebsiteClassifier.normalizeDomain(new URL(activeTab.url).hostname); } catch {}
+  const category = classifier.classify(domain || '', activeTab.title || '', activeTab.url);
+
   const record = {
     url: activeTab.url,
     title: activeTab.title,
+    domain: domain,
+    category: category,
     visitTime: activeTab.startTime,
     duration: duration,
     date: new Date(activeTab.startTime).toISOString().split('T')[0]
@@ -258,12 +269,13 @@ async function updateGoalsProgress() {
 
 async function showNotification(type, message) {
   const preferences = await getPreferences();
+  // 通知系统开关是全局的，干预通知也受此控制
   if (!preferences.notificationsEnabled) return;
 
   chrome.notifications.create({
     type: 'basic',
     iconUrl: 'icons/icon128.png',
-    title: type === 'achieved' ? '🎉 目标达成' : '⚠️ 时间提醒',
+    title: type === 'achieved' ? '🎉 目标达成' : type === 'intervention' ? '🧠 专注提醒' : '⚠️ 时间提醒',
     message: message,
     priority: 2
   });
@@ -339,7 +351,8 @@ function parseCategoryTimeLimits(str) {
 
 async function checkInterventions(domain, category) {
   const preferences = await getPreferences();
-  if (!preferences.interventionsEnabled || !preferences.notificationsEnabled) return;
+  if (!preferences.interventionsEnabled) return;
+  // notificationsEnabled 检查在 showNotification() 中，不在这里做双重拦截
 
   const normalizedDomain = (domain || '').toLowerCase();
   const allowlist = parseListString(preferences.domainAllowlist);
