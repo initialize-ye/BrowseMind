@@ -388,7 +388,7 @@ function renderHourlyChart(hourlyDist) {
   const active = hourlyDist.filter(item => item.duration > 0);
   const gridColor = getGridColor();
   const ctx = document.getElementById('hourlyChart').getContext('2d');
-  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: active.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: active.map(item => Math.round(item.duration / 60)), backgroundColor: active.map((_, index) => palette[index % palette.length]), borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
+  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: active.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: active.map(item => Math.round(item.duration / 60)), backgroundColor: active.map((_, index) => palette[index % palette.length]), borderRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
 }
 function renderBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');

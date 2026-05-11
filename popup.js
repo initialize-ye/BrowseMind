@@ -346,7 +346,7 @@ function drawBarChart() {
         label: '浏览时长（分钟）',
         data: data,
         backgroundColor: 'oklch(55% 0.14 275 / 0.7)',
-        borderRadius: 6
+        borderRadius: 0
       }]
     },
     options: {

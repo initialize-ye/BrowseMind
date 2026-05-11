@@ -65,7 +65,6 @@
     body.sidebar-collapsed .layout { grid-template-columns: 88px minmax(0, 1fr); }
     .page { width: min(1440px, calc(100vw - 24px)); margin: 0 auto; padding: var(--space-5) 0 28px; }
     .topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: 22px; }
-    .brand { display: flex; align-items: center; gap: var(--space-3); }
     .brand-dot { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); }
     h1 { font-size: clamp(26px, 3.5vw, 38px); line-height: 1.1; letter-spacing: -0.04em; font-weight: 700; }
     .subtitle { margin-top: var(--space-1); color: var(--muted); font-size: 14px; }
@@ -74,7 +73,11 @@
     .analytics-main { min-width: 0; order: 2; }
     .sidebar { position: sticky; top: 16px; order: 1; min-height: calc(100vh - 32px); padding: 16px; border-radius: 0; background: oklch(15% 0.008 58); color: oklch(90% 0.004 58); box-shadow: 0 12px 32px oklch(0% 0 0 / 0.18); transition: padding 0.22s var(--ease-out), width 0.22s var(--ease-out); overflow: hidden; }
     .sidebar-shell { display: grid; gap: 16px; }
-    .sidebar-header { display: flex; align-items: center; gap: 12px; }
+    .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .sidebar-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .sidebar-brand-copy { min-width: 0; }
+    .sidebar-title { font-size: 15px; font-weight: 700; color: oklch(95% 0.004 58); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-subtitle { margin-top: 2px; color: oklch(65% 0.01 58); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sidebar-toggle { width: 40px; height: 40px; padding: 0; border-radius: 6px; color: oklch(90% 0.004 58); background: oklch(100% 0 0 / 0.06); }
     .sidebar-toggle:hover { background: oklch(100% 0 0 / 0.12); box-shadow: none; transform: none; }
     .sidebar-label { color: oklch(65% 0.01 58); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -96,6 +99,7 @@
     .sidebar input:focus, .sidebar select:focus, .sidebar textarea:focus { border-color: oklch(68% 0.14 275); box-shadow: 0 0 0 3px oklch(68% 0.14 275 / 0.18); }
     body.sidebar-collapsed .sidebar { padding: 16px 10px; }
     body.sidebar-collapsed .sidebar-label,
+    body.sidebar-collapsed .sidebar-brand-copy,
     body.sidebar-collapsed .sidebar-tab-label,
     body.sidebar-collapsed .sidebar-panel { display: none; }
     body.sidebar-collapsed .sidebar-shell { justify-items: center; }
@@ -204,7 +208,6 @@
   <div id="categoryPicker" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9998;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:0 12px 40px rgba(0,0,0,.18);padding:20px;min-width:280px;max-width:360px;"></div>
   <main class="page">
     <header class="topbar">
-      <div class="brand"><div class="brand-dot"></div><div><h1>BrowseMind Dashboard</h1><p class="subtitle">本地浏览数据、同步操作与插件设置</p></div></div>
       <button id="refreshBtn">刷新数据</button>
     </header>
 
@@ -212,7 +215,13 @@
       <aside class="sidebar" aria-label="Dashboard 侧边导航">
         <div class="sidebar-shell">
           <div class="sidebar-header">
-            <div class="brand-dot"></div>
+            <div class="sidebar-brand">
+              <div class="brand-dot"></div>
+              <div class="sidebar-brand-copy">
+                <div class="sidebar-title">BrowseMind</div>
+                <div class="sidebar-subtitle">工作台</div>
+              </div>
+            </div>
             <button id="sidebarToggleBtn" class="sidebar-toggle" aria-expanded="true" aria-label="收起侧边栏">☰</button>
           </div>
           <div class="sidebar-label">导航</div>
