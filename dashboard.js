@@ -182,6 +182,7 @@ function applyPreferencesToForm(preferences) {
   document.getElementById('apiBaseUrlInput').value = preferences.apiBaseUrl;
   document.getElementById('autoSyncEnabledInput').checked = Boolean(preferences.autoSyncEnabled);
   document.getElementById('notificationsEnabledInput').checked = Boolean(preferences.notificationsEnabled);
+  updateInterventionWarning();
   document.getElementById('autoSyncDebounceInput').value = Math.round(preferences.autoSyncDebounceMs / 1000);
   document.getElementById('autoSyncMinIntervalInput').value = Math.round(preferences.autoSyncMinIntervalMs / 1000);
   document.getElementById('dataRetentionDaysInput').value = preferences.dataRetentionDays;
@@ -194,6 +195,13 @@ function applyPreferencesToForm(preferences) {
   document.getElementById('domainBlocklistInput').value = preferences.domainBlocklist || '';
   document.getElementById('categoryTimeLimitsInput').value = preferences.categoryTimeLimits || '';
   document.getElementById('interventionCooldownInput').value = preferences.interventionCooldownMinutes;
+}
+function updateInterventionWarning() {
+  const warnEl = document.getElementById('interventionWarning');
+  if (!warnEl) return;
+  const interventionsOn = document.getElementById('interventionsEnabledInput')?.checked;
+  const notificationsOn = document.getElementById('notificationsEnabledInput')?.checked;
+  warnEl.style.display = (interventionsOn && !notificationsOn) ? '' : 'none';
 }
 async function loadPreferences() {
   const preferences = await getPreferences();
@@ -752,6 +760,8 @@ document.querySelectorAll('[data-pref]').forEach(el => {
   const evt = el.type === 'checkbox' ? 'change' : (el.tagName === 'SELECT' ? 'change' : 'input');
   el.addEventListener(evt, autoSaveSettings);
 });
+document.getElementById('notificationsEnabledInput').addEventListener('change', updateInterventionWarning);
+document.getElementById('interventionsEnabledInput').addEventListener('change', updateInterventionWarning);
 document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
 
 document.addEventListener('DOMContentLoaded', async () => { await loadSidebarState(); bindEvents(); applySidebarState(); await loadTheme(); await switchSidebarTab(activeSidebarTab); await refreshDashboard(); });

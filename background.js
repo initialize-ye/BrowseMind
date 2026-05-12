@@ -77,12 +77,16 @@ async function checkTabIntervention(tab) {
   try {
     if (!tab.url || tab.url.startsWith('chrome://')) return;
     const preferences = await getPreferences();
-    if (!preferences.interventionsEnabled) return;
+    if (!preferences.interventionsEnabled) {
+      console.log('干预检查: 已跳过（interventionsEnabled=false）');
+      return;
+    }
+    console.log('干预检查: 通知开关=', preferences.notificationsEnabled, '专注模式=', preferences.focusModeEnabled, '黑名单=', preferences.domainBlocklist, '冷却=', preferences.interventionCooldownMinutes + 'min');
     const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
     const classifier = new WebsiteClassifier(classificationOverrides);
     const domain = WebsiteClassifier.normalizeDomain(new URL(tab.url).hostname);
     const category = classifier.classify(domain, tab.title || '', tab.url);
-    console.log('干预检查:', domain, '→', category, 'focusMode:', preferences.focusModeEnabled, 'notifications:', preferences.notificationsEnabled);
+    console.log('干预检查: 当前站点', domain, '→ 分类:', category);
     await checkInterventions(domain, category);
   } catch (e) {
     console.error('checkTabIntervention error:', e);
@@ -292,7 +296,13 @@ async function showNotification(type, message) {
     const preferences = await getPreferences();
     // 通知系统开关是全局的，干预通知也受此控制
     if (!preferences.notificationsEnabled) {
-      console.log('showNotification: 通知已禁用, 跳过', type, message);
+      console.warn('showNotification: 通知已禁用, 跳过', type, message);
+      // 即使通知被禁用，干预类提醒仍设置角标
+      if (type === 'warning' || type === 'intervention') {
+        chrome.action.setBadgeText({ text: '!' });
+        chrome.action.setBadgeBackgroundColor({ color: '#f87171' });
+        setTimeout(() => chrome.action.setBadgeText({ text: '' }), 5000);
+      }
       return;
     }
 
@@ -311,6 +321,12 @@ async function showNotification(type, message) {
     console.log('通知已发送:', notificationId, type, message);
   } catch (error) {
     console.error('通知发送失败:', error);
+    // API 失败时也尝试设置角标作为降级方案
+    try {
+      chrome.action.setBadgeText({ text: '!' });
+      chrome.action.setBadgeBackgroundColor({ color: '#f87171' });
+      setTimeout(() => chrome.action.setBadgeText({ text: '' }), 5000);
+    } catch {}
   }
 }
 
@@ -384,8 +400,10 @@ function parseCategoryTimeLimits(str) {
 
 async function checkInterventions(domain, category) {
   const preferences = await getPreferences();
-  if (!preferences.interventionsEnabled) return;
-  // notificationsEnabled 检查在 showNotification() 中，不在这里做双重拦截
+  if (!preferences.interventionsEnabled) {
+    console.log('checkInterventions: 跳过（interventionsEnabled=false）');
+    return;
+  }
 
   const normalizedDomain = (domain || '').toLowerCase();
   const allowlist = parseListString(preferences.domainAllowlist);
@@ -394,25 +412,34 @@ async function checkInterventions(domain, category) {
   const now = Date.now();
 
   // 白名单跳过
-  if (allowlist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) return;
+  if (allowlist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) {
+    console.log('checkInterventions: ', normalizedDomain, '在白名单中，跳过');
+    return;
+  }
 
   // 黑名单提醒
   const blockKey = `block:${normalizedDomain}`;
   if (blocklist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) {
+    console.log('checkInterventions: ', normalizedDomain, '命中黑名单');
     if (!interventionCooldowns[blockKey] || now - interventionCooldowns[blockKey] > cooldownMs) {
       interventionCooldowns[blockKey] = now;
       await showNotification('warning', `你正在访问黑名单站点：${domain}`);
+    } else {
+      console.log('checkInterventions: 黑名单冷却中，跳过');
     }
     return;
   }
 
   // 专注模式提醒（娱乐/社交类）
   if (preferences.focusModeEnabled && (category === 'entertainment' || category === 'social')) {
+    console.log('checkInterventions: ', normalizedDomain, '命中专注模式, 分类:', category);
     const focusKey = `focus:${category}`;
     if (!interventionCooldowns[focusKey] || now - interventionCooldowns[focusKey] > cooldownMs) {
       interventionCooldowns[focusKey] = now;
       const catNames = { entertainment: '娱乐', social: '社交' };
       await showNotification('warning', `专注模式已开启，当前正在访问${catNames[category] || category}类站点。`);
+    } else {
+      console.log('checkInterventions: 专注模式冷却中，跳过');
     }
     return;
   }
