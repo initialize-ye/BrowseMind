@@ -81,11 +81,11 @@ async function loadData() {
       classifier
     };
 
-    // 计算基础统计
-    const stats = calculateStats(browsingData);
+    // 计算基础统计（使用已清洗和分类的数据，避免重复计算）
+    const stats = calculateStats(classifiedData);
 
     // 更新UI
-    updateUI(stats, browsingData, categoryStats, todayStats, classifier);
+    updateUI(stats, classifiedData, categoryStats, todayStats, classifier);
 
     // 绘制默认图表（饼图）
     drawPieChart();
@@ -119,15 +119,9 @@ function calculateStats(data) {
   const todayVisits = todayData.length;
   const todayDuration = todayData.reduce((sum, r) => sum + (r.duration || 0), 0);
 
-  // 7天数据
+  // 当前窗口数据
   const totalVisits = data.length;
-  const uniqueSites = new Set(data.map(r => {
-    try {
-      return new URL(r.url).hostname;
-    } catch {
-      return r.url;
-    }
-  })).size;
+  const uniqueSites = new Set(data.map(r => r.domain).filter(Boolean)).size;
 
   return {
     todayVisits,

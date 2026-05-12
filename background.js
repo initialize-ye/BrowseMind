@@ -150,11 +150,11 @@ async function collectHistoryData() {
   const preferences = await getPreferences();
   const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
 
-  // 避免每次 onInstalled 和 alarm 都重复拉取
-  const { lastCollectTime = 0 } = await chrome.storage.local.get('lastCollectTime');
-  if (lastCollectTime > retentionStart) return;
+  // 避免每次 onInstalled 和 alarm 都重复拉取（但允许手动清空数据后重新采集）
+  const { lastCollectTime = 0, browsingData: existingData = [] } = await chrome.storage.local.get(['lastCollectTime', 'browsingData']);
+  if (lastCollectTime > retentionStart && existingData.length > 0) return;
 
-  const historyItems = await new Promise((resolve, reject) => {
+  const historyItems = await new Promise((resolve) => {
     try {
       chrome.history.search({
         text: '',
@@ -173,25 +173,42 @@ async function collectHistoryData() {
     }
   });
 
+  // 初始化分类器，为历史记录补充 domain 和 category
+  const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
+  const classifier = new WebsiteClassifier(classificationOverrides);
+
   const records = historyItems
     .filter(item => item.url && !item.url.startsWith('chrome://'))
-    .map(item => ({
-      url: item.url,
-      title: item.title,
-      visitTime: item.lastVisitTime,
-      duration: 0,
-      date: new Date(item.lastVisitTime).toISOString().split('T')[0]
-    }));
+    .map(item => {
+      let domain = null;
+      try { domain = WebsiteClassifier.normalizeDomain(new URL(item.url).hostname); } catch {}
+      const category = domain ? classifier.classify(domain, item.title || '', item.url) : 'other';
+      return {
+        url: item.url,
+        title: item.title,
+        domain: domain,
+        category: category,
+        visitTime: item.lastVisitTime,
+        duration: 0,
+        date: new Date(item.lastVisitTime).toISOString().split('T')[0]
+      };
+    });
 
+  // 合并策略：已有的本地记录（含 duration > 0 和 domain/category）优先
   const { browsingData = [] } = await chrome.storage.local.get('browsingData');
-  const merged = [...browsingData, ...records];
+  const existingMap = new Map(browsingData.map(r => [`${r.url}-${r.visitTime}`, r]));
 
-  const unique = Array.from(
-    new Map(merged.map(r => [`${r.url}-${r.visitTime}`, r])).values()
-  );
+  // 仅在 key 不冲突，或历史记录能补充缺失字段时才写入
+  for (const hist of records) {
+    const key = `${hist.url}-${hist.visitTime}`;
+    if (!existingMap.has(key)) {
+      existingMap.set(key, hist);
+    }
+  }
 
+  const unique = Array.from(existingMap.values());
   await chrome.storage.local.set({ browsingData: unique, lastCollectTime: Date.now() });
-  console.log(`已采集 ${records.length} 条历史记录`);
+  console.log(`已采集 ${records.length} 条历史记录，合并后共 ${unique.length} 条`);
 }
 
 // 定期清理旧数据（每小时执行一次）

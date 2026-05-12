@@ -391,10 +391,16 @@ function renderTrendChart(dailyTrend) {
 }
 function renderHourlyChart(hourlyDist) {
   if (hourlyChart) hourlyChart.destroy();
-  const active = hourlyDist.filter(item => item.duration > 0);
+  // Build full 24-hour array, filling missing hours with 0
+  const hourMap = new Map(hourlyDist.map(item => [item.hour, item.duration]));
+  const allHours = Array.from({ length: 24 }, (_, i) => ({
+    hour: i,
+    duration: hourMap.get(i) || 0
+  }));
   const gridColor = getGridColor();
+  const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#6366f1';
   const ctx = document.getElementById('hourlyChart').getContext('2d');
-  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: active.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: active.map(item => Math.round(item.duration / 60)), backgroundColor: active.map((_, index) => palette[index % palette.length]), borderRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
+  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: allHours.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: allHours.map(item => Math.round(item.duration / 60)), backgroundColor: allHours.map(item => item.duration > 0 ? accentColor : 'rgba(128,128,128,0.15)'), borderRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } } } } });
 }
 function renderBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
@@ -537,7 +543,9 @@ async function loadLatestAIAnalysis() {
       if (latest.ai_summary || latest.ai_issues || latest.ai_suggestions) {
         const issues = (() => { try { return JSON.parse(latest.ai_issues); } catch { return [latest.ai_issues]; } })();
         const suggestions = (() => { try { return JSON.parse(latest.ai_suggestions); } catch { return [latest.ai_suggestions]; } })();
-        renderAIAnalysis({ summary: latest.ai_summary || '', issues: Array.isArray(issues) ? issues : [], suggestions: Array.isArray(suggestions) ? suggestions : [], category_stats: Array.isArray(latest.category_stats) ? latest.category_stats : [], top_domains: latest.top_domains || [] });
+        let parsedCategoryStats = [];
+        try { parsedCategoryStats = JSON.parse(latest.category_stats); } catch { parsedCategoryStats = []; }
+        renderAIAnalysis({ summary: latest.ai_summary || '', issues: Array.isArray(issues) ? issues : [], suggestions: Array.isArray(suggestions) ? suggestions : [], category_stats: Array.isArray(parsedCategoryStats) ? parsedCategoryStats : [], top_domains: latest.top_domains || [] });
         return;
       }
     }
@@ -585,8 +593,13 @@ async function loadAnalytics() {
   const hourlyDist = analyzer.getHourlyDistribution();
   const analysisDays = Number(storage.analysisDays || DEFAULT_PREFERENCES.analysisDays);
   const dailyTrend = calculateDailyTrend(classifiedData, analysisDays);
+  // Window data to analysisDays for metrics display
+  const windowStart = new Date();
+  windowStart.setDate(windowStart.getDate() - analysisDays);
+  const windowStartStr = windowStart.toISOString().split('T')[0];
+  const windowedData = classifiedData.filter(r => r.date >= windowStartStr);
   currentClassifiedData = classifiedData;
-  renderMetrics(classifiedData);
+  renderMetrics(windowedData);
   renderCategoryList(categoryStats, classifier);
   renderFilteredDomains();
   renderTrendChart(dailyTrend);

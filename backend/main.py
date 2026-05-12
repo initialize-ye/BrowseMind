@@ -77,15 +77,15 @@ async def upload_browsing_data(
         saved_count = 0
 
         for record_data in batch.records:
-            # 检查是否已存在（避免重复）
+            # 检查是否已存在（避免重复，用 url + visit_time 去重）
             existing = db.query(BrowsingRecord).filter(
                 BrowsingRecord.user_id == batch.user_id,
                 BrowsingRecord.url == record_data.url,
-                BrowsingRecord.date == record_data.date
+                BrowsingRecord.visit_time == datetime.fromtimestamp(record_data.visit_time / 1000)
             ).first()
 
             if existing:
-                # 更新停留时间（取最大值）
+                # 更新停留时间（取最大值，因为同一次访问不应出现更短的记录）
                 if record_data.duration > existing.duration:
                     existing.duration = record_data.duration
                 # 刷新分类（用户可能在本地修正了分类）

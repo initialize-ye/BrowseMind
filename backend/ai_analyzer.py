@@ -31,7 +31,7 @@ class AIAnalyzer:
             from openai import OpenAI
             self.client = OpenAI(
                 api_key=self.api_key,
-                base_url="https://api.deepseek.com"
+                base_url="https://api.deepseek.com/v1"
             )
             self.model = model or os.getenv("AI_MODEL", "deepseek-chat")
         else:
@@ -149,7 +149,6 @@ class AIAnalyzer:
     def _parse_ai_response(self, content: str) -> Dict[str, any]:
         """解析 AI 响应"""
 
-        # 简单的文本解析
         lines = content.strip().split('\n')
 
         summary = ""
@@ -163,29 +162,32 @@ class AIAnalyzer:
             if not line:
                 continue
 
-            # 识别章节
-            if "行为总结" in line or "总结" in line:
+            # 识别章节（宽松匹配）
+            lower = line.lower()
+            if any(kw in line for kw in ["行为总结", "总结", "概览", "概述"]):
                 current_section = "summary"
                 continue
-            elif "问题" in line or "发现" in line:
+            elif any(kw in line for kw in ["问题", "发现", "不足", "风险"]):
                 current_section = "issues"
                 continue
-            elif "建议" in line or "优化" in line:
+            elif any(kw in line for kw in ["建议", "优化", "改进", "推荐"]):
                 current_section = "suggestions"
                 continue
 
             # 提取内容
             if current_section == "summary":
-                if not line.startswith(('#', '*', '-', '1', '2', '3')):
-                    summary += line + " "
+                cleaned = line.lstrip('#*- ').strip()
+                # 跳过编号列表项（如 "1. xxx"），只取连续文本
+                if cleaned and not cleaned[0].isdigit():
+                    summary += cleaned + " "
             elif current_section == "issues":
-                if line.startswith(('-', '•', '*')) or line[0].isdigit():
-                    issue = line.lstrip('-•*0123456789. ').strip()
+                if line.startswith(('-', '•', '*')) or (line and line[0].isdigit()):
+                    issue = line.lstrip('-•*0123456789. )）').strip()
                     if issue and issue not in issues:
                         issues.append(issue)
             elif current_section == "suggestions":
-                if line.startswith(('-', '•', '*')) or line[0].isdigit():
-                    suggestion = line.lstrip('-•*0123456789. ').strip()
+                if line.startswith(('-', '•', '*')) or (line and line[0].isdigit()):
+                    suggestion = line.lstrip('-•*0123456789. )）').strip()
                     if suggestion and suggestion not in suggestions:
                         suggestions.append(suggestion)
 

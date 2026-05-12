@@ -18,6 +18,7 @@ class BrowsingRecord(Base):
     __table_args__ = (
         Index('ix_browsing_records_user_time', 'user_id', 'visit_time'),
         Index('ix_browsing_records_user_date', 'user_id', 'date'),
+        Index('ix_browsing_records_user_url_time', 'user_id', 'url', 'visit_time'),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
