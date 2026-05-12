@@ -288,17 +288,30 @@ async function updateGoalsProgress() {
 }
 
 async function showNotification(type, message) {
-  const preferences = await getPreferences();
-  // 通知系统开关是全局的，干预通知也受此控制
-  if (!preferences.notificationsEnabled) return;
+  try {
+    const preferences = await getPreferences();
+    // 通知系统开关是全局的，干预通知也受此控制
+    if (!preferences.notificationsEnabled) {
+      console.log('showNotification: 通知已禁用, 跳过', type, message);
+      return;
+    }
 
-  chrome.notifications.create({
-    type: 'basic',
-    iconUrl: 'icons/icon128.png',
-    title: type === 'achieved' ? '🎉 目标达成' : type === 'intervention' ? '🧠 专注提醒' : '⚠️ 时间提醒',
-    message: message,
-    priority: 2
-  });
+    const title =
+      type === 'achieved' ? '🎉 目标达成' :
+      type === 'intervention' || type === 'warning' ? '🧠 浏览提醒' :
+      '⚠️ 时间提醒';
+
+    const notificationId = await chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: title,
+      message: message,
+      priority: 2
+    });
+    console.log('通知已发送:', notificationId, type, message);
+  } catch (error) {
+    console.error('通知发送失败:', error);
+  }
 }
 
 async function getDataSync() {
@@ -388,7 +401,7 @@ async function checkInterventions(domain, category) {
   if (blocklist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) {
     if (!interventionCooldowns[blockKey] || now - interventionCooldowns[blockKey] > cooldownMs) {
       interventionCooldowns[blockKey] = now;
-      showNotification('warning', `你正在访问黑名单站点：${domain}`);
+      await showNotification('warning', `你正在访问黑名单站点：${domain}`);
     }
     return;
   }
@@ -399,7 +412,7 @@ async function checkInterventions(domain, category) {
     if (!interventionCooldowns[focusKey] || now - interventionCooldowns[focusKey] > cooldownMs) {
       interventionCooldowns[focusKey] = now;
       const catNames = { entertainment: '娱乐', social: '社交' };
-      showNotification('warning', `专注模式已开启，当前正在访问${catNames[category] || category}类站点。`);
+      await showNotification('warning', `专注模式已开启，当前正在访问${catNames[category] || category}类站点。`);
     }
     return;
   }
@@ -419,7 +432,7 @@ async function checkInterventions(domain, category) {
         interventionCooldowns[limitKey] = now;
         const catNames = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具' };
         const limitMin = Math.round(timeLimits[category] / 60);
-        showNotification('warning', `${catNames[category] || category}类今日已使用 ${Math.round(todayCategoryDuration / 60)} 分钟，超过 ${limitMin} 分钟限制。`);
+        await showNotification('warning', `${catNames[category] || category}类今日已使用 ${Math.round(todayCategoryDuration / 60)} 分钟，超过 ${limitMin} 分钟限制。`);
       }
     }
   }
