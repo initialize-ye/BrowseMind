@@ -480,13 +480,43 @@ function renderAIAnalysis(analysis) {
 function renderReports(reports) {
   const container = document.getElementById('reportList');
   if (!reports || !reports.length) {
-    container.innerHTML = '<div class="empty">暂无历史报告。</div>';
+    container.innerHTML = '<div class="empty">暂无历史报告。<br><small>运行 AI 分析后，结果会自动保存为历史报告。</small></div>';
     return;
   }
-  const typeLabels = { ai_analysis: 'AI 分析', ai_7d: '7 天 AI 分析', ai_14d: '14 天 AI 分析', ai_30d: '30 天 AI 分析' };
-  container.innerHTML = reports.slice(0, 5).map(report => {
-    const typeLabel = typeLabels[report.report_type] || report.report_type || '';
-    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(report.report_date || report.created_at || '未知日期')}${typeLabel ? ` <span style="font-weight:400;color:var(--muted);font-size:11px;">${escapeHtml(typeLabel)}</span>` : ''}</div><div class="domain-meta">${escapeHtml(report.ai_summary || '无总结')}</div></div><div class="domain-meta">${formatDuration(report.total_duration)}</div></div>`;
+  const typeLabels = { ai_analysis: 'AI 分析', ai_7d: '7天', ai_14d: '14天', ai_30d: '30天', ai_weekly: '周报', ai_monthly: '月报' };
+  container.innerHTML = reports.slice(0, 5).map((report, i) => {
+    const typeLabel = typeLabels[report.report_type] || (report.report_type || '分析');
+    const date = report.report_date || (report.created_at ? report.created_at.split('T')[0] : '');
+    const summary = report.ai_summary || '';
+    let issues = [];
+    try { issues = JSON.parse(report.ai_issues); } catch { issues = []; }
+    if (!Array.isArray(issues)) { try { issues = JSON.parse(issues); } catch { issues = []; } }
+    let suggestions = [];
+    try { suggestions = JSON.parse(report.ai_suggestions); } catch { suggestions = []; }
+    if (!Array.isArray(suggestions)) { try { suggestions = JSON.parse(suggestions); } catch { suggestions = []; } }
+    const issuesHtml = issues.length ? issues.map(iss => `<li>${escapeHtml(iss)}</li>`).join('') : '<li>暂无记录的问题</li>';
+    const suggestionsHtml = suggestions.length ? suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join('') : '<li>暂无记录的建议</li>';
+    return `<div class="report-card">
+      <div class="report-card-header" onclick="this.closest('.report-card').classList.toggle('expanded')">
+        <div class="report-card-meta">
+          <span class="report-type-badge">${escapeHtml(typeLabel)}</span>
+          <span class="report-date">${escapeHtml(date)}</span>
+          ${report.total_duration ? `<span class="report-duration">${formatDuration(report.total_duration)}</span>` : ''}
+        </div>
+        <div class="report-card-summary">${escapeHtml(summary) || '暂无总结'}</div>
+        <div class="report-card-indicator">▼</div>
+      </div>
+      <div class="report-card-body">
+        <div class="report-card-section">
+          <h4>发现的问题</h4>
+          <ul>${issuesHtml}</ul>
+        </div>
+        <div class="report-card-section">
+          <h4>优化建议</h4>
+          <ul>${suggestionsHtml}</ul>
+        </div>
+      </div>
+    </div>`;
   }).join('');
 }
 function renderAdvancedEmpty(message) {

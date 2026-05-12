@@ -34,16 +34,40 @@ jobs:
           echo "📁 进入项目目录..."
           cd /var/www/browsemind || { echo "❌ 项目目录不存在"; exit 1; }
 
-          # 备份当前版本
-          echo "💾 备份当前版本..."
-          if [ -d "backend" ]; then
-            cp -r backend backend_backup_$(date +%Y%m%d_%H%M%S) 2>/dev/null || true
+          # 保护数据库文件（git reset 后不会被清理，但做显式备份以防万一）
+          echo "💾 备份数据库..."
+          DB_PATH="/var/www/browsemind/backend/browsemind.db"
+          DB_BACKUP="/tmp/browsemind_backup_$(date +%Y%m%d_%H%M%S).db"
+          if [ -f "$DB_PATH" ]; then
+            cp "$DB_PATH" "$DB_BACKUP" || { echo "❌ 数据库备份失败"; exit 1; }
+            echo "   数据库已备份到 $DB_BACKUP ($(du -h "$DB_PATH" | cut -f1))"
           fi
+
+          # 清理旧备份目录（保留最近 3 个）
+          echo "🧹 清理旧备份..."
+          ls -dt /var/www/browsemind/backend_backup_* 2>/dev/null | tail -n +4 | xargs rm -rf 2>/dev/null || true
+          ls -t /tmp/browsemind_backup_*.db 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null || true
 
           # 拉取最新代码
           echo "📥 拉取最新代码..."
           git fetch origin main
           git reset --hard origin/main || { echo "❌ Git 同步失败"; exit 1; }
+
+          # 恢复数据库文件
+          if [ -n "$DB_BACKUP" ] && [ -f "$DB_BACKUP" ]; then
+            if [ -f "$DB_PATH" ]; then
+              # 如果数据库还在，比较大小决定是否恢复
+              LIVE_SIZE=$(stat -c%s "$DB_PATH" 2>/dev/null || echo 0)
+              BACKUP_SIZE=$(stat -c%s "$DB_BACKUP" 2>/dev/null || echo 0)
+              if [ "$LIVE_SIZE" -lt 1024 ] && [ "$BACKUP_SIZE" -gt "$LIVE_SIZE" ]; then
+                echo "⚠️  当前数据库过小 ($LIVE_SIZE B)，从备份恢复 ($BACKUP_SIZE B)..."
+                cp "$DB_BACKUP" "$DB_PATH" || true
+              fi
+            else
+              echo "⚠️  数据库文件不存在，从备份恢复..."
+              cp "$DB_BACKUP" "$DB_PATH" || true
+            fi
+          fi
 
           # 进入 backend 目录
           echo "📂 进入 backend 目录..."
