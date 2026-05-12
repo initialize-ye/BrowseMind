@@ -51,9 +51,12 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
     await saveTabDuration();
     activeTab = { tabId: null, url: null, title: null, startTime: null };
   } else {
-    // 用户返回浏览器，重新追踪当前标签
+    // 用户返回浏览器，重新追踪当前标签并检查干预
     const [tab] = await chrome.tabs.query({ active: true, windowId });
-    if (tab) startTrackingTab(tab);
+    if (tab) {
+      startTrackingTab(tab);
+      await checkTabIntervention(tab);
+    }
   }
 });
 
