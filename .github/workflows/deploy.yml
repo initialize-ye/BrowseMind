@@ -5,7 +5,8 @@ on:
     branches:
       - main  # 推送到 main 分支时触发
     paths:
-      - 'backend/**'  # 只有 backend 目录变化时才部署
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:  # 允许手动触发
 
 jobs:
