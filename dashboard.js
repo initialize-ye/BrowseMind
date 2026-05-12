@@ -549,15 +549,25 @@ async function loadAdvancedInsights() {
   renderAttentionCurve(analysis.attention_curve);
 }
 async function loadReports() {
-  await initDataSync();
-  if (!(await dataSync.checkConnection())) {
+  try {
+    await initDataSync();
+    if (!(await dataSync.checkConnection())) {
+      renderReports([]);
+      return;
+    }
+    await dataSync.initUserId();
+    const response = await fetch(`${dataSync.apiBaseUrl}/api/reports/${dataSync.userId}?limit=5`);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      console.error('历史报告加载失败:', response.status, errorText);
+      renderReports([]);
+      return;
+    }
+    renderReports(await response.json());
+  } catch (error) {
+    console.error('历史报告加载失败:', error);
     renderReports([]);
-    return;
   }
-  await dataSync.initUserId();
-  const response = await fetch(`${dataSync.apiBaseUrl}/api/reports/${dataSync.userId}?limit=5`);
-  if (!response.ok) throw new Error('历史报告加载失败');
-  renderReports(await response.json());
 }
 async function loadLatestAIAnalysis() {
   const container = document.getElementById('aiAnalysisResult');
