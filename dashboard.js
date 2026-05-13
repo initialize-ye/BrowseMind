@@ -400,7 +400,7 @@ function renderMetrics(data) {
 function renderCategoryList(categoryStats, classifier) {
   const container = document.getElementById('categoryList');
   if (!categoryStats.length) {
-    container.innerHTML = '<div class="empty">还没有足够数据生成分类。</div>';
+    container.innerHTML = '<div class="empty">分类数据还在积累中，多逛几个站点就有了。</div>';
     return;
   }
   const categories = classifier.getAllCategories();
@@ -496,7 +496,7 @@ function renderHourlyChart(hourlyDist) {
 function renderBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
   if (!blackholes || !blackholes.top_blackholes || !blackholes.top_blackholes.length) {
-    container.innerHTML = '<div class="empty">没有发现明显时间黑洞。</div>';
+    container.innerHTML = '<div class="empty">没有明显的时间黑洞 — 你的浏览节奏很健康。</div>';
     return;
   }
   const items = blackholes.top_blackholes.slice(0, 5).map((item, i) => {
@@ -509,7 +509,7 @@ function renderBlackholes(blackholes) {
 function renderAttentionCurve(attentionCurve) {
   const statsContainer = document.getElementById('attentionStats');
   if (!attentionCurve || !attentionCurve.hourly_focus) {
-    statsContainer.innerHTML = '<div class="empty">暂无足够数据生成专注曲线。</div>';
+    statsContainer.innerHTML = '<div class="empty">专注曲线需要更多数据 — 同步后再来看看。</div>';
     return;
   }
   const peakLabels = (attentionCurve.peak_hours || []).map(h => `${h}:00`).join('、') || '—';
@@ -766,8 +766,10 @@ async function refreshDashboard() {
   const connected = await cachedCheckConnection();
   const syncText = lastSyncTime ? `上次同步：${new Date(lastSyncTime).toLocaleString('zh-CN')}` : '尚未同步。';
   const days = preferences.analysisDays;
+  const hour = new Date().getHours();
+  const greeting = hour < 6 ? '夜深了' : hour < 12 ? '早上好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
   document.getElementById('statusNote').textContent = `${connected ? '云服务器连接正常。' : '无法连接云服务器。'} 已载入 ${analytics.count} 条本地记录。${analytics.topCategoryText} ${syncText} 当前分析窗口：${days} 天。`;
-  document.getElementById('analysisWindowDesc').textContent = `查看最近 ${days} 天的访问、分类、时段和高频站点。`;
+  document.getElementById('analysisWindowDesc').textContent = `${greeting} — 查看最近 ${days} 天的访问、分类、时段和高频站点。`;
   document.getElementById('weekVisitsLabel').textContent = `${days} 天访问`;
   document.getElementById('trendChartTitle').textContent = `${days} 天趋势`;
   await loadGoals();
@@ -797,7 +799,7 @@ async function createGoal() {
 }
 async function loadGoals() {
   const list = document.getElementById('goalList');
-  try { await initDataSync(); if (!(await cachedCheckConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>暂无目标</strong><p class="muted">添加一个今日目标开始追踪。</p></div></div>'; return; } list.innerHTML = goals.map(goal => `<div class="goal-card"><div><strong>${goalTypeNames[goal.goal_type] || goal.goal_type}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${Number(goal.progress_percentage || 0).toFixed(1)}%</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${goal.id}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${goal.id}">停用</button><button class="danger" data-goal-id="${goal.id}">删除</button></div></div>`).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
+  try { await initDataSync(); if (!(await cachedCheckConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>还没有目标</strong><p class="muted">设一个今日目标，看看自己能走多远。</p></div></div>'; return; } list.innerHTML = goals.map(goal => { const pct = Number(goal.progress_percentage || 0); const achieved = pct >= 100; const warning = pct >= 80 && !achieved; const barClass = achieved ? 'achieved' : (warning ? 'warning' : ''); return `<div class="goal-card ${achieved ? 'achieved' : ''}"><div><strong>${goalTypeNames[goal.goal_type] || goal.goal_type}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${pct.toFixed(1)}%${achieved ? ' ✓' : ''}</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${goal.id}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${goal.id}">停用</button><button class="danger" data-goal-id="${goal.id}">删除</button></div><div class="bar-track"><div class="bar-fill ${barClass}" style="width: ${Math.min(pct, 100)}%"></div></div></div>`; }).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
 }
 async function refreshGoalProgress() {
   const button = document.getElementById('refreshGoalsBtn');
@@ -866,7 +868,17 @@ document.getElementById('notificationsEnabledInput').addEventListener('change', 
 document.getElementById('interventionsEnabledInput').addEventListener('change', updateInterventionWarning);
 document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
 
-document.addEventListener('DOMContentLoaded', async () => { await loadSidebarState(); bindEvents(); applySidebarState(); await loadTheme(); await switchSidebarTab(activeSidebarTab); await refreshDashboard(); });
+const _dashLoadingMsgs = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
+let _dashLoadTimer = null;
+function startDashLoadingRotation() {
+  const el = document.getElementById('statusNote');
+  if (!el) return;
+  let i = 0;
+  _dashLoadTimer = setInterval(() => { i = (i + 1) % _dashLoadingMsgs.length; el.textContent = _dashLoadingMsgs[i]; }, 1800);
+}
+function stopDashLoadingRotation() { clearInterval(_dashLoadTimer); _dashLoadTimer = null; }
+
+document.addEventListener('DOMContentLoaded', async () => { startDashLoadingRotation(); await loadSidebarState(); bindEvents(); applySidebarState(); await loadTheme(); await switchSidebarTab(activeSidebarTab); await refreshDashboard(); stopDashLoadingRotation(); });
 window.addEventListener('resize', () => {
   if (activeSidebarTab === 'dashboard') {
     if (trendChart) trendChart.resize();

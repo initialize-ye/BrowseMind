@@ -31,6 +31,16 @@ document.querySelectorAll('.chart-tab').forEach(btn => {
   btn.addEventListener('click', () => switchChart(btn.dataset.chart, btn));
 });
 
+const loadingMessages = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
+let _loadingMsgTimer = null;
+function startLoadingRotation() {
+  const el = document.getElementById('loadingMsg');
+  if (!el) return;
+  let i = 0;
+  _loadingMsgTimer = setInterval(() => { i = (i + 1) % loadingMessages.length; el.textContent = loadingMessages[i]; }, 1800);
+}
+function stopLoadingRotation() { clearInterval(_loadingMsgTimer); _loadingMsgTimer = null; }
+
 async function loadData() {
   const loading = document.getElementById('loading');
   const content = document.getElementById('content');
@@ -39,6 +49,7 @@ async function loadData() {
   loading.style.display = 'block';
   content.style.display = 'none';
   emptyState.style.display = 'none';
+  startLoadingRotation();
 
   try {
     await initDataSync();
@@ -54,7 +65,7 @@ async function loadData() {
     const browsingData = storage.browsingData || [];
 
     if (browsingData.length === 0) {
-      loading.style.display = 'none';
+      stopLoadingRotation(); loading.style.display = 'none';
       emptyState.style.display = 'block';
       return;
     }
@@ -100,7 +111,7 @@ async function loadData() {
     await loadGoals();
     await loadAdvancedAnalysis();
 
-    loading.style.display = 'none';
+    stopLoadingRotation(); loading.style.display = 'none';
     content.style.display = 'block';
     content.querySelectorAll('.stat-bar, .chart-card, .section').forEach((el, i) => {
       el.style.animationDelay = `${i * 0.06}s`;
@@ -108,7 +119,7 @@ async function loadData() {
     });
   } catch (error) {
     console.error('加载数据失败:', error);
-    loading.style.display = 'none';
+    stopLoadingRotation(); loading.style.display = 'none';
     emptyState.style.display = 'block';
   }
 }
@@ -748,7 +759,7 @@ function displayBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
 
   if (!blackholes.top_blackholes || blackholes.top_blackholes.length === 0) {
-    container.innerHTML = '<p class="empty-line" style="color:var(--green);">没有发现时间黑洞</p>';
+    container.innerHTML = '<p class="empty-line" style="color:var(--green);">没有时间黑洞 — 你的浏览节奏很好</p>';
     return;
   }
 
@@ -905,7 +916,7 @@ function displayGoals(goals) {
   const container = document.getElementById('goalsContainer');
 
   if (!goals || goals.length === 0) {
-    container.innerHTML = '<p class="empty-line">暂无目标</p>';
+    container.innerHTML = '<p class="empty-line">还没有目标 — 设一个小目标开始追踪吧</p>';
     return;
   }
 
@@ -932,7 +943,7 @@ function displayGoals(goals) {
     };
 
     return `
-      <div class="goal-item">
+      <div class="goal-item ${isAchieved ? 'achieved' : ''}">
         <div class="goal-header">
           <span class="goal-type">${goalTypeMap[goal.goal_type] || goal.goal_type}</span>
           <div>
