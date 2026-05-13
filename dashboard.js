@@ -161,10 +161,16 @@ async function toggleSidebar() {
   isSidebarCollapsed = !isSidebarCollapsed;
   applySidebarState();
   await chrome.storage.local.set({ dashboardSidebarCollapsed: isSidebarCollapsed });
+  // Wait for CSS grid transition to fully complete (280ms) before resizing
   setTimeout(() => {
     if (trendChart) trendChart.resize();
     if (hourlyChart) hourlyChart.resize();
-  }, 240);
+    // Second pass ensures charts pick up final layout dimensions
+    requestAnimationFrame(() => {
+      if (trendChart) trendChart.resize();
+      if (hourlyChart) hourlyChart.resize();
+    });
+  }, 320);
 }
 async function switchSidebarTab(tab, options = {}) {
   if (!SIDEBAR_TABS.includes(tab)) {
