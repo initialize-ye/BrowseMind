@@ -24,38 +24,45 @@ chrome.runtime.onInstalled.addListener(() => {
   collectHistoryData();
 });
 
+// 一次性读取偏好与分类覆盖（供 saveTabDuration + checkTabIntervention 共用）
+async function getSharedContext() {
+  const [preferences, { classificationOverrides = {} }] = await Promise.all([
+    getPreferences(),
+    chrome.storage.local.get('classificationOverrides')
+  ]);
+  return { preferences, classificationOverrides };
+}
+
 // 监听标签页激活（用户切换标签）
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  // 保存上一个标签的停留时间
-  await saveTabDuration();
-
-  // 获取新激活标签的信息
+  const ctx = await getSharedContext();
+  await saveTabDuration(ctx);
   const tab = await chrome.tabs.get(activeInfo.tabId);
   startTrackingTab(tab);
-  await checkTabIntervention(tab);
+  await checkTabIntervention(tab, ctx);
 });
 
 // 监听标签页更新（URL变化）
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.active) {
-    await saveTabDuration();
+    const ctx = await getSharedContext();
+    await saveTabDuration(ctx);
     startTrackingTab(tab);
-    await checkTabIntervention(tab);
+    await checkTabIntervention(tab, ctx);
   }
 });
 
 // 监听窗口焦点变化
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    // 用户离开浏览器
     await saveTabDuration();
     activeTab = { tabId: null, url: null, title: null, startTime: null };
   } else {
-    // 用户返回浏览器，重新追踪当前标签并检查干预
     const [tab] = await chrome.tabs.query({ active: true, windowId });
     if (tab) {
+      const ctx = await getSharedContext();
       startTrackingTab(tab);
-      await checkTabIntervention(tab);
+      await checkTabIntervention(tab, ctx);
     }
   }
 });
@@ -72,37 +79,32 @@ function startTrackingTab(tab) {
   };
 }
 
-// 检查当前标签是否需要干预提醒
-async function checkTabIntervention(tab) {
+// 检查当前标签是否需要干预提醒（可接收预读的共享上下文）
+async function checkTabIntervention(tab, ctx) {
   try {
     if (!tab.url || tab.url.startsWith('chrome://')) return;
-    const preferences = await getPreferences();
-    if (!preferences.interventionsEnabled) {
-      console.log('干预检查: 已跳过（interventionsEnabled=false）');
-      return;
-    }
-    console.log('干预检查: 通知开关=', preferences.notificationsEnabled, '专注模式=', preferences.focusModeEnabled, '黑名单=', preferences.domainBlocklist, '冷却=', preferences.interventionCooldownMinutes + 'min');
-    const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
-    const classifier = new WebsiteClassifier(classificationOverrides);
+    const preferences = ctx?.preferences || await getPreferences();
+    if (!preferences.interventionsEnabled) return;
+    const overrides = ctx?.classificationOverrides ?? (await chrome.storage.local.get('classificationOverrides')).classificationOverrides ?? {};
+    const classifier = new WebsiteClassifier(overrides);
     const domain = WebsiteClassifier.normalizeDomain(new URL(tab.url).hostname);
     const category = classifier.classify(domain, tab.title || '', tab.url);
-    console.log('干预检查: 当前站点', domain, '→ 分类:', category);
     await checkInterventions(domain, category);
   } catch (e) {
     console.error('checkTabIntervention error:', e);
   }
 }
 
-// 保存标签页停留时间
-async function saveTabDuration() {
+// 保存标签页停留时间（可接收预读的共享上下文）
+async function saveTabDuration(ctx) {
   if (!activeTab.startTime || !activeTab.url) return;
 
-  const preferences = await getPreferences();
+  const preferences = ctx?.preferences || await getPreferences();
   const duration = Math.floor((Date.now() - activeTab.startTime) / 1000); // 秒
   if (duration < preferences.minVisitDurationSeconds) return;
 
-  const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
-  const classifier = new WebsiteClassifier(classificationOverrides);
+  const overrides = ctx?.classificationOverrides ?? (await chrome.storage.local.get('classificationOverrides')).classificationOverrides ?? {};
+  const classifier = new WebsiteClassifier(overrides);
   let domain = null;
   try { domain = WebsiteClassifier.normalizeDomain(new URL(activeTab.url).hostname); } catch {}
   const category = classifier.classify(domain || '', activeTab.title || '', activeTab.url);
@@ -134,9 +136,8 @@ function ensureRecordCache(browsingData) {
   }
 }
 
-// 添加浏览记录到存储（O(1) 去重，避免全量扫描）
+// 添加浏览记录到存储（O(1) 去重，保留由 cleanOldData alarm 处理）
 async function addBrowsingRecord(record) {
-  const preferences = await getPreferences();
   const { browsingData = [] } = await chrome.storage.local.get('browsingData');
 
   ensureRecordCache(browsingData);
@@ -145,12 +146,7 @@ async function addBrowsingRecord(record) {
 
   _recentRecordKeys.add(key);
   browsingData.push(record);
-
-  const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
-  const filteredData = browsingData.filter(r => r.visitTime > retentionStart);
-
-  await chrome.storage.local.set({ browsingData: filteredData });
-  console.log('记录已保存:', record);
+  await chrome.storage.local.set({ browsingData });
 }
 
 async function collectHistoryData() {

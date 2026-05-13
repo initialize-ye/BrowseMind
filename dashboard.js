@@ -9,6 +9,17 @@ const chartAnimation = prefersReducedMotion ? false : undefined;
 const categoryMap = { daily_learning: 'learning', daily_entertainment: 'entertainment', daily_coding: 'coding', daily_social: 'social' };
 const goalTypeNames = { daily_learning: '每日学习时长', daily_entertainment: '每日娱乐时长限制', daily_coding: '每日编程时长', daily_social: '每日社交时长限制' };
 let dataSync = null;
+let _connectionCache = { result: null, time: 0 };
+const CONNECTION_CACHE_TTL = 30000; // 30s
+async function cachedCheckConnection() {
+  const now = Date.now();
+  if (_connectionCache.result !== null && now - _connectionCache.time < CONNECTION_CACHE_TTL) {
+    return _connectionCache.result;
+  }
+  const result = await dataSync.checkConnection();
+  _connectionCache = { result, time: now };
+  return result;
+}
 let trendChart = null;
 let hourlyChart = null;
 let activeSidebarTab = 'actions';
@@ -41,12 +52,31 @@ function applyTheme(themeMode) {
     btn.textContent = labels[themeMode] || labels.light;
     btn.dataset.theme = themeMode;
   }
-  // Re-render charts with new grid color
+  // Update chart colors for new theme
   setTimeout(() => {
     palette = getChartPalette();
-    if (trendChart) { trendChart.destroy(); trendChart = null; }
-    if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
-    loadAnalytics();
+    const gridColor = getGridColor();
+    if (trendChart) {
+      trendChart.data.datasets[0].borderColor = palette[0];
+      trendChart.data.datasets[0].backgroundColor = palette[0] + '14';
+      trendChart.data.datasets[1].borderColor = palette[1];
+      trendChart.data.datasets[1].backgroundColor = palette[1] + '1a';
+      trendChart.options.scales.y.grid.color = gridColor;
+      trendChart.update();
+    }
+    if (hourlyChart) {
+      const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#6366f1';
+      const active = hourlyChart._activeHours || hourlyChart.data.datasets[0].data.map(v => v > 0);
+      hourlyChart.data.datasets[0].backgroundColor = active.map(on => on ? accentColor : 'rgba(128,128,128,0.15)');
+      hourlyChart.options.scales.y.grid.color = gridColor;
+      hourlyChart.update();
+    }
+    if (attentionChart) {
+      attentionChart.data.datasets[0].borderColor = palette[0];
+      attentionChart.data.datasets[0].backgroundColor = palette[0] + '14';
+      attentionChart.options.scales.y.grid.color = gridColor;
+      attentionChart.update();
+    }
   }, 80);
 }
 async function cycleTheme() {
@@ -226,6 +256,7 @@ function readPreferencesFromForm() {
 async function initDataSync() {
   const apiBaseUrl = await getApiBaseUrl();
   dataSync = new DataSync(apiBaseUrl);
+  _connectionCache = { result: null, time: 0 }; // invalidate on new instance
   return dataSync;
 }
 
@@ -416,33 +447,51 @@ function getGridColor() {
   return getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim() || 'rgba(0,0,0,0.06)';
 }
 function renderTrendChart(dailyTrend) {
-  if (trendChart) trendChart.destroy();
+  const labels = dailyTrend.map(item => { const date = new Date(item.date); return `${date.getMonth() + 1}/${date.getDate()}`; });
+  const durationData = dailyTrend.map(item => Math.round((item.duration || 0) / 60));
+  const visitsData = dailyTrend.map(item => item.visits);
+  if (trendChart) {
+    trendChart.data.labels = labels;
+    trendChart.data.datasets[0].data = durationData;
+    trendChart.data.datasets[0].borderColor = palette[0];
+    trendChart.data.datasets[0].backgroundColor = palette[0] + '14';
+    trendChart.data.datasets[1].data = visitsData;
+    trendChart.data.datasets[1].borderColor = palette[1];
+    trendChart.data.datasets[1].backgroundColor = palette[1] + '1a';
+    trendChart.options.scales.y.grid.color = getGridColor();
+    trendChart.update();
+    return;
+  }
   const ctx = document.getElementById('trendChart').getContext('2d');
-  const gridColor = getGridColor();
   trendChart = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels: dailyTrend.map(item => { const date = new Date(item.date); return `${date.getMonth() + 1}/${date.getDate()}`; }),
-      datasets: [
-        { label: '时长（分钟）', data: dailyTrend.map(item => Math.round((item.duration || 0) / 60)), borderColor: palette[0], backgroundColor: palette[0] + '14', tension: .36, fill: true, yAxisID: 'y' },
-        { label: '访问次数', data: dailyTrend.map(item => item.visits), borderColor: palette[1], backgroundColor: palette[1] + '1a', tension: .36, fill: true, yAxisID: 'y1' }
-      ]
-    },
-    options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }, x: { grid: { display: false } } } }
+    data: { labels, datasets: [
+      { label: '时长（分钟）', data: durationData, borderColor: palette[0], backgroundColor: palette[0] + '14', tension: .36, fill: true, yAxisID: 'y' },
+      { label: '访问次数', data: visitsData, borderColor: palette[1], backgroundColor: palette[1] + '1a', tension: .36, fill: true, yAxisID: 'y1' }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } } }, scales: { y: { beginAtZero: true, grid: { color: getGridColor() } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }, x: { grid: { display: false } } } }
   });
 }
 function renderHourlyChart(hourlyDist) {
-  if (hourlyChart) hourlyChart.destroy();
-  // Build full 24-hour array, filling missing hours with 0
   const hourMap = new Map(hourlyDist.map(item => [item.hour, item.duration]));
-  const allHours = Array.from({ length: 24 }, (_, i) => ({
-    hour: i,
-    duration: hourMap.get(i) || 0
-  }));
-  const gridColor = getGridColor();
+  const allHours = Array.from({ length: 24 }, (_, i) => ({ hour: i, duration: hourMap.get(i) || 0 }));
+  const labels = allHours.map(item => `${item.hour}:00`);
+  const data = allHours.map(item => Math.round(item.duration / 60));
+  const activeHours = allHours.map(item => item.duration > 0);
   const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#6366f1';
+  const bgColors = activeHours.map(active => active ? accentColor : 'rgba(128,128,128,0.15)');
+  if (hourlyChart) {
+    hourlyChart.data.labels = labels;
+    hourlyChart.data.datasets[0].data = data;
+    hourlyChart.data.datasets[0].backgroundColor = bgColors;
+    hourlyChart._activeHours = activeHours;
+    hourlyChart.options.scales.y.grid.color = getGridColor();
+    hourlyChart.update();
+    return;
+  }
   const ctx = document.getElementById('hourlyChart').getContext('2d');
-  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: allHours.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: allHours.map(item => Math.round(item.duration / 60)), backgroundColor: allHours.map(item => item.duration > 0 ? accentColor : 'rgba(128,128,128,0.15)'), borderRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } } } } });
+  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: '分钟', data, backgroundColor: bgColors, borderRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: getGridColor() } }, x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } } } } });
+  hourlyChart._activeHours = activeHours;
 }
 function renderBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
@@ -466,12 +515,21 @@ function renderAttentionCurve(attentionCurve) {
   const peakLabels = (attentionCurve.peak_hours || []).map(h => `${h}:00`).join('、') || '—';
   const recommendation = attentionCurve.recommendations && attentionCurve.recommendations[0] ? `<div class="status-note">${escapeHtml(attentionCurve.recommendations[0])}</div>` : '';
   statsContainer.innerHTML = `<div class="insight-cards"><div class="insight-card"><span>专注分数</span><strong>${Math.round(attentionCurve.focus_score || 0)}</strong></div><div class="insight-card"><span>高效时段</span><strong>${(attentionCurve.peak_hours || []).length}</strong><small>${peakLabels}</small></div></div>${recommendation}`;
-  if (attentionChart) attentionChart.destroy();
   const activeHours = attentionCurve.hourly_focus.filter(item => item.total_duration > 0);
-  if (!activeHours.length) return;
+  if (!activeHours.length) { if (attentionChart) { attentionChart.destroy(); attentionChart = null; } return; }
+  const labels = activeHours.map(item => `${item.hour}:00`);
+  const scores = activeHours.map(item => item.score);
+  if (attentionChart) {
+    attentionChart.data.labels = labels;
+    attentionChart.data.datasets[0].data = scores;
+    attentionChart.data.datasets[0].borderColor = palette[0];
+    attentionChart.data.datasets[0].backgroundColor = palette[0] + '14';
+    attentionChart.options.scales.y.grid.color = getGridColor();
+    attentionChart.update();
+    return;
+  }
   const ctx = document.getElementById('attentionChart').getContext('2d');
-  const gridColor = getGridColor();
-  attentionChart = new Chart(ctx, { type: 'line', data: { labels: activeHours.map(item => `${item.hour}:00`), datasets: [{ label: '专注度', data: activeHours.map(item => item.score), borderColor: palette[0], backgroundColor: palette[0] + '14', tension: .36, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
+  attentionChart = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ label: '专注度', data: scores, borderColor: palette[0], backgroundColor: palette[0] + '14', tension: .36, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: getGridColor() } }, x: { grid: { display: false } } } } });
 }
 function renderAIAnalysis(analysis) {
   const container = document.getElementById('aiAnalysisResult');
@@ -582,7 +640,7 @@ function renderAdvancedEmpty(message) {
 async function loadAdvancedInsights() {
   const preferences = await getPreferences();
   await initDataSync();
-  if (!(await dataSync.checkConnection())) {
+  if (!(await cachedCheckConnection())) {
     renderAdvancedEmpty('后端未连接，暂时无法加载高级分析。');
     return;
   }
@@ -603,7 +661,7 @@ async function loadAdvancedInsights() {
 async function loadReports() {
   try {
     await initDataSync();
-    if (!(await dataSync.checkConnection())) {
+    if (!(await cachedCheckConnection())) {
       renderReports([]);
       return;
     }
@@ -625,7 +683,7 @@ async function loadLatestAIAnalysis() {
   const container = document.getElementById('aiAnalysisResult');
   try {
     await initDataSync();
-    if (!(await dataSync.checkConnection())) return;
+    if (!(await cachedCheckConnection())) return;
     await dataSync.initUserId();
     const response = await fetch(`${dataSync.apiBaseUrl}/api/reports/${dataSync.userId}?limit=1`);
     if (!response.ok) return;
@@ -664,7 +722,7 @@ async function refreshInsights() {
 }
 
 async function loadAnalytics() {
-  const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', ...Object.keys(DEFAULT_PREFERENCES)]);
+  const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'analysisDays']);
   const browsingData = storage.browsingData || [];
   if (!browsingData.length) {
     renderMetrics([]);
@@ -705,7 +763,7 @@ async function refreshDashboard() {
   await initDataSync();
   const { userId, lastSyncTime } = await chrome.storage.local.get(['userId', 'lastSyncTime']);
   const analytics = await loadAnalytics();
-  const connected = await dataSync.checkConnection();
+  const connected = await cachedCheckConnection();
   const syncText = lastSyncTime ? `上次同步：${new Date(lastSyncTime).toLocaleString('zh-CN')}` : '尚未同步。';
   const days = preferences.analysisDays;
   document.getElementById('statusNote').textContent = `${connected ? '云服务器连接正常。' : '无法连接云服务器。'} 已载入 ${analytics.count} 条本地记录。${analytics.topCategoryText} ${syncText} 当前分析窗口：${days} 天。`;
@@ -730,21 +788,21 @@ async function syncNow() {
 async function runAIAnalysis() {
   const button = document.getElementById('aiBtn');
   setButtonBusy(button, true, '分析中...');
-  try { const preferences = await getPreferences(); await initDataSync(); if (!(await dataSync.checkConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await fetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); renderAIAnalysis(analysis); await loadReports(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); await switchSidebarTab('insights', { focusPanel: true }); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); } finally { setButtonBusy(button, false); }
+  try { const preferences = await getPreferences(); await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await fetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); renderAIAnalysis(analysis); await loadReports(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); await switchSidebarTab('insights', { focusPanel: true }); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
 async function createGoal() {
   const button = document.getElementById('createGoalBtn');
   setButtonBusy(button, true, '添加中...');
-  try { await initDataSync(); if (!(await dataSync.checkConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const goalType = document.getElementById('goalTypeSelect').value; const durationMinutes = parseInt(document.getElementById('goalDurationInput').value, 10); if (!durationMinutes || durationMinutes <= 0) throw new Error('请输入有效的目标时长'); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal_type: goalType, category: categoryMap[goalType], target_duration: durationMinutes * 60, date: todayString() }) }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || '创建目标失败'); } setNote('目标已添加', 'success'); log(`已添加目标：${goalTypeNames[goalType]} ${durationMinutes} 分钟`); await loadGoals(); } catch (error) { setNote(`创建目标失败：${error.message}`, 'danger'); log(`创建目标失败：${error.message}`); } finally { setButtonBusy(button, false); }
+  try { await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const goalType = document.getElementById('goalTypeSelect').value; const durationMinutes = parseInt(document.getElementById('goalDurationInput').value, 10); if (!durationMinutes || durationMinutes <= 0) throw new Error('请输入有效的目标时长'); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal_type: goalType, category: categoryMap[goalType], target_duration: durationMinutes * 60, date: todayString() }) }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || '创建目标失败'); } setNote('目标已添加', 'success'); log(`已添加目标：${goalTypeNames[goalType]} ${durationMinutes} 分钟`); await loadGoals(); } catch (error) { setNote(`创建目标失败：${error.message}`, 'danger'); log(`创建目标失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
 async function loadGoals() {
   const list = document.getElementById('goalList');
-  try { await initDataSync(); if (!(await dataSync.checkConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>暂无目标</strong><p class="muted">添加一个今日目标开始追踪。</p></div></div>'; return; } list.innerHTML = goals.map(goal => `<div class="goal-card"><div><strong>${goalTypeNames[goal.goal_type] || goal.goal_type}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${Number(goal.progress_percentage || 0).toFixed(1)}%</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${goal.id}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${goal.id}">停用</button><button class="danger" data-goal-id="${goal.id}">删除</button></div></div>`).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
+  try { await initDataSync(); if (!(await cachedCheckConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>暂无目标</strong><p class="muted">添加一个今日目标开始追踪。</p></div></div>'; return; } list.innerHTML = goals.map(goal => `<div class="goal-card"><div><strong>${goalTypeNames[goal.goal_type] || goal.goal_type}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${Number(goal.progress_percentage || 0).toFixed(1)}%</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${goal.id}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${goal.id}">停用</button><button class="danger" data-goal-id="${goal.id}">删除</button></div></div>`).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
 }
 async function refreshGoalProgress() {
   const button = document.getElementById('refreshGoalsBtn');
   setButtonBusy(button, true, '刷新中...');
-  try { await initDataSync(); if (!(await dataSync.checkConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}/update-progress?date=${encodeURIComponent(todayString())}`, { method: 'POST' }); if (!response.ok) throw new Error('刷新目标进度失败'); setNote('目标进度已刷新', 'success'); log('目标进度已刷新'); await loadGoals(); } catch (error) { setNote(`目标刷新失败：${error.message}`, 'danger'); log(`目标刷新失败：${error.message}`); } finally { setButtonBusy(button, false); }
+  try { await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}/update-progress?date=${encodeURIComponent(todayString())}`, { method: 'POST' }); if (!response.ok) throw new Error('刷新目标进度失败'); setNote('目标进度已刷新', 'success'); log('目标进度已刷新'); await loadGoals(); } catch (error) { setNote(`目标刷新失败：${error.message}`, 'danger'); log(`目标刷新失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
 async function editGoalDuration(goalId, currentMinutes) {
   const value = prompt('新的目标时长（分钟）', currentMinutes);
@@ -782,7 +840,7 @@ function showSettingsStatus(text) {
   _settingsStatusTimer = setTimeout(() => el.classList.remove('visible'), 2000);
 }
 async function resetApiBaseUrl() { const button = document.getElementById('resetApiBtn'); setButtonBusy(button, true, '恢复中...'); try { await chrome.storage.local.set({ ...DEFAULT_PREFERENCES }); await initDataSync(); await loadPreferences(); setNote('已恢复默认插件设置', 'success'); log('已恢复默认插件设置'); await refreshDashboard(); } finally { setButtonBusy(button, false); } }
-async function testApiConnection() { const button = document.getElementById('testApiBtn'); setButtonBusy(button, true, '测试中...'); try { await initDataSync(); const connected = await dataSync.checkConnection(); setNote(connected ? '连接成功' : '连接失败，请检查云服务器服务', connected ? 'success' : 'danger'); log(connected ? '后端连接测试成功' : '后端连接测试失败'); } finally { setButtonBusy(button, false); } }
+async function testApiConnection() { const button = document.getElementById('testApiBtn'); setButtonBusy(button, true, '测试中...'); try { await initDataSync(); const connected = await dataSync.checkConnection(); _connectionCache = { result: connected, time: Date.now() }; setNote(connected ? '连接成功' : '连接失败，请检查云服务器服务', connected ? 'success' : 'danger'); log(connected ? '后端连接测试成功' : '后端连接测试失败'); } finally { setButtonBusy(button, false); } }
 async function exportJson() { const { browsingData = [] } = await chrome.storage.local.get('browsingData'); const blob = new Blob([JSON.stringify(browsingData, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `browsemind-${todayString()}.json`; a.click(); URL.revokeObjectURL(url); setNote('JSON 已导出', 'success'); log(`已导出 ${browsingData.length} 条本地记录`); }
 async function clearLocalData() { if (!confirm('确定清空本地浏览数据吗？此操作不可恢复。')) return; await chrome.storage.local.set({ browsingData: [] }); setNote('本地数据已清空', 'success'); log('本地浏览数据已清空'); await refreshDashboard(); }
 function moveSidebarTabFocus(currentTab, direction) {
