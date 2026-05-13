@@ -23,6 +23,13 @@
       --yellow: oklch(70% 0.13 85);
       --yellow-soft: oklch(94% 0.04 85);
       --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      /* Chart.js palette — hex required for Canvas API */
+      --chart-1: #6366f1;
+      --chart-2: #34d399;
+      --chart-3: #fbbf24;
+      --chart-4: #f87171;
+      --chart-5: #a1a1aa;
+      --chart-6: #818cf8;
     }
     html[data-theme="dark"] {
       --bg: oklch(13% 0.008 58);
@@ -33,7 +40,7 @@
       --muted: oklch(62% 0.012 58);
       --line: oklch(28% 0.012 58);
       --accent: oklch(68% 0.14 275);
-      --accent-soft: oklch(25% 0.06 275);
+      --accent-soft: oklch(30% 0.08 275);
       --accent-glow: oklch(68% 0.14 275 / 0.12);
       --green: oklch(68% 0.14 150);
       --green-soft: oklch(22% 0.04 150);
@@ -71,15 +78,12 @@
       align-items: center;
       gap: 10px;
     }
-    h1::before {
-      content: '';
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      border-radius: 3px;
-      background: var(--accent);
+    .brand-mark {
+      width: 22px;
+      height: 22px;
       flex-shrink: 0;
     }
+    .brand-mark svg { display: block; width: 100%; height: 100%; }
     .subtitle {
       margin-top: 4px;
       color: var(--muted);
@@ -98,6 +102,8 @@
       padding: 48px 20px;
       text-align: center;
       color: var(--muted);
+      border-radius: 14px;
+      background: var(--accent-glow);
     }
     .spinner {
       width: 28px;
@@ -168,14 +174,14 @@
     .chart-tabs {
       display: flex;
       gap: 2px;
-      padding: 3px;
+      padding: 4px;
       border-radius: 10px;
       background: var(--surface-2);
     }
     .chart-tab {
       all: unset;
       cursor: pointer;
-      padding: 5px 10px;
+      padding: 6px 10px;
       border-radius: 8px;
       font-size: 11px;
       font-weight: 600;
@@ -184,6 +190,7 @@
       transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
     }
     .chart-tab:hover { color: var(--text); }
+    .chart-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-glow); }
     .chart-tab.active {
       color: var(--accent);
       background: var(--surface);
@@ -242,7 +249,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 7px 0;
+      padding: 8px 0;
       border-bottom: 1px solid var(--line);
       font-size: 12.5px;
     }
@@ -252,7 +259,7 @@
 
     .record-list { max-height: 180px; overflow-y: auto; }
     .record-item {
-      padding: 9px 10px;
+      padding: 10px;
       border-radius: 8px;
       margin-bottom: 2px;
       background: var(--surface);
@@ -290,8 +297,9 @@
     .goal-progress-bar { height: 4px; margin-top: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
     .goal-progress-fill { height: 100%; border-radius: inherit; background: var(--green); }
     .goal-progress-fill.warning { background: var(--yellow); }
-    .goal-delete { cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px; }
+    .goal-delete { cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; padding: 2px; background: transparent; border: 0; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
     .goal-delete:hover { color: var(--red); }
+    .goal-delete:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-glow); border-radius: 4px; }
 
     .attention-stats { display: flex; gap: 10px; margin-top: 8px; }
     .attention-stat-item {
@@ -316,7 +324,7 @@
     .action-btn {
       flex: 1;
       min-height: 40px;
-      padding: 9px 10px;
+      padding: 10px;
       border: 0;
       border-radius: 10px;
       cursor: pointer;
@@ -333,13 +341,12 @@
       background: var(--accent);
       color: oklch(100% 0 0);
     }
-    .action-btn.primary:hover { background: oklch(48% 0.14 275); }
+    .action-btn.primary:hover { background: color-mix(in oklch, var(--accent) 85%, black); }
     .action-btn.secondary {
       background: var(--accent-soft);
       color: var(--accent);
     }
-    .action-btn.secondary:hover { background: oklch(85% 0.06 275); }
-    html[data-theme="dark"] .action-btn.secondary:hover { background: oklch(30% 0.06 275); }
+    .action-btn.secondary:hover { background: color-mix(in oklch, var(--accent) 20%, var(--surface)); }
 
     .modal {
       position: fixed;
@@ -369,9 +376,18 @@
       color: var(--muted);
       font-size: 22px;
       line-height: 1;
+      background: transparent;
+      border: 0;
+      padding: 4px;
+      min-width: 44px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       transition: color 0.15s var(--ease-out);
     }
     .modal-close:hover { color: var(--text); }
+    .modal-close:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-glow); border-radius: 4px; }
     .modal h2 {
       font-size: 20px;
       font-weight: 700;
@@ -390,7 +406,7 @@
     .ai-summary-card {
       padding: 20px 18px;
       border-radius: 14px;
-      background: linear-gradient(135deg, oklch(52% 0.14 275), oklch(45% 0.12 300));
+      background: linear-gradient(135deg, oklch(48% 0.16 300), oklch(40% 0.12 330));
       color: oklch(98% 0 0);
       font-size: 13.5px;
       line-height: 1.65;
@@ -471,7 +487,7 @@
     }
     .ai-table th {
       text-align: left;
-      padding: 7px 14px;
+      padding: 8px 14px;
       font-size: 11px;
       font-weight: 600;
       color: var(--muted);
@@ -502,7 +518,7 @@
       margin: 0 0 14px;
     }
     .ai-issue-card {
-      padding: 11px 14px;
+      padding: 12px 14px;
       border-radius: 10px;
       background: var(--yellow-soft);
       border-left: 3px solid var(--yellow);
@@ -512,7 +528,7 @@
       color: var(--text);
     }
     .ai-suggestion-card {
-      padding: 11px 14px;
+      padding: 12px 14px;
       border-radius: 10px;
       background: var(--green-soft);
       border-left: 3px solid var(--green);
@@ -552,24 +568,24 @@
 <body>
   <div class="container">
     <header>
-      <h1>BrowseMind</h1>
+      <h1><span class="brand-mark"><svg viewBox="0 0 22 22" fill="none"><rect x="1" y="1" width="20" height="20" rx="4" fill="var(--accent)"/><text x="11" y="16" font-size="13" text-anchor="middle" fill="oklch(100% 0 0)">🧠</text></svg></span>BrowseMind</h1>
       <p class="subtitle">浏览行为分析</p>
     </header>
 
     <div id="loading" class="loading">
       <div class="spinner"></div>
-      <p style="font-size:13px;">正在加载数据...</p>
+      <p style="font-size:13px;">正在读取数据...</p>
     </div>
 
     <div id="content" style="display: none;">
       <div class="stat-bar" id="todayOverview">
         <div class="stat-block">
           <div class="stat-value" id="todayDuration">0m</div>
-          <div class="stat-label">今日浏览</div>
+          <div class="stat-label">今日时长</div>
         </div>
         <div class="stat-block">
           <div class="stat-value" id="todayVisits">0</div>
-          <div class="stat-label">访问次数</div>
+          <div class="stat-label">今日访问</div>
         </div>
       </div>
 
@@ -646,7 +662,7 @@
 
       <div class="section">
         <div class="section-header">
-          <span class="section-title">注意力曲线</span>
+          <span class="section-title">专注曲线</span>
         </div>
         <div class="chart-container" style="height: 140px; margin-bottom: 8px;">
           <canvas id="attentionChart"></canvas>
@@ -666,15 +682,15 @@
 
     <div id="aiAnalysisModal" class="modal" style="display: none;">
       <div class="modal-content">
-        <span class="modal-close" id="closeModal">&times;</span>
-        <h2>AI 智能分析</h2>
+        <button class="modal-close" id="closeModal" aria-label="关闭">&times;</button>
+        <h2>AI 分析结果</h2>
         <div id="aiAnalysisContent"></div>
       </div>
     </div>
 
     <div id="goalModal" class="modal" style="display: none;">
       <div class="modal-content">
-        <span class="modal-close" id="closeGoalModal">&times;</span>
+        <button class="modal-close" id="closeGoalModal" aria-label="关闭">&times;</button>
         <h2>设置目标</h2>
         <div style="margin-bottom: 16px;">
           <label>目标类型</label>
@@ -689,7 +705,7 @@
           <label>目标时长（分钟）</label>
           <input type="number" id="goalDurationInput" min="1" max="1440" value="60">
         </div>
-        <button id="saveGoalBtn" class="action-btn primary" style="width:100%;">保存目标</button>
+        <button id="saveGoalBtn" class="action-btn primary" style="width:100%;">添加目标</button>
       </div>
     </div>
 

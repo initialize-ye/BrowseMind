@@ -4,6 +4,12 @@ let currentChart = null;
 let chartData = null;
 let attentionChart = null;
 let dataSync = new DataSync();
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const chartAnimation = prefersReducedMotion ? false : undefined;
+function getChartPalette() {
+  const cs = getComputedStyle(document.documentElement);
+  return [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
+}
 // getPreferences(), DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
 
 async function initDataSync() {
@@ -271,14 +277,7 @@ function drawPieChart() {
 
   const data = categoryStats.map(stat => stat.totalDuration / 60); // 转换为分钟
 
-  const colors = [
-    '#6366f1', // indigo
-    '#34d399', // emerald
-    '#fbbf24', // amber
-    '#f87171', // coral
-    '#a1a1aa', // neutral
-    '#818cf8'  // lighter indigo
-  ];
+  const colors = getChartPalette();
 
   destroyChart();
 
@@ -296,6 +295,7 @@ function drawPieChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: chartAnimation,
       plugins: {
         legend: {
           position: 'bottom',
@@ -339,13 +339,14 @@ function drawBarChart() {
       datasets: [{
         label: '浏览时长（分钟）',
         data: data,
-        backgroundColor: 'oklch(55% 0.14 275 / 0.7)',
+        backgroundColor: colors[0] + 'b3',
         borderRadius: 0
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: chartAnimation,
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -399,8 +400,8 @@ function drawLineChart() {
         {
           label: '浏览时长（分钟）',
           data: durationData,
-          borderColor: '#6366f1',
-          backgroundColor: 'oklch(55% 0.14 275 / 0.08)',
+          borderColor: colors[0],
+          backgroundColor: colors[0] + '14',
           tension: 0.35,
           fill: true,
           yAxisID: 'y'
@@ -408,8 +409,8 @@ function drawLineChart() {
         {
           label: '访问次数',
           data: visitsData,
-          borderColor: '#34d399',
-          backgroundColor: 'oklch(65% 0.14 150 / 0.08)',
+          borderColor: colors[1],
+          backgroundColor: colors[1] + '14',
           tension: 0.35,
           fill: true,
           yAxisID: 'y1'
@@ -419,6 +420,7 @@ function drawLineChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: chartAnimation,
       interaction: {
         mode: 'index',
         intersect: false
@@ -475,15 +477,7 @@ function extractDomain(url) {
   }
 }
 
-// 格式化时长
-function formatDuration(seconds) {
-  if (seconds < 60) return `${seconds}秒`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}分钟`;
-  const hours = Math.floor(minutes / 60);
-  const remainMinutes = minutes % 60;
-  return `${hours}小时${remainMinutes}分钟`;
-}
+// formatDuration() is defined in dataSync.js (shared with dashboard)
 
 // 格式化时间
 function formatTime(timestamp) {
@@ -607,9 +601,10 @@ function displayAIAnalysis(analysis) {
   const content = document.getElementById('aiAnalysisContent');
 
   // 颜色映射
+  const pal = getChartPalette();
   const categoryColors = {
-    learning: '#6366f1', coding: '#34d399', entertainment: '#f87171',
-    social: '#fbbf24', tools: '#818cf8', other: '#a1a1aa'
+    learning: pal[0], coding: pal[1], entertainment: pal[3],
+    social: pal[2], tools: pal[5], other: pal[4]
   };
   const categoryNames = {
     learning: '学习', coding: '编程', entertainment: '娱乐',
@@ -628,11 +623,11 @@ function displayAIAnalysis(analysis) {
   const stats = analysis.category_stats || [];
   if (stats.length > 0) {
     const segments = stats.map(s => {
-      const color = categoryColors[s.category] || '#a1a1aa';
+      const color = categoryColors[s.category] || pal[4];
       return `<div class="ai-stacked-segment" style="width:${s.percentage}%;background:${color}"></div>`;
     }).join('');
     const legend = stats.map(s => {
-      const color = categoryColors[s.category] || '#a1a1aa';
+      const color = categoryColors[s.category] || pal[4];
       const name = categoryNames[s.category] || s.category;
       return `<span class="ai-legend-item"><span class="ai-legend-dot" style="background:${color}"></span>${name} <span class="ai-legend-pct">${s.percentage}%</span></span>`;
     }).join('');
@@ -840,6 +835,7 @@ function drawAttentionChart(hourlyFocus) {
   const data = activeHours.map(h => h.score);
 
   const ctx = document.getElementById('attentionChart').getContext('2d');
+  const attColors = getChartPalette();
   attentionChart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -847,8 +843,8 @@ function drawAttentionChart(hourlyFocus) {
       datasets: [{
         label: '专注度',
         data: data,
-        borderColor: '#6366f1',
-        backgroundColor: 'oklch(55% 0.14 275 / 0.08)',
+        borderColor: attColors[0],
+        backgroundColor: attColors[0] + '14',
         tension: 0.35,
         fill: true,
         pointRadius: 3,
@@ -858,6 +854,7 @@ function drawAttentionChart(hourlyFocus) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: chartAnimation,
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -940,7 +937,7 @@ function displayGoals(goals) {
           <span class="goal-type">${goalTypeMap[goal.goal_type] || goal.goal_type}</span>
           <div>
             <span class="goal-status ${statusClass}">${statusText}</span>
-            <span class="goal-delete" data-goal-id="${goal.id}">×</span>
+            <button class="goal-delete" data-goal-id="${goal.id}" aria-label="删除目标">×</button>
           </div>
         </div>
         <div class="goal-progress-bar">

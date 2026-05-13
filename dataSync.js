@@ -51,6 +51,16 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function formatDuration(seconds) {
+  const total = Math.floor(seconds || 0);
+  if (total < 60) return `${total}秒`;
+  const minutes = Math.floor(total / 60);
+  if (minutes < 60) return `${minutes}分钟`;
+  const hours = Math.floor(minutes / 60);
+  const remain = minutes % 60;
+  return remain ? `${hours}小时${remain}分钟` : `${hours}小时`;
+}
+
 class DataSync {
   constructor(apiBaseUrl = 'http://119.29.55.112:8000') {
     this.apiBaseUrl = apiBaseUrl;

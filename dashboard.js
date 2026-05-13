@@ -1,5 +1,11 @@
 // getPreferences(), DEFAULT_API_BASE_URL, DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
-const palette = ['#6366f1', '#34d399', '#fbbf24', '#f87171', '#a1a1aa', '#818cf8'];
+function getChartPalette() {
+  const cs = getComputedStyle(document.documentElement);
+  return [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
+}
+let palette = getChartPalette();
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const chartAnimation = prefersReducedMotion ? false : undefined;
 const categoryMap = { daily_learning: 'learning', daily_entertainment: 'entertainment', daily_coding: 'coding', daily_social: 'social' };
 const goalTypeNames = { daily_learning: '每日学习时长', daily_entertainment: '每日娱乐时长限制', daily_coding: '每日编程时长', daily_social: '每日社交时长限制' };
 let dataSync = null;
@@ -13,15 +19,7 @@ let domainFilterTimer = null;
 const SIDEBAR_TABS = ['dashboard', 'insights', 'actions', 'goals', 'settings'];
 
 function todayString() { return new Date().toISOString().split('T')[0]; }
-function formatDuration(seconds) {
-  const total = Math.floor(seconds || 0);
-  if (total < 60) return `${total}s`;
-  const minutes = Math.floor(total / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const remain = minutes % 60;
-  return remain ? `${hours}h ${remain}m` : `${hours}h`;
-}
+// formatDuration() is defined in dataSync.js (shared with popup)
 function log(message) {
   const box = document.getElementById('logBox');
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
@@ -45,6 +43,7 @@ function applyTheme(themeMode) {
   }
   // Re-render charts with new grid color
   setTimeout(() => {
+    palette = getChartPalette();
     if (trendChart) { trendChart.destroy(); trendChart = null; }
     if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
     loadAnalytics();
@@ -148,9 +147,6 @@ async function switchSidebarTab(tab, options = {}) {
     button.classList.toggle('active', isActive);
     button.setAttribute('aria-selected', isActive ? 'true' : 'false');
     button.tabIndex = isActive ? 0 : -1;
-  });
-  document.querySelectorAll('[data-sidebar-panel]').forEach(panel => {
-    panel.classList.toggle('active', panel.dataset.sidebarPanel === tab);
   });
   document.querySelectorAll('[data-main-view]').forEach(view => {
     const isActive = view.dataset.mainView === tab;
@@ -278,22 +274,60 @@ function showCategoryPicker(domain, currentCategory) {
   const classifier = new WebsiteClassifier();
   const categories = classifier.getAllCategories();
   const picker = document.getElementById('categoryPicker');
+
+  // Backdrop overlay
+  let backdrop = document.getElementById('pickerBackdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.id = 'pickerBackdrop';
+    backdrop.style.cssText = 'display:none;position:fixed;inset:0;z-index:9997;background:oklch(0% 0 0 / 0.32);';
+    document.body.appendChild(backdrop);
+  }
+  backdrop.style.display = 'block';
+
   picker.style.display = 'block';
   picker.innerHTML = `<div class="picker-header"><strong>修改分类：${escapeHtml(domain)}</strong><button class="ghost" id="closePickerBtn" style="min-height:32px;padding:4px 10px;">取消</button></div>` +
     Object.entries(categories).map(([key, info]) =>
       `<button class="picker-option${key === currentCategory ? ' active' : ''}" data-pick-cat="${key}">${info.icon} ${escapeHtml(info.name)}</button>`
     ).join('');
-  function closePicker() { picker.style.display = 'none'; }
+
+  // Track previously focused element to restore on close
+  const trigger = document.activeElement;
+
+  function closePicker() {
+    picker.style.display = 'none';
+    backdrop.style.display = 'none';
+    document.removeEventListener('keydown', onPickerKey);
+    backdrop.removeEventListener('click', closePicker);
+    if (trigger && typeof trigger.focus === 'function') trigger.focus();
+  }
+
+  function onPickerKey(e) {
+    if (e.key === 'Escape') { closePicker(); return; }
+    // Focus trap: cycle Tab within dialog
+    if (e.key === 'Tab') {
+      const focusable = picker.querySelectorAll('button:not([disabled])');
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+
   document.getElementById('closePickerBtn').addEventListener('click', closePicker);
+  backdrop.addEventListener('click', closePicker);
   document.addEventListener('keydown', onPickerKey);
-  picker.addEventListener('click', onPickerBackdrop);
-  function onPickerKey(e) { if (e.key === 'Escape') { closePicker(); document.removeEventListener('keydown', onPickerKey); } }
-  function onPickerBackdrop(e) { if (e.target === picker) { closePicker(); picker.removeEventListener('click', onPickerBackdrop); } }
+
+  // Focus the first option
+  const firstBtn = picker.querySelector('[data-pick-cat]');
+  if (firstBtn) firstBtn.focus();
+
   picker.querySelectorAll('[data-pick-cat]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const newCat = btn.dataset.pickCat;
       await saveClassificationOverride(domain, newCat);
-      picker.style.display = 'none';
+      closePicker();
       log(`已将 ${domain} 分类为 ${categories[newCat]?.name || newCat}`);
       await loadAnalytics();
       renderOverrideRules();
@@ -379,7 +413,7 @@ function renderFilteredDomains() {
   renderDomainList(domains);
 }
 function getGridColor() {
-  return getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim() || 'oklch(0% 0 0 / 0.06)';
+  return getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim() || 'rgba(0,0,0,0.06)';
 }
 function renderTrendChart(dailyTrend) {
   if (trendChart) trendChart.destroy();
@@ -390,11 +424,11 @@ function renderTrendChart(dailyTrend) {
     data: {
       labels: dailyTrend.map(item => { const date = new Date(item.date); return `${date.getMonth() + 1}/${date.getDate()}`; }),
       datasets: [
-        { label: '时长（分钟）', data: dailyTrend.map(item => Math.round((item.duration || 0) / 60)), borderColor: '#6366f1', backgroundColor: 'oklch(55% 0.14 275 / 0.08)', tension: .36, fill: true, yAxisID: 'y' },
-        { label: '访问次数', data: dailyTrend.map(item => item.visits), borderColor: '#34a853', backgroundColor: 'rgba(52,168,83,.10)', tension: .36, fill: true, yAxisID: 'y1' }
+        { label: '时长（分钟）', data: dailyTrend.map(item => Math.round((item.duration || 0) / 60)), borderColor: palette[0], backgroundColor: palette[0] + '14', tension: .36, fill: true, yAxisID: 'y' },
+        { label: '访问次数', data: dailyTrend.map(item => item.visits), borderColor: palette[1], backgroundColor: palette[1] + '1a', tension: .36, fill: true, yAxisID: 'y1' }
       ]
     },
-    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }, x: { grid: { display: false } } } }
+    options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }, x: { grid: { display: false } } } }
   });
 }
 function renderHourlyChart(hourlyDist) {
@@ -408,7 +442,7 @@ function renderHourlyChart(hourlyDist) {
   const gridColor = getGridColor();
   const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#6366f1';
   const ctx = document.getElementById('hourlyChart').getContext('2d');
-  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: allHours.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: allHours.map(item => Math.round(item.duration / 60)), backgroundColor: allHours.map(item => item.duration > 0 ? accentColor : 'rgba(128,128,128,0.15)'), borderRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } } } } });
+  hourlyChart = new Chart(ctx, { type: 'bar', data: { labels: allHours.map(item => `${item.hour}:00`), datasets: [{ label: '分钟', data: allHours.map(item => Math.round(item.duration / 60)), backgroundColor: allHours.map(item => item.duration > 0 ? accentColor : 'rgba(128,128,128,0.15)'), borderRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: gridColor } }, x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } } } } });
 }
 function renderBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
@@ -437,14 +471,14 @@ function renderAttentionCurve(attentionCurve) {
   if (!activeHours.length) return;
   const ctx = document.getElementById('attentionChart').getContext('2d');
   const gridColor = getGridColor();
-  attentionChart = new Chart(ctx, { type: 'line', data: { labels: activeHours.map(item => `${item.hour}:00`), datasets: [{ label: '专注度', data: activeHours.map(item => item.score), borderColor: '#6366f1', backgroundColor: 'oklch(55% 0.14 275 / 0.08)', tension: .36, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
+  attentionChart = new Chart(ctx, { type: 'line', data: { labels: activeHours.map(item => `${item.hour}:00`), datasets: [{ label: '专注度', data: activeHours.map(item => item.score), borderColor: palette[0], backgroundColor: palette[0] + '14', tension: .36, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, grid: { color: gridColor } }, x: { grid: { display: false } } } } });
 }
 function renderAIAnalysis(analysis) {
   const container = document.getElementById('aiAnalysisResult');
 
   const categoryColors = {
-    learning: '#6366f1', coding: '#34d399', entertainment: '#f87171',
-    social: '#fbbf24', tools: '#818cf8', other: '#a1a1aa'
+    learning: palette[0], coding: palette[1], entertainment: palette[3],
+    social: palette[2], tools: palette[5], other: palette[4]
   };
   const categoryNames = {
     learning: '学习', coding: '编程', entertainment: '娱乐',
@@ -458,11 +492,11 @@ function renderAIAnalysis(analysis) {
   const stats = analysis.category_stats || [];
   if (stats.length > 0) {
     const segments = stats.map(s => {
-      const color = categoryColors[s.category] || '#a1a1aa';
+      const color = categoryColors[s.category] || palette[4];
       return `<div class="ai-stacked-segment" style="width:${s.percentage}%;background:${color}"></div>`;
     }).join('');
     const legend = stats.map(s => {
-      const color = categoryColors[s.category] || '#a1a1aa';
+      const color = categoryColors[s.category] || palette[4];
       const name = categoryNames[s.category] || s.category;
       return `<span class="ai-legend-item"><span class="ai-legend-dot" style="background:${color}"></span>${name} <span class="ai-legend-pct">${s.percentage}%</span></span>`;
     }).join('');
@@ -505,16 +539,16 @@ function renderReports(reports) {
     const issuesHtml = issues.length ? issues.map(iss => `<li>${escapeHtml(iss)}</li>`).join('') : '<li>暂无记录的问题</li>';
     const suggestionsHtml = suggestions.length ? suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join('') : '<li>暂无记录的建议</li>';
     return `<div class="report-card">
-      <div class="report-card-header" onclick="this.closest('.report-card').classList.toggle('expanded')">
+      <div class="report-card-header" role="button" tabindex="0" aria-expanded="false" aria-label="展开报告详情">
         <div class="report-card-meta">
           <span class="report-type-badge">${escapeHtml(typeLabel)}</span>
           <span class="report-date">${escapeHtml(date)}</span>
           ${report.total_duration ? `<span class="report-duration">${formatDuration(report.total_duration)}</span>` : ''}
         </div>
         <div class="report-card-summary">${escapeHtml(summary) || '暂无总结'}</div>
-        <div class="report-card-indicator">▼</div>
+        <div class="report-card-indicator" aria-hidden="true">▼</div>
       </div>
-      <div class="report-card-body">
+      <div class="report-card-body" role="region">
         <div class="report-card-section">
           <h4>发现的问题</h4>
           <ul>${issuesHtml}</ul>
@@ -526,6 +560,16 @@ function renderReports(reports) {
       </div>
     </div>`;
   }).join('');
+  // Bind click/keyboard handlers for expandable report cards
+  container.querySelectorAll('.report-card-header').forEach(header => {
+    function toggleReport() {
+      const card = header.closest('.report-card');
+      const expanded = card.classList.toggle('expanded');
+      header.setAttribute('aria-expanded', String(expanded));
+    }
+    header.addEventListener('click', toggleReport);
+    header.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleReport(); } });
+  });
 }
 function renderAdvancedEmpty(message) {
   document.getElementById('blackholeStats').innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
