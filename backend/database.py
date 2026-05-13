@@ -140,6 +140,15 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     """初始化数据库"""
     Base.metadata.create_all(bind=engine)
+
+    # 增量迁移：为已有表补上新增列（create_all 不会 ALTER）
+    with engine.connect() as conn:
+        try:
+            conn.execute("ALTER TABLE analysis_reports ADD COLUMN top_domains TEXT")
+            print("迁移：已添加 analysis_reports.top_domains 列")
+        except Exception:
+            pass  # 列已存在则忽略
+
     print("数据库初始化完成")
 
 
