@@ -581,7 +581,7 @@ async function showAIAnalysis() {
 
     const preferences = await getPreferences();
 
-    const response = await fetch(
+    const response = await authFetch(
       `${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`,
       { method: 'POST' }
     );
@@ -727,7 +727,7 @@ async function loadAdvancedAnalysis() {
     if (isConnected) {
       await dataSync.initUserId();
       const preferences = await getPreferences();
-      const response = await fetch(
+      const response = await authFetch(
         `${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=${preferences.analysisDays}&blackhole_threshold=${preferences.blackholeThresholdMinutes}`
       );
 
@@ -911,7 +911,7 @@ async function loadGoals() {
     if (!userId) return;
 
     const today = new Date().toISOString().split('T')[0];
-    const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${userId}?date=${today}&is_active=1`);
+    const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${userId}?date=${today}&is_active=1`);
 
     if (!response.ok) {
       console.error('获取目标失败');
@@ -1018,7 +1018,7 @@ async function saveGoal() {
 
     const today = new Date().toISOString().split('T')[0];
 
-    const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${userId}`, {
+    const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1050,7 +1050,7 @@ async function deleteGoal(goalId) {
   }
 
   try {
-    const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, {
+    const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, {
       method: 'DELETE'
     });
 
@@ -1074,7 +1074,7 @@ async function updateGoalsProgress() {
 
     const today = new Date().toISOString().split('T')[0];
 
-    const response = await fetch(`${dataSync.apiBaseUrl}/api/goals/${userId}/update-progress?date=${encodeURIComponent(today)}`, {
+    const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${userId}/update-progress?date=${encodeURIComponent(today)}`, {
       method: 'POST'
     });
 

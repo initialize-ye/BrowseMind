@@ -59,11 +59,28 @@ function formatDuration(seconds) {
   return remain ? `${hours}小时${remain}分钟` : `${hours}小时`;
 }
 
+// 带认证头的 fetch 封装（供 popup/dashboard 直接调用后端 API 时使用）
+async function authFetch(url, options = {}) {
+  const { authToken } = await chrome.storage.local.get('authToken');
+  const headers = { ...(options.headers || {}) };
+  if (authToken) headers['X-Auth-Token'] = authToken;
+  return fetch(url, { ...options, headers });
+}
+
 class DataSync {
   constructor(apiBaseUrl = 'http://119.29.55.112:8000') {
     this.apiBaseUrl = apiBaseUrl;
     this.userId = null;
     this._initPromise = null; // mutex for concurrent initUserId() calls
+    this._authToken = null;
+  }
+
+  async _getAuthHeaders() {
+    if (!this._authToken) {
+      const { authToken } = await chrome.storage.local.get('authToken');
+      this._authToken = authToken || '';
+    }
+    return this._authToken ? { 'X-Auth-Token': this._authToken } : {};
   }
 
   // 初始化用户ID（带互斥锁，防止并发生成重复ID）
@@ -106,10 +123,12 @@ class DataSync {
         sample_record: records[0]
       });
 
+      const authHeaders = await this._getAuthHeaders();
       const response = await fetch(`${this.apiBaseUrl}/api/upload`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...authHeaders
         },
         body: JSON.stringify(payload)
       });
@@ -135,8 +154,10 @@ class DataSync {
     await this.initUserId();
 
     try {
+      const authHeaders = await this._getAuthHeaders();
       const response = await fetch(
-        `${this.apiBaseUrl}/api/analysis/${this.userId}?days=${days}`
+        `${this.apiBaseUrl}/api/analysis/${this.userId}?days=${days}`,
+        { headers: authHeaders }
       );
 
       if (!response.ok) {
@@ -157,7 +178,8 @@ class DataSync {
     await this.initUserId();
 
     try {
-      const response = await fetch(`${this.apiBaseUrl}/api/stats/${this.userId}`);
+      const authHeaders = await this._getAuthHeaders();
+      const response = await fetch(`${this.apiBaseUrl}/api/stats/${this.userId}`, { headers: authHeaders });
 
       if (!response.ok) {
         throw new Error(`获取统计失败: ${response.status}`);

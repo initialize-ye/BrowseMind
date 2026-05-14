@@ -28,9 +28,16 @@ let focusSession = {
   domains: new Set()
 };
 
-// 初始化：加载历史记录 + 创建右键菜单
-chrome.runtime.onInstalled.addListener(() => {
+// 初始化：加载历史记录 + 创建右键菜单 + 生成认证 token
+chrome.runtime.onInstalled.addListener(async () => {
   console.log('BrowseMind 已安装');
+  // 生成认证 token（首次安装时）
+  const { authToken } = await chrome.storage.local.get('authToken');
+  if (!authToken) {
+    const token = crypto.randomUUID();
+    await chrome.storage.local.set({ authToken: token });
+    console.log('已生成认证 token');
+  }
   collectHistoryData();
   createContextMenus();
 });
@@ -419,8 +426,11 @@ async function updateGoalsProgress() {
     const baseUrl = preferences.apiBaseUrl;
     const today = new Date().toISOString().split('T')[0];
 
+    const { authToken } = await chrome.storage.local.get('authToken');
+    const headers = authToken ? { 'X-Auth-Token': authToken } : {};
     const response = await fetch(baseUrl + '/api/goals/' + userId + '/update-progress?date=' + encodeURIComponent(today), {
-      method: 'POST'
+      method: 'POST',
+      headers
     });
 
     if (!response.ok) {

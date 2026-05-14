@@ -5,9 +5,10 @@ BrowseMind 后端服务 - 主应用
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List
@@ -16,7 +17,7 @@ import io
 import json
 import os
 
-from database import init_db, get_db, BrowsingRecord, AnalysisReport, UserGoal
+from database import init_db, get_db, BrowsingRecord, AnalysisReport, UserGoal, UserToken
 from schemas import (
     BrowsingRecordBatch,
     BrowsingRecordResponse,
@@ -47,6 +48,72 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
+
+# 写操作路径前缀（需要认证）
+WRITE_PATHS = ['/api/upload', '/api/goals', '/api/ai-analysis', '/api/export']
+# 不需要认证的路径
+AUTH_SKIP_PATHS = ['/', '/docs', '/openapi.json', '/redoc']
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """写操作 Token 认证中间件"""
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        # 跳过不需要认证的路径和 OPTIONS 请求
+        if request.method == 'OPTIONS' or path in AUTH_SKIP_PATHS or path.startswith('/docs') or path.startswith('/openapi') or path.startswith('/redoc'):
+            return await call_next(request)
+
+        # GET 请求不强制认证（向后兼容）
+        if request.method == 'GET':
+            return await call_next(request)
+
+        # 写操作需要验证 token
+        token = request.headers.get('X-Auth-Token')
+        if not token:
+            return StreamingResponse(
+                iter([json.dumps({"detail": "缺少认证 token（X-Auth-Token header）"})]),
+                status_code=401,
+                media_type="application/json"
+            )
+
+        # 首次使用时自动注册 token（绑定到 user_id）
+        # 从请求体或路径中提取 user_id
+        db = SessionLocal()
+        try:
+            existing = db.query(UserToken).filter(UserToken.token == token).first()
+            if not existing:
+                # 尝试从 URL 路径提取 user_id
+                user_id = None
+                parts = path.strip('/').split('/')
+                for i, part in enumerate(parts):
+                    if part in ('upload', 'goals', 'ai-analysis', 'export') and i > 0:
+                        user_id = parts[i + 1] if i + 1 < len(parts) else None
+                        break
+                if not user_id:
+                    # 从请求体提取（需要消费 body）
+                    body = await request.body()
+                    try:
+                        data = json.loads(body)
+                        user_id = data.get('user_id')
+                    except:
+                        pass
+                    # 重建 request body（已被消费）
+                    async def receive():
+                        return {"type": "http.request", "body": body}
+                    request._receive = receive
+
+                if user_id:
+                    new_token = UserToken(token=token, user_id=user_id)
+                    db.add(new_token)
+                    db.commit()
+                    print(f"注册新 token: {token[:8]}... -> {user_id}")
+        finally:
+            db.close()
+
+        return await call_next(request)
+
+
+app.add_middleware(AuthMiddleware)
 
 
 @app.on_event("startup")

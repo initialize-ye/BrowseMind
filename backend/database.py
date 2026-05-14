@@ -131,6 +131,17 @@ class UserGoal(Base):
         }
 
 
+class UserToken(Base):
+    """用户认证 Token"""
+    __tablename__ = 'user_tokens'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, default=datetime.utcnow)
+
+
 # 数据库引擎和会话
 DATABASE_URL = "sqlite:///./browsemind.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
