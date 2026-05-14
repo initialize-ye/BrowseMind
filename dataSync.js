@@ -117,11 +117,7 @@ class DataSync {
         records: records
       };
 
-      console.log('准备上传数据:', {
-        user_id: this.userId,
-        records_count: records.length,
-        sample_record: records[0]
-      });
+      console.log(`上传数据: ${records.length} 条记录`);
 
       const authHeaders = await this._getAuthHeaders();
       const response = await fetch(`${this.apiBaseUrl}/api/upload`, {

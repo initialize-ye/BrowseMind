@@ -562,10 +562,7 @@ function parseCategoryTimeLimits(str) {
 
 async function checkInterventions(domain, category) {
   const preferences = await getPreferences();
-  if (!preferences.interventionsEnabled) {
-    console.log('checkInterventions: 跳过（interventionsEnabled=false）');
-    return;
-  }
+  if (!preferences.interventionsEnabled) return;
 
   // 专注会话期间访问娱乐/社交站点 — 记录打断并提醒
   if (focusSession.active && (category === 'entertainment' || category === 'social')) {
@@ -582,34 +579,25 @@ async function checkInterventions(domain, category) {
   const now = Date.now();
 
   // 白名单跳过
-  if (allowlist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) {
-    console.log('checkInterventions: ', normalizedDomain, '在白名单中，跳过');
-    return;
-  }
+  if (allowlist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) return;
 
   // 黑名单提醒
   const blockKey = `block:${normalizedDomain}`;
   if (blocklist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) {
-    console.log('checkInterventions: ', normalizedDomain, '命中黑名单');
     if (!interventionCooldowns[blockKey] || now - interventionCooldowns[blockKey] > cooldownMs) {
       interventionCooldowns[blockKey] = now;
       await showNotification('warning', `你正在访问黑名单站点：${domain}`);
-    } else {
-      console.log('checkInterventions: 黑名单冷却中，跳过');
     }
     return;
   }
 
   // 专注模式提醒（娱乐/社交类）
   if (preferences.focusModeEnabled && (category === 'entertainment' || category === 'social')) {
-    console.log('checkInterventions: ', normalizedDomain, '命中专注模式, 分类:', category);
     const focusKey = `focus:${category}`;
     if (!interventionCooldowns[focusKey] || now - interventionCooldowns[focusKey] > cooldownMs) {
       interventionCooldowns[focusKey] = now;
       const catNames = { entertainment: '娱乐', social: '社交' };
       await showNotification('warning', `专注模式已开启，当前正在访问${catNames[category] || category}类站点。`);
-    } else {
-      console.log('checkInterventions: 专注模式冷却中，跳过');
     }
     return;
   }
