@@ -708,7 +708,7 @@
         <button class="modal-close" id="closeGoalModal" aria-label="关闭">&times;</button>
         <h2>设置目标</h2>
         <div style="margin-bottom: 16px;">
-          <label>目标类型</label>
+          <label for="goalTypeSelect">目标类型</label>
           <select id="goalTypeSelect">
             <option value="daily_learning">每日学习时长</option>
             <option value="daily_entertainment">每日娱乐时长限制</option>
@@ -717,7 +717,7 @@
           </select>
         </div>
         <div style="margin-bottom: 16px;">
-          <label>目标时长（分钟）</label>
+          <label for="goalDurationInput">目标时长（分钟）</label>
           <input type="number" id="goalDurationInput" min="1" max="1440" value="60">
         </div>
         <button id="saveGoalBtn" class="action-btn primary" style="width:100%;">添加目标</button>
