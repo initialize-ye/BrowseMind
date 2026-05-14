@@ -382,6 +382,9 @@ chrome.alarms.create('updateGoalsProgress', { periodInMinutes: 5 });
 // 定期兜底同步浏览数据（每5分钟）
 chrome.alarms.create('syncBrowsingData', { periodInMinutes: 5 });
 
+// 每日摘要检查（每小时）
+chrome.alarms.create('dailySummary', { periodInMinutes: 60 });
+
 async function cleanOldData() {
   const preferences = await getPreferences();
   const { browsingData = [] } = await chrome.storage.local.get('browsingData');
@@ -391,6 +394,45 @@ async function cleanOldData() {
     await chrome.storage.local.set({ browsingData: filtered });
     console.log(`清理旧数据：${browsingData.length - filtered.length} 条已移除`);
   }
+}
+
+async function checkDailySummary() {
+  const preferences = await getPreferences();
+  if (!preferences.dailySummaryEnabled || !preferences.notificationsEnabled) return;
+  if (isInQuietHours(preferences)) return;
+
+  const now = new Date();
+  if (now.getHours() !== preferences.dailySummaryHour) return;
+
+  const today = now.toISOString().split('T')[0];
+  const { lastDailySummary = '' } = await chrome.storage.local.get('lastDailySummary');
+  if (lastDailySummary === today) return;
+
+  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+  const todayData = browsingData.filter(r => r.date === today);
+  if (!todayData.length) return;
+
+  const totalDuration = todayData.reduce((s, r) => s + (r.duration || 0), 0);
+  const uniqueDomains = new Set(todayData.map(r => r.domain).filter(Boolean)).size;
+
+  // 分类统计
+  const catStats = {};
+  for (const r of todayData) {
+    const cat = r.category || 'other';
+    catStats[cat] = (catStats[cat] || 0) + (r.duration || 0);
+  }
+  const topCat = Object.entries(catStats).sort((a, b) => b[1] - a[1])[0];
+  const catNames = { learning: '学习', coding: '编程', entertainment: '娱乐', social: '社交', tools: '工具', other: '其他' };
+  const topCatText = topCat ? `${catNames[topCat[0]] || topCat[0]} ${Math.round(topCat[1] / 60)}分钟` : '';
+
+  const hours = Math.floor(totalDuration / 3600);
+  const minutes = Math.round((totalDuration % 3600) / 60);
+  const durationText = hours > 0 ? `${hours}小时${minutes}分钟` : `${minutes}分钟`;
+
+  const message = `今日浏览 ${durationText}，${uniqueDomains} 个站点。${topCatText ? '最多：' + topCatText + '。' : ''}共 ${todayData.length} 次访问。`;
+
+  await showNotification('info', message);
+  await chrome.storage.local.set({ lastDailySummary: today });
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -409,6 +451,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     } else if (alarm.name === 'focusSessionEnd') {
       endFocusSession(true).catch(e => console.error('endFocusSession failed:', e));
       showNotification('info', '专注会话完成！你做到了。').catch(e => console.error('showNotification failed:', e));
+    } else if (alarm.name === 'dailySummary') {
+      checkDailySummary().catch(e => console.error('dailySummary failed:', e));
     }
   } catch (e) {
     console.error('alarm handler error:', e);
@@ -452,9 +496,29 @@ async function updateGoalsProgress() {
   }
 }
 
+// 检查当前是否在安静时段
+function isInQuietHours(preferences) {
+  const start = preferences.quietHoursStart;
+  const end = preferences.quietHoursEnd;
+  if (!start || !end) return false;
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const [startH, startM] = start.split(':').map(Number);
+  const [endH, endM] = end.split(':').map(Number);
+  const startMinutes = startH * 60 + startM;
+  const endMinutes = endH * 60 + endM;
+  if (startMinutes <= endMinutes) {
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  }
+  // 跨午夜（如 23:00 - 7:00）
+  return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+}
+
 async function showNotification(type, message) {
   try {
     const preferences = await getPreferences();
+    // 安静时段跳过所有通知
+    if (isInQuietHours(preferences)) return;
     // 通知系统开关是全局的，干预通知也受此控制
     if (!preferences.notificationsEnabled) {
       console.warn('showNotification: 通知已禁用, 跳过', type, message);

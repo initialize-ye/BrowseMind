@@ -244,6 +244,11 @@ function applyPreferencesToForm(preferences) {
   document.getElementById('domainBlocklistInput').value = preferences.domainBlocklist || '';
   document.getElementById('categoryTimeLimitsInput').value = preferences.categoryTimeLimits || '';
   document.getElementById('interventionCooldownInput').value = preferences.interventionCooldownMinutes;
+  document.getElementById('quietHoursStartInput').value = preferences.quietHoursStart || '';
+  document.getElementById('quietHoursEndInput').value = preferences.quietHoursEnd || '';
+  document.getElementById('focusDurationsInput').value = preferences.focusDurations || '25,45,60';
+  document.getElementById('dailySummaryEnabledInput').checked = Boolean(preferences.dailySummaryEnabled);
+  document.getElementById('dailySummaryHourInput').value = preferences.dailySummaryHour || 21;
 }
 function updateInterventionWarning() {
   const warnEl = document.getElementById('interventionWarning');
@@ -273,7 +278,12 @@ function readPreferencesFromForm() {
     domainAllowlist: document.getElementById('domainAllowlistInput').value.trim(),
     domainBlocklist: document.getElementById('domainBlocklistInput').value.trim(),
     categoryTimeLimits: document.getElementById('categoryTimeLimitsInput').value.trim(),
-    interventionCooldownMinutes: Math.max(1, Number(document.getElementById('interventionCooldownInput').value || 30))
+    interventionCooldownMinutes: Math.max(1, Number(document.getElementById('interventionCooldownInput').value || 30)),
+    quietHoursStart: document.getElementById('quietHoursStartInput').value || '',
+    quietHoursEnd: document.getElementById('quietHoursEndInput').value || '',
+    focusDurations: document.getElementById('focusDurationsInput').value.trim() || '25,45,60',
+    dailySummaryEnabled: document.getElementById('dailySummaryEnabledInput').checked,
+    dailySummaryHour: Math.max(0, Math.min(23, Number(document.getElementById('dailySummaryHourInput').value || 21)))
   };
 }
 async function initDataSync() {
@@ -896,8 +906,9 @@ function renderFocusHistory(sessions) {
   container.innerHTML = `<div style="font-size:12px;font-weight:600;margin-bottom:6px;">最近会话</div>${html}`;
 }
 
-function showFocusDurationPicker() {
-  const durations = [25, 45, 60];
+async function showFocusDurationPicker() {
+  const preferences = await getPreferences();
+  const durations = (preferences.focusDurations || '25,45,60').split(/[,，]/).map(s => parseInt(s.trim())).filter(n => n > 0 && n <= 240);
   const infoEl = document.getElementById('focusSessionInfo');
   infoEl.style.display = 'block';
   infoEl.innerHTML = `<div style="font-size:12px;margin-bottom:8px;">选择专注时长</div><div class="button-row compact">${durations.map(m => `<button class="ghost focus-duration-pick" data-minutes="${m}" style="font-size:12px;">${m} 分钟</button>`).join('')}</div>`;

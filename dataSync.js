@@ -16,7 +16,12 @@ const DEFAULT_PREFERENCES = {
   domainAllowlist: '',
   domainBlocklist: '',
   categoryTimeLimits: '',
-  interventionCooldownMinutes: 30
+  interventionCooldownMinutes: 30,
+  quietHoursStart: '',
+  quietHoursEnd: '',
+  focusDurations: '25,45,60',
+  dailySummaryEnabled: false,
+  dailySummaryHour: 21
 };
 
 // 模块级缓存：避免每次调用都重新计算 Object.keys
@@ -41,7 +46,12 @@ async function getPreferences() {
     domainAllowlist: stored.domainAllowlist != null ? stored.domainAllowlist : defaults.domainAllowlist,
     domainBlocklist: stored.domainBlocklist != null ? stored.domainBlocklist : defaults.domainBlocklist,
     categoryTimeLimits: stored.categoryTimeLimits != null ? stored.categoryTimeLimits : defaults.categoryTimeLimits,
-    interventionCooldownMinutes: stored.interventionCooldownMinutes != null ? Number(stored.interventionCooldownMinutes) : defaults.interventionCooldownMinutes
+    interventionCooldownMinutes: stored.interventionCooldownMinutes != null ? Number(stored.interventionCooldownMinutes) : defaults.interventionCooldownMinutes,
+    quietHoursStart: stored.quietHoursStart != null ? stored.quietHoursStart : defaults.quietHoursStart,
+    quietHoursEnd: stored.quietHoursEnd != null ? stored.quietHoursEnd : defaults.quietHoursEnd,
+    focusDurations: stored.focusDurations != null ? stored.focusDurations : defaults.focusDurations,
+    dailySummaryEnabled: stored.dailySummaryEnabled != null ? stored.dailySummaryEnabled : defaults.dailySummaryEnabled,
+    dailySummaryHour: stored.dailySummaryHour != null ? Number(stored.dailySummaryHour) : defaults.dailySummaryHour
   };
 }
 

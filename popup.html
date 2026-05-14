@@ -582,6 +582,11 @@
       <p class="subtitle">浏览行为分析</p>
     </header>
 
+    <div id="currentSiteBar" style="display:none;padding:8px 12px;margin-bottom:8px;background:var(--surface-2);border-radius:8px;font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+      <span id="currentSiteName" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;"></span>
+      <span id="currentSiteTime" style="color:var(--muted);font-variant-numeric:tabular-nums;"></span>
+    </div>
+
     <div id="loading" class="loading">
       <div class="spinner"></div>
       <p id="loadingMsg" style="font-size:13px;">正在唤醒分析引擎...</p>

@@ -55,22 +55,23 @@ document.getElementById('focusStopBtn').addEventListener('click', stopFocusFromP
 
 let _popupFocusTimer = null;
 
-function showFocusPicker() {
+async function showFocusPicker() {
   const btn = document.getElementById('focusBtn');
   if (btn.dataset.picking) {
     btn.dataset.picking = '';
     btn.textContent = '专注';
     return;
   }
+  const preferences = await getPreferences();
+  const durations = (preferences.focusDurations || '25,45,60').split(/[,，]/).map(s => s.trim()).filter(Boolean);
   btn.dataset.picking = '1';
-  btn.textContent = '25 / 45 / 60';
-  // 简单实现：直接弹出选择
-  const minutes = prompt('专注时长（分钟）：25、45 或 60', '25');
+  btn.textContent = durations.join(' / ');
+  const minutes = prompt(`专注时长（分钟）：${durations.join('、')}`, durations[0]);
   btn.dataset.picking = '';
   btn.textContent = '专注';
   if (!minutes) return;
   const m = parseInt(minutes, 10);
-  if (![25, 45, 60].includes(m)) return;
+  if (!m || m <= 0 || m > 240) return;
   startFocusFromPopup(m);
 }
 
@@ -131,6 +132,39 @@ async function loadFocusStatus() {
   }
 }
 
+// 当前站点追踪
+let _siteTrackerTimer = null;
+function updateCurrentSite() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const bar = document.getElementById('currentSiteBar');
+    const nameEl = document.getElementById('currentSiteName');
+    const timeEl = document.getElementById('currentSiteTime');
+    if (!bar || !tabs || !tabs[0] || !tabs[0].url) {
+      if (bar) bar.style.display = 'none';
+      return;
+    }
+    const tab = tabs[0];
+    try {
+      const url = new URL(tab.url);
+      if (url.protocol === 'chrome:' || url.protocol === 'chrome-extension:') {
+        bar.style.display = 'none';
+        return;
+      }
+      const domain = url.hostname.replace(/^www\./, '');
+      nameEl.textContent = domain;
+      bar.style.display = 'flex';
+
+      // 从 background 获取当前标签停留时间
+      chrome.runtime.sendMessage({ action: 'focusStatus' }, res => {
+        if (chrome.runtime.lastError) return;
+        // 显示域名即可，时长由 background 追踪
+      });
+    } catch {
+      bar.style.display = 'none';
+    }
+  });
+}
+
 const loadingMessages = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
 const goalTypeNames = { daily_learning: '学习时长', daily_entertainment: '娱乐限制', daily_coding: '编程时长', daily_social: '社交限制' };
 let _loadingMsgTimer = null;
@@ -163,6 +197,9 @@ async function loadData() {
     } else {
       html.removeAttribute('data-theme');
     }
+    updateCurrentSite();
+    clearInterval(_siteTrackerTimer);
+    _siteTrackerTimer = setInterval(updateCurrentSite, 5000);
     const browsingData = storage.browsingData || [];
 
     if (browsingData.length === 0) {
