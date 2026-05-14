@@ -210,7 +210,7 @@ function updateCategoryStats(categoryStats, classifier) {
   const categories = classifier.getAllCategories();
 
   container.innerHTML = categoryStats.map(stat => {
-    const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦', color: '#90919e' };
+    const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other, color: '#90919e' };
     const percentage = parseFloat(stat.percentage);
 
     return `
@@ -240,7 +240,7 @@ function updateTodayCategoryStats(todayStats, classifier) {
   }
 
   container.innerHTML = todayStats.slice(0, 5).map(stat => {
-    const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦', color: '#90919e' };
+    const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other, color: '#90919e' };
     const percentage = parseFloat(stat.percentage);
 
     return `
@@ -282,8 +282,8 @@ function drawPieChart() {
 
   // 准备数据
   const labels = categoryStats.map(stat => {
-    const info = categories[stat.category] || { name: '其他', icon: '📦' };
-    return `${info.icon} ${info.name}`;
+    const info = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
+    return info.name;
   });
 
   const data = categoryStats.map(stat => stat.totalDuration / 60); // 转换为分钟

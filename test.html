@@ -17,6 +17,7 @@
       color: #667eea;
       margin-bottom: 30px;
     }
+    .cat-icon { width: 16px; height: 16px; vertical-align: -2px; margin-right: 2px; }
 
     .test-section {
       background: white;
@@ -274,10 +275,10 @@
       const categories = classifier.getAllCategories();
 
       statsGrid.innerHTML = categoryStats.map(stat => {
-        const categoryInfo = categories[stat.category] || { name: '其他', icon: '📦' };
+        const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
         return `
           <div class="stat-card">
-            <div style="font-size: 32px; margin-bottom: 8px;">${categoryInfo.icon}</div>
+            <div style="margin-bottom: 8px;">${categoryInfo.icon.replace('class="cat-icon"', 'class="cat-icon" style="width:32px;height:32px;"')}</div>
             <div class="stat-value">${stat.percentage}%</div>
             <div class="stat-label">${categoryInfo.name}</div>
             <div style="font-size: 11px; color: #999; margin-top: 4px;">
@@ -291,7 +292,7 @@
       const tbody = document.getElementById('resultsBody');
       tbody.innerHTML = domainStats.slice(0, 20).map(stat => {
         const category = classifier.classify(stat.domain, stat.titles[0]);
-        const categoryInfo = categories[category] || { name: '其他', icon: '📦' };
+        const categoryInfo = categories[category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
 
         return `
           <tr>
@@ -320,8 +321,8 @@
 
       // 饼图数据
       const pieLabels = categoryStats.map(stat => {
-        const info = categories[stat.category] || { name: '其他', icon: '📦' };
-        return `${info.icon} ${info.name}`;
+        const info = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
+        return info.name;
       });
 
       const pieData = categoryStats.map(stat => stat.totalDuration / 60);

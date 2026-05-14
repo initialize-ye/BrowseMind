@@ -293,7 +293,7 @@ function renderOverrideRules() {
     const classifier = new WebsiteClassifier();
     const categories = classifier.getAllCategories();
     container.innerHTML = entries.map(([domain, category]) => {
-      const info = categories[category] || { name: '其他', icon: '📦' };
+      const info = categories[category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
       const encDomain = domain.replace(/"/g, '&quot;');
       return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain)}</div><div class="domain-meta">${info.icon} ${escapeHtml(info.name)}</div></div><button class="danger" data-override-remove="${encDomain}">移除</button></div>`;
     }).join('');
@@ -411,7 +411,7 @@ function renderCategoryList(categoryStats, classifier) {
   }
   const categories = classifier.getAllCategories();
   container.innerHTML = categoryStats.map((stat, index) => {
-    const info = categories[stat.category] || { name: '其他', icon: '◇' };
+    const info = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
     const percentage = Number(stat.percentage || 0);
     return `<div class="category-row"><div><strong>${info.icon} ${escapeHtml(info.name)}</strong><div class="category-meta">${stat.visits} 次</div></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(percentage, 100)}%; background:${palette[index % palette.length]}"></div></div><div class="category-meta">${percentage.toFixed(1)}%</div></div>`;
   }).join('');

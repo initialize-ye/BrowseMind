@@ -104,12 +104,26 @@ class DataProcessor {
  * 网站分类器 - 基于规则的分类系统
  */
 class WebsiteClassifier {
+  // 分类 SVG 图标（16×16，currentColor 继承文字颜色）
+  static SVG = {
+    learning: `<svg class="cat-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12.5V3a1 1 0 011-1h4.5L12 6.5V12.5"/><path d="M7.5 2v4.5H12"/><path d="M4.5 9h3"/><path d="M4.5 11.5h5"/></svg>`,
+    coding: `<svg class="cat-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4L1.5 8L5 12"/><path d="M11 4l3.5 4-3.5 4"/><path d="M9.5 2.5L6.5 13.5"/></svg>`,
+    entertainment: `<svg class="cat-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M6.5 5.5l4 2.5-4 2.5V5.5z" fill="currentColor" stroke="none"/></svg>`,
+    social: `<svg class="cat-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h12v8H6L2 14V3z"/></svg>`,
+    tools: `<svg class="cat-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L2 6l3 3-1.5 4.5L8 10l4.5 1.5L14 7l-4-4"/><circle cx="11" cy="5" r="1" fill="currentColor" stroke="none"/></svg>`,
+    other: `<svg class="cat-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="12" height="10" rx="1"/><path d="M5 4V2.5A1.5 1.5 0 016.5 1h3A1.5 1.5 0 0111 2.5V4"/><path d="M2 8h12"/></svg>`
+  };
+
+  static iconFor(category) {
+    return WebsiteClassifier.SVG[category] || WebsiteClassifier.SVG.other;
+  }
+
   constructor(overrides = {}) {
     this.overrides = overrides; // { normalizedDomain: category, ... }
     this.rules = {
       learning: {
         name: '学习',
-        icon: '📚',
+        icon: WebsiteClassifier.SVG.learning,
         domains: [
           'wikipedia.org', 'wikihow.com', 'zhihu.com', 'quora.com', 'stackoverflow.com',
           'medium.com', 'dev.to', 'hashnode.dev', 'csdn.net', 'juejin.cn',
@@ -132,7 +146,7 @@ class WebsiteClassifier {
       },
       coding: {
         name: '编程',
-        icon: '💻',
+        icon: WebsiteClassifier.SVG.coding,
         domains: [
           'github.com', 'gitlab.com', 'bitbucket.org', 'gitee.com', 'coding.net',
           'leetcode.com', 'leetcode.cn', 'hackerrank.com', 'codewars.com', 'codeforces.com',
@@ -156,7 +170,7 @@ class WebsiteClassifier {
       },
       entertainment: {
         name: '娱乐',
-        icon: '🎮',
+        icon: WebsiteClassifier.SVG.entertainment,
         domains: [
           'youtube.com', 'youtu.be', 'bilibili.com', 'douyin.com', 'tiktok.com',
           'netflix.com', 'iqiyi.com', 'youku.com', 'v.qq.com', 'mgtv.com', 'twitch.tv',
@@ -177,7 +191,7 @@ class WebsiteClassifier {
       },
       social: {
         name: '社交',
-        icon: '💬',
+        icon: WebsiteClassifier.SVG.social,
         domains: [
           'twitter.com', 'x.com', 'facebook.com', 'instagram.com', 'threads.net',
           'weibo.com', 'douban.com', 'xiaohongshu.com', 'reddit.com', 'v2ex.com',
@@ -198,7 +212,7 @@ class WebsiteClassifier {
       },
       tools: {
         name: '工具',
-        icon: '🔧',
+        icon: WebsiteClassifier.SVG.tools,
         domains: [
           'google.com', 'baidu.com', 'bing.com', 'duckduckgo.com', 'gmail.com',
           'outlook.com', 'mail.qq.com', 'notion.so', 'trello.com', 'asana.com',
@@ -387,14 +401,14 @@ class WebsiteClassifier {
 
   // 获取分类信息
   getCategoryInfo(category) {
-    return this.rules[category] || { name: '其他', icon: '📦' };
+    return this.rules[category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
   }
 
   // 获取所有分类
   getAllCategories() {
     return {
       ...this.rules,
-      other: { name: '其他', icon: '📦', domains: [], strongKeywords: [], weakKeywords: [] }
+      other: { name: '其他', icon: WebsiteClassifier.SVG.other, domains: [], strongKeywords: [], weakKeywords: [] }
     };
   }
 }
