@@ -49,6 +49,24 @@ function escapeHtml(text) {
   return (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// 数据验证：确保浏览记录数组有效
+function validateBrowsingData(data) {
+  if (!Array.isArray(data)) return [];
+  return data.filter(r => r && typeof r === 'object' && r.url && r.visitTime);
+}
+
+// 带重试的 fetch 封装
+async function fetchWithRetry(url, options = {}, maxRetries = 2) {
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      if (i === maxRetries) throw error;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+}
+
 function formatDuration(seconds) {
   const total = Math.floor(seconds || 0);
   if (total < 60) return `${total}秒`;
@@ -120,7 +138,7 @@ class DataSync {
       console.log(`上传数据: ${records.length} 条记录`);
 
       const authHeaders = await this._getAuthHeaders();
-      const response = await fetch(`${this.apiBaseUrl}/api/upload`, {
+      const response = await fetchWithRetry(`${this.apiBaseUrl}/api/upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

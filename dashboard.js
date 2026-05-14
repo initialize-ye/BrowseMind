@@ -945,7 +945,7 @@ async function refreshInsights() {
 
 async function loadAnalytics() {
   const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback', 'analysisDays']);
-  const browsingData = storage.browsingData || [];
+  const browsingData = validateBrowsingData(storage.browsingData);
   if (!browsingData.length) {
     renderMetrics([]);
     renderCategoryList([], new WebsiteClassifier());
