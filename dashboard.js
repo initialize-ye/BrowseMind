@@ -1462,4 +1462,16 @@ window.addEventListener('beforeunload', () => {
   if (trendChart) { trendChart.destroy(); trendChart = null; }
   if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
   if (attentionChart) { attentionChart.destroy(); attentionChart = null; }
+  clearInterval(_focusTimer);
+  clearTimeout(_autoSaveTimer);
 });
+
+// 定期清理过期缓存（每 5 分钟）
+setInterval(() => {
+  _connectionCache = { result: null, time: 0 };
+  // 清理过大的域名列表缓存
+  if (_allDomains.length > 500) {
+    _allDomains = _allDomains.slice(0, 200);
+    _domainPage = 1;
+  }
+}, 5 * 60 * 1000);
