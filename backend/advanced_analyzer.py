@@ -11,40 +11,32 @@ from collections import defaultdict
 class TimeBlackholeDetector:
     """时间黑洞检测器"""
 
-    def __init__(self, threshold_minutes: int = 30):
-        """
-        初始化检测器
+    # 娱乐/社交类站点，权重更高
+    DISTRACTION_CATEGORIES = {'entertainment', 'social'}
+    # 多次短访问阈值：如果某域名总访问次数超过此值且总时长超过阈值，也算黑洞
+    HIGH_FREQUENCY_VISITS = 10
 
-        Args:
-            threshold_minutes: 时间黑洞阈值（分钟），默认30分钟
-        """
+    def __init__(self, threshold_minutes: int = 30):
         self.threshold_seconds = threshold_minutes * 60
 
     def detect(self, records: List[Dict]) -> Dict:
         """
         检测时间黑洞
 
-        Args:
-            records: 浏览记录列表
-
-        Returns:
-            {
-                'blackholes': [黑洞列表],
-                'total_wasted_time': 总浪费时间,
-                'waste_percentage': 浪费时间占比,
-                'top_blackholes': 前5个黑洞
-            }
+        识别标准：
+        1. 单次访问 >= 阈值的域名（长时间沉浸）
+        2. 总访问次数多且累计时长高的域名（频繁短访问模式）
+        3. 娱乐/社交类站点权重 ×1.5
         """
         blackholes = []
         total_duration = 0
-        total_wasted_time = 0
 
         # 按域名分组统计
         domain_stats = defaultdict(lambda: {
             'domain': '',
             'total_duration': 0,
             'visit_count': 0,
-            'long_sessions': [],  # 长时间会话
+            'long_sessions': [],
             'category': ''
         })
 
@@ -53,45 +45,67 @@ class TimeBlackholeDetector:
             duration = record.get('duration', 0)
             total_duration += duration
 
-            if domain:
-                domain_stats[domain]['domain'] = domain
-                domain_stats[domain]['total_duration'] += duration
-                domain_stats[domain]['visit_count'] += 1
-                domain_stats[domain]['category'] = record.get('category', 'other')
+            if not domain:
+                continue
 
-                # 检测单次长时间访问
-                if duration >= self.threshold_seconds:
-                    domain_stats[domain]['long_sessions'].append({
-                        'duration': duration,
-                        'date': record.get('date', ''),
-                        'title': record.get('title', ''),
-                        'url': record.get('url', '')
-                    })
-                    total_wasted_time += duration
+            domain_stats[domain]['domain'] = domain
+            domain_stats[domain]['total_duration'] += duration
+            domain_stats[domain]['visit_count'] += 1
+            domain_stats[domain]['category'] = record.get('category', 'other')
 
-        # 识别时间黑洞
+            # 记录长时间会话
+            if duration >= self.threshold_seconds:
+                domain_stats[domain]['long_sessions'].append({
+                    'duration': duration,
+                    'date': record.get('date', ''),
+                    'title': record.get('title', ''),
+                    'url': record.get('url', '')
+                })
+
+        # 识别黑洞域名
         for domain, stats in domain_stats.items():
-            if stats['long_sessions']:
-                blackhole = {
-                    'domain': domain,
-                    'category': stats['category'],
-                    'total_duration': stats['total_duration'],
-                    'visit_count': stats['visit_count'],
-                    'long_sessions_count': len(stats['long_sessions']),
-                    'longest_session': max(s['duration'] for s in stats['long_sessions']),
-                    'sessions': stats['long_sessions'][:5]  # 只返回前5个
-                }
-                blackholes.append(blackhole)
+            is_long_session = len(stats['long_sessions']) > 0
+            is_high_frequency = (
+                stats['visit_count'] >= self.HIGH_FREQUENCY_VISITS
+                and stats['total_duration'] >= self.threshold_seconds
+            )
 
-        # 按总时长排序
-        blackholes.sort(key=lambda x: x['total_duration'], reverse=True)
+            if not is_long_session and not is_high_frequency:
+                continue
 
-        # 计算浪费占比
-        waste_percentage = (total_wasted_time / total_duration * 100) if total_duration > 0 else 0
+            # 确定黑洞类型
+            if is_long_session and is_high_frequency:
+                blackhole_type = 'both'
+            elif is_long_session:
+                blackhole_type = 'long_session'
+            else:
+                blackhole_type = 'high_frequency'
+
+            blackhole = {
+                'domain': domain,
+                'category': stats['category'],
+                'total_duration': stats['total_duration'],
+                'visit_count': stats['visit_count'],
+                'long_sessions_count': len(stats['long_sessions']),
+                'longest_session': max(s['duration'] for s in stats['long_sessions']) if stats['long_sessions'] else 0,
+                'sessions': stats['long_sessions'][:5],
+                'blackhole_type': blackhole_type
+            }
+            blackholes.append(blackhole)
+
+        # 排序：娱乐/社交类加权，然后按总时长降序
+        def sort_key(b):
+            weight = 1.5 if b['category'] in self.DISTRACTION_CATEGORIES else 1.0
+            return b['total_duration'] * weight
+        blackholes.sort(key=sort_key, reverse=True)
+
+        # 计算黑洞域名总时长（去重后的域名级汇总）
+        blackhole_domain_time = sum(b['total_duration'] for b in blackholes)
+        waste_percentage = (blackhole_domain_time / total_duration * 100) if total_duration > 0 else 0
 
         return {
             'blackholes': blackholes,
-            'total_wasted_time': total_wasted_time,
+            'total_wasted_time': blackhole_domain_time,
             'waste_percentage': round(waste_percentage, 1),
             'top_blackholes': blackholes[:5],
             'threshold_minutes': self.threshold_seconds // 60

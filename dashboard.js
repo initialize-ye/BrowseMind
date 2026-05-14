@@ -505,12 +505,19 @@ function renderBlackholes(blackholes) {
     container.innerHTML = '<div class="empty">没有明显的时间黑洞 — 你的浏览节奏很健康。</div>';
     return;
   }
-  const items = blackholes.top_blackholes.slice(0, 5).map((item, i) => {
+  const catNames = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具', other: '其他' };
+  const typeLabels = { long_session: '长时间沉浸', high_frequency: '频繁访问', both: '沉浸 + 频繁' };
+  const items = blackholes.top_blackholes.slice(0, 5).map(item => {
     const pct = blackholes.total_wasted_time > 0 ? Math.round(item.total_duration / blackholes.total_wasted_time * 100) : 0;
-    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(item.domain)}</div><div class="domain-meta">${item.long_sessions_count} 次长访问 · 最长 ${formatDuration(item.longest_session)}</div></div><div style="text-align:right"><div class="domain-meta">${formatDuration(item.total_duration)}</div><div class="domain-meta" style="font-size:11px">${pct}%</div></div></div>`;
+    const catName = catNames[item.category] || '其他';
+    const typeLabel = typeLabels[item.blackhole_type] || '';
+    const meta = item.blackhole_type === 'high_frequency'
+      ? `${item.visit_count} 次访问 · 累计 ${formatDuration(item.total_duration)}`
+      : `${item.long_sessions_count} 次长访问 · 最长 ${formatDuration(item.longest_session)}`;
+    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(item.domain)} <span style="font-size:11px;font-weight:500;color:var(--muted);background:var(--surface-2);padding:1px 6px;border-radius:4px;">${catName}</span> <span style="font-size:11px;font-weight:500;color:var(--yellow);">${typeLabel}</span></div><div class="domain-meta">${meta}</div></div><div style="text-align:right"><div class="domain-meta">${formatDuration(item.total_duration)}</div><div class="domain-meta" style="font-size:11px">${pct}%</div></div></div>`;
   }).join('');
   const wp = Number(blackholes.waste_percentage || 0).toFixed(1);
-  container.innerHTML = `<div class="status-note danger"><strong>${wp}%</strong> 的时间陷入黑洞 · 共浪费 ${formatDuration(blackholes.total_wasted_time)}</div>${items}`;
+  container.innerHTML = `<div class="status-note danger"><strong>${wp}%</strong> 的时间陷入黑洞 · 共 ${formatDuration(blackholes.total_wasted_time)}</div>${items}`;
 }
 function renderAttentionCurve(attentionCurve) {
   const statsContainer = document.getElementById('attentionStats');

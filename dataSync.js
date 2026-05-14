@@ -233,7 +233,7 @@ class DataSync {
   async checkConnection() {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
+      const timer = setTimeout(() => controller.abort(), 8000);
       const response = await fetch(`${this.apiBaseUrl}/`, {
         method: 'GET',
         signal: controller.signal
@@ -241,7 +241,7 @@ class DataSync {
       clearTimeout(timer);
       return response.ok;
     } catch (error) {
-      console.error('服务器连接失败:', error);
+      console.error('服务器连接失败:', error.message || error);
       return false;
     }
   }

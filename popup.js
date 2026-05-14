@@ -763,25 +763,32 @@ function displayBlackholes(blackholes) {
     return;
   }
 
+  const catNames = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具', other: '其他' };
+  const typeLabels = { long_session: '沉浸', high_frequency: '频繁', both: '沉浸+频繁' };
   const wastePercentage = blackholes.waste_percentage;
   const totalWasted = formatDuration(blackholes.total_wasted_time);
 
   let html = `
     <div style="text-align: center; margin-bottom: 12px; padding: 8px; background: var(--red-soft); border-radius: 8px;">
       <div style="font-size: 20px; font-weight: 700; color: var(--red);">${wastePercentage}%</div>
-      <div style="font-size: 11px; color: var(--muted);">浪费时间占比 · 共 ${totalWasted}</div>
+      <div style="font-size: 11px; color: var(--muted);">黑洞时间占比 · 共 ${totalWasted}</div>
     </div>
   `;
 
   html += blackholes.top_blackholes.slice(0, 3).map(bh => {
+    const catName = catNames[bh.category] || '其他';
+    const typeLabel = typeLabels[bh.blackhole_type] || '';
+    const meta = bh.blackhole_type === 'high_frequency'
+      ? `${bh.visit_count} 次访问 · 累计 ${formatDuration(bh.total_duration)}`
+      : `${bh.long_sessions_count} 次长时间访问 · 最长 ${formatDuration(bh.longest_session)}`;
     return `
       <div class="blackhole-item">
         <div class="blackhole-header">
-          <span class="blackhole-domain">${escapeHtml(bh.domain)}</span>
+          <span class="blackhole-domain">${escapeHtml(bh.domain)} <span style="font-size:10px;color:var(--muted);background:var(--surface-2);padding:1px 5px;border-radius:3px;">${catName}</span> <span style="font-size:10px;color:var(--yellow);">${typeLabel}</span></span>
           <span class="blackhole-duration">${formatDuration(bh.total_duration)}</span>
         </div>
         <div class="blackhole-meta">
-          ${bh.long_sessions_count} 次长时间访问 · 最长 ${formatDuration(bh.longest_session)}
+          ${meta}
         </div>
       </div>
     `;
