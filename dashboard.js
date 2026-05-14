@@ -93,7 +93,10 @@ async function loadTheme() {
   const { themeMode = 'light' } = await chrome.storage.local.get('themeMode');
   applyTheme(themeMode);
   // Listen for system theme changes
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme(themeMode));
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
+    const { themeMode: current = 'light' } = await chrome.storage.local.get('themeMode');
+    if (current === 'system') applyTheme('system');
+  });
 }
 
 function setButtonBusy(button, busy, busyText) {
@@ -770,6 +773,7 @@ async function loadFocusStats() {
       const timer = setTimeout(() => resolve({ active: false }), 2000);
       chrome.runtime.sendMessage({ action: 'focusStatus' }, res => {
         clearTimeout(timer);
+        if (chrome.runtime.lastError) console.warn('focusStatus:', chrome.runtime.lastError.message);
         resolve(res?.status || { active: false });
       });
     });
@@ -829,15 +833,13 @@ function renderFocusSessionInfo(status) {
     document.getElementById('focusStopBtn').addEventListener('click', stopFocusSession);
 
     // 倒计时
-    clearInterval(_focusTimer);
-    _focusTimer = setInterval(() => {
-      loadFocusStats();
-    }, 1000);
+    clearTimeout(_focusTimer);
+    _focusTimer = setTimeout(loadFocusStats, 1000);
   } else {
     infoEl.style.display = 'none';
     startBtn.disabled = false;
     startBtn.textContent = '开始专注';
-    clearInterval(_focusTimer);
+    clearTimeout(_focusTimer);
     _focusTimer = null;
   }
 }
@@ -1144,7 +1146,7 @@ async function generateShareCard() {
 
   // 分类饼图
   const cats = Object.entries(catStats).sort((a, b) => b[1] - a[1]);
-  const palette = [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
+  const sharePalette = [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
   const pieX = 480, pieY = 220, pieR = 70;
   let startAngle = -Math.PI / 2;
   const totalCat = cats.reduce((s, [, d]) => s + d, 0) || 1;
@@ -1155,7 +1157,7 @@ async function generateShareCard() {
     ctx.beginPath();
     ctx.moveTo(pieX, pieY);
     ctx.arc(pieX, pieY, pieR, startAngle, startAngle + sliceAngle);
-    ctx.fillStyle = palette[i % palette.length];
+    ctx.fillStyle = sharePalette[i % sharePalette.length];
     ctx.fill();
     startAngle += sliceAngle;
   }
@@ -1166,7 +1168,7 @@ async function generateShareCard() {
     const [cat, duration] = cats[i];
     const catName = WebsiteClassifier.CATEGORY_NAMES[cat] || cat;
     const pct = Math.round(duration / totalCat * 100);
-    ctx.fillStyle = palette[i % palette.length];
+    ctx.fillStyle = sharePalette[i % sharePalette.length];
     ctx.fillRect(24, labelY - 8, 10, 10);
     ctx.fillStyle = text;
     ctx.font = '12px system-ui, sans-serif';

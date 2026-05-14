@@ -58,14 +58,24 @@ function showFocusPicker() {
 
 async function startFocusFromPopup(minutes) {
   await new Promise(resolve => {
-    chrome.runtime.sendMessage({ action: 'startFocus', durationMinutes: minutes }, resolve);
+    const timer = setTimeout(() => resolve(null), 2000);
+    chrome.runtime.sendMessage({ action: 'startFocus', durationMinutes: minutes }, res => {
+      clearTimeout(timer);
+      if (chrome.runtime.lastError) console.warn('sendMessage:', chrome.runtime.lastError.message);
+      resolve(res);
+    });
   });
   loadFocusStatus();
 }
 
 async function stopFocusFromPopup() {
   await new Promise(resolve => {
-    chrome.runtime.sendMessage({ action: 'stopFocus' }, resolve);
+    const timer = setTimeout(() => resolve(null), 2000);
+    chrome.runtime.sendMessage({ action: 'stopFocus' }, res => {
+      clearTimeout(timer);
+      if (chrome.runtime.lastError) console.warn('sendMessage:', chrome.runtime.lastError.message);
+      resolve(res);
+    });
   });
   loadFocusStatus();
 }
@@ -93,12 +103,12 @@ async function loadFocusStatus() {
     const sec = remaining % 60;
     text.textContent = `专注中 ${min}:${String(sec).padStart(2, '0')} · 打断 ${status.interruptions} 次`;
     focusBtn.disabled = true;
-    clearInterval(_popupFocusTimer);
-    _popupFocusTimer = setInterval(loadFocusStatus, 1000);
+    clearTimeout(_popupFocusTimer);
+    _popupFocusTimer = setTimeout(loadFocusStatus, 1000);
   } else {
     bar.style.display = 'none';
     focusBtn.disabled = false;
-    clearInterval(_popupFocusTimer);
+    clearTimeout(_popupFocusTimer);
     _popupFocusTimer = null;
   }
 }
@@ -1139,38 +1149,6 @@ async function deleteGoal(goalId) {
   }
 }
 
-async function updateGoalsProgress() {
-  try {
-    await initDataSync();
-    const { userId } = await chrome.storage.local.get('userId');
-    if (!userId) return;
-
-    const today = new Date().toISOString().split('T')[0];
-
-    const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${userId}/update-progress?date=${encodeURIComponent(today)}`, {
-      method: 'POST'
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('更新目标进度失败:', response.status, errorText);
-      return;
-    }
-
-    const result = await response.json();
-
-    // 处理通知
-    if (result.data && result.data.notifications) {
-      result.data.notifications.forEach(notif => {
-        showNotification(notif.type, notif.message);
-      });
-    }
-
-    await loadGoals();
-  } catch (error) {
-    console.error('更新目标进度失败:', error);
-  }
-}
 
 function showNotification(type, message) {
   // MV3 popup 无法直接调用 chrome.notifications，委托 background 代发

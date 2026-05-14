@@ -405,10 +405,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     } else if (alarm.name === 'updateGoalsProgress') {
       updateGoalsProgress().catch(e => console.error('updateGoalsProgress failed:', e));
     } else if (alarm.name === 'syncBrowsingData') {
-      syncLocalDataInBackground('alarm');
+      syncLocalDataInBackground('alarm').catch(e => console.error('syncBrowsingData failed:', e));
     } else if (alarm.name === 'focusSessionEnd') {
-      endFocusSession(true);
-      showNotification('info', '专注会话完成！你做到了。');
+      endFocusSession(true).catch(e => console.error('endFocusSession failed:', e));
+      showNotification('info', '专注会话完成！你做到了。').catch(e => console.error('showNotification failed:', e));
     }
   } catch (e) {
     console.error('alarm handler error:', e);
@@ -639,17 +639,21 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 // 监听 popup/dashboard 发来的消息
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'showNotification') {
-    showNotification(msg.type, msg.message);
-    sendResponse({ ok: true });
+    showNotification(msg.type, msg.message)
+      .then(() => sendResponse({ ok: true }))
+      .catch(e => sendResponse({ ok: false, error: e.message }));
+    return true;
   } else if (msg.action === 'startFocus') {
     startFocusSession(msg.durationMinutes);
     sendResponse({ ok: true, status: getFocusStatus() });
   } else if (msg.action === 'stopFocus') {
     endFocusSession(false).then(() => {
       sendResponse({ ok: true, status: getFocusStatus() });
-    });
-    return true; // async sendResponse
+    }).catch(e => sendResponse({ ok: false, error: e.message }));
+    return true;
   } else if (msg.action === 'focusStatus') {
     sendResponse({ ok: true, status: getFocusStatus() });
+  } else {
+    sendResponse({ ok: false, error: 'Unknown action: ' + msg.action });
   }
 });
