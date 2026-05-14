@@ -1344,6 +1344,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     startDashLoadingRotation();
     await loadSidebarState();
+    // 旧用户 storage 中保存了 'actions'，强制迁移到 'dashboard'
+    if (activeSidebarTab === 'actions') activeSidebarTab = 'dashboard';
     bindEvents();
     applySidebarState();
     await loadTheme();

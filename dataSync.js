@@ -256,6 +256,13 @@ class DataSync {
       // 上传到服务器
       const result = await this.uploadData(records);
 
+      // 从服务器拉取数据（补充本地可能缺失的记录）
+      try {
+        await this.pullFromServer();
+      } catch (e) {
+        console.warn('拉取服务器数据失败（不影响上传）:', e);
+      }
+
       // 记录最后同步时间
       await chrome.storage.local.set({
         lastSyncTime: Date.now()
@@ -276,6 +283,47 @@ class DataSync {
       return WebsiteClassifier.normalizeDomain(urlObj.hostname);
     } catch {
       return null;
+    }
+  }
+
+  // 从服务器拉取浏览记录，合并到本地
+  async pullFromServer() {
+    await this.initUserId();
+    const authHeaders = await this._getAuthHeaders();
+    const response = await fetchWithRetry(
+      `${this.apiBaseUrl}/api/records/${this.userId}?limit=5000`,
+      { headers: authHeaders }
+    );
+    if (!response.ok) return;
+
+    const serverRecords = await response.json();
+    if (!serverRecords || !serverRecords.length) return;
+
+    const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+    const existingKeys = new Set(browsingData.map(r => `${r.url}-${r.visitTime}`));
+    let added = 0;
+
+    for (const sr of serverRecords) {
+      const visitTime = new Date(sr.visit_time).getTime();
+      const key = `${sr.url}-${visitTime}`;
+      if (existingKeys.has(key)) continue;
+
+      browsingData.push({
+        url: sr.url,
+        title: sr.title || '',
+        domain: sr.domain || '',
+        category: sr.category || 'other',
+        visitTime,
+        duration: sr.duration || 0,
+        date: sr.date || new Date(visitTime).toISOString().split('T')[0]
+      });
+      existingKeys.add(key);
+      added++;
+    }
+
+    if (added > 0) {
+      await chrome.storage.local.set({ browsingData });
+      console.log(`从服务器拉取了 ${added} 条新记录`);
     }
   }
 
