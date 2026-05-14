@@ -154,7 +154,7 @@ function applySidebarState() {
   if (toggleButton) {
     toggleButton.setAttribute('aria-expanded', isSidebarCollapsed ? 'false' : 'true');
     toggleButton.setAttribute('aria-label', isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏');
-    toggleButton.innerHTML = isSidebarCollapsed ? WebsiteClassifier.UI_ICONS.menu : WebsiteClassifier.UI_ICONS.close;
+    toggleButton.innerHTML = WebsiteClassifier.UI_ICONS.menu;
   }
   document.querySelectorAll('[data-sidebar-tab]').forEach(button => {
     const label = button.querySelector('.sidebar-tab-label')?.textContent?.trim() || button.dataset.sidebarTab;
@@ -166,14 +166,21 @@ async function toggleSidebar() {
   isSidebarCollapsed = !isSidebarCollapsed;
   applySidebarState();
   await chrome.storage.local.set({ dashboardSidebarCollapsed: isSidebarCollapsed });
-  // Wait for CSS grid transition to fully complete (280ms) before resizing
+  // Force layout recalculation after CSS transition
+  const layout = document.querySelector('.layout');
+  if (layout) {
+    // Trigger reflow to ensure grid recalculates
+    layout.offsetHeight;
+  }
   setTimeout(() => {
+    if (layout) layout.offsetHeight;
     if (trendChart) trendChart.resize();
     if (hourlyChart) hourlyChart.resize();
-    // Second pass ensures charts pick up final layout dimensions
+    if (attentionChart) attentionChart.resize();
     requestAnimationFrame(() => {
       if (trendChart) trendChart.resize();
       if (hourlyChart) hourlyChart.resize();
+      if (attentionChart) attentionChart.resize();
     });
   }, 320);
 }
