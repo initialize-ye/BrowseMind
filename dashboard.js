@@ -865,7 +865,114 @@ function showSettingsStatus(text) {
 }
 async function resetApiBaseUrl() { const button = document.getElementById('resetApiBtn'); setButtonBusy(button, true, '恢复中...'); try { await chrome.storage.local.set({ ...DEFAULT_PREFERENCES }); await initDataSync(); await loadPreferences(); setNote('已恢复默认插件设置', 'success'); log('已恢复默认插件设置'); await refreshDashboard(); } finally { setButtonBusy(button, false); } }
 async function testApiConnection() { const button = document.getElementById('testApiBtn'); setButtonBusy(button, true, '测试中...'); try { await initDataSync(); const connected = await dataSync.checkConnection(); _connectionCache = { result: connected, time: Date.now() }; setNote(connected ? '连接成功' : '连接失败，请检查云服务器服务', connected ? 'success' : 'danger'); log(connected ? '后端连接测试成功' : '后端连接测试失败'); } finally { setButtonBusy(button, false); } }
-async function exportJson() { const { browsingData = [] } = await chrome.storage.local.get('browsingData'); const blob = new Blob([JSON.stringify(browsingData, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `browsemind-${todayString()}.json`; a.click(); URL.revokeObjectURL(url); setNote('JSON 已导出', 'success'); log(`已导出 ${browsingData.length} 条本地记录`); }
+async function exportJson() { const { browsingData = [] } = await chrome.storage.local.get('browsingData'); const blob = new Blob([JSON.stringify(browsingData, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `browsemind-local-${todayString()}.json`; a.click(); URL.revokeObjectURL(url); setNote('本地 JSON 已导出', 'success'); log(`已导出 ${browsingData.length} 条本地记录`); }
+
+async function exportCloudData() {
+  const button = document.getElementById('exportCloudBtn');
+  setButtonBusy(button, true, '导出中...');
+  try {
+    await initDataSync();
+    if (!(await cachedCheckConnection())) {
+      setNote('后端未连接，无法导出云端数据', 'danger');
+      log('云端导出失败：后端未连接');
+      return;
+    }
+    await dataSync.initUserId();
+    const days = document.getElementById('exportDaysSelect').value;
+    const url = `${dataSync.apiBaseUrl}/api/export/${dataSync.userId}?format=json&days=${days}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`导出失败 (${response.status})`);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `browsemind-cloud-${todayString()}.json`;
+    a.click();
+    URL.revokeObjectURL(blobUrl);
+    setNote('云端数据已导出', 'success');
+    log(`云端数据已导出（${days > 0 ? days + ' 天' : '全部'}）`);
+  } catch (error) {
+    setNote(`云端导出失败：${error.message}`, 'danger');
+    log(`云端导出失败：${error.message}`);
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+function initImport() {
+  const importBtn = document.getElementById('importBtn');
+  const fileInput = document.getElementById('importFileInput');
+  importBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', handleImportFile);
+}
+
+async function handleImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fileNameEl = document.getElementById('importFileName');
+  const importNote = document.getElementById('importNote');
+  fileNameEl.textContent = file.name;
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    // 支持两种格式：纯数组（本地导出）或 { records: [...] }（云端导出）
+    let importedRecords = [];
+    let importedOverrides = null;
+    if (Array.isArray(data)) {
+      importedRecords = data;
+    } else if (data.records && Array.isArray(data.records)) {
+      importedRecords = data.records;
+      // 云端导出不包含 classificationOverrides，跳过
+    } else {
+      throw new Error('无法识别的数据格式');
+    }
+
+    if (!importedRecords.length) {
+      importNote.textContent = '文件中没有可导入的记录';
+      importNote.className = 'note visible';
+      setTimeout(() => importNote.classList.remove('visible'), 3000);
+      return;
+    }
+
+    // 合并策略：本地优先，新数据追加
+    const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+    const existingKeys = new Set(browsingData.map(r => `${r.url}-${r.visitTime}`));
+    let added = 0;
+    for (const record of importedRecords) {
+      const key = `${record.url}-${record.visitTime}`;
+      if (!existingKeys.has(key)) {
+        // 补充可能缺失的字段
+        if (!record.domain && record.url) {
+          try { record.domain = new URL(record.url).hostname.replace(/^www\./, ''); } catch {}
+        }
+        if (!record.category) record.category = 'other';
+        if (!record.date && record.visitTime) {
+          record.date = new Date(record.visitTime).toISOString().split('T')[0];
+        }
+        browsingData.push(record);
+        existingKeys.add(key);
+        added++;
+      }
+    }
+
+    await chrome.storage.local.set({ browsingData });
+    importNote.textContent = `导入完成：新增 ${added} 条，跳过 ${importedRecords.length - added} 条重复`;
+    importNote.className = 'note visible success';
+    log(`数据导入完成：+${added} / ${importedRecords.length}`);
+    setTimeout(() => importNote.classList.remove('visible'), 5000);
+    await refreshDashboard();
+  } catch (error) {
+    importNote.textContent = `导入失败：${error.message}`;
+    importNote.className = 'note visible danger';
+    log(`数据导入失败：${error.message}`);
+    setTimeout(() => importNote.classList.remove('visible'), 5000);
+  } finally {
+    e.target.value = '';
+  }
+}
+
 async function clearLocalData() { if (!confirm('确定清空本地浏览数据吗？此操作不可恢复。')) return; await chrome.storage.local.set({ browsingData: [] }); setNote('本地数据已清空', 'success'); log('本地浏览数据已清空'); await refreshDashboard(); }
 function moveSidebarTabFocus(currentTab, direction) {
   const currentIndex = SIDEBAR_TABS.indexOf(currentTab);
@@ -880,7 +987,7 @@ function moveSidebarTabFocus(currentTab, direction) {
 function bindEvents() { document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', () => {
   clearTimeout(domainFilterTimer);
   domainFilterTimer = setTimeout(renderFilteredDomains, 250);
-}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
+}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
 document.getElementById('themeToggleBtn').addEventListener('click', cycleTheme);
 document.querySelectorAll('[data-pref]').forEach(el => {
   const evt = el.type === 'checkbox' ? 'change' : (el.tagName === 'SELECT' ? 'change' : 'input');

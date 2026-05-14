@@ -5,11 +5,14 @@ BrowseMind 后端服务 - 主应用
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List
+import csv
+import io
 import json
 import os
 
@@ -725,6 +728,59 @@ async def update_goals_progress(
             "updated_count": updated_count,
             "notifications": notifications
         }
+    )
+
+
+# ==================== 数据导出 ====================
+
+@app.get("/api/export/{user_id}")
+def export_user_data(
+    user_id: str,
+    format: str = Query("json", regex="^(json|csv)$"),
+    days: int = Query(0, ge=0, description="导出天数，0=全部"),
+    db: Session = Depends(get_db)
+):
+    """导出用户全部数据（JSON 或 CSV）"""
+    query = db.query(BrowsingRecord).filter(BrowsingRecord.user_id == user_id)
+    if days > 0:
+        cutoff = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
+        query = query.filter(BrowsingRecord.date >= cutoff)
+    records = query.order_by(BrowsingRecord.visit_time.desc()).all()
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["url", "title", "domain", "category", "visit_time", "duration", "date"])
+        for r in records:
+            writer.writerow([
+                r.url, r.title or "", r.domain or "", r.category or "",
+                r.visit_time.isoformat() if r.visit_time else "",
+                r.duration or 0, r.date or ""
+        ])
+        output.seek(0)
+        filename = f"browsemind_{user_id}_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+
+    # JSON 全量导出
+    reports = db.query(AnalysisReport).filter(AnalysisReport.user_id == user_id).all()
+    goals = db.query(UserGoal).filter(UserGoal.user_id == user_id).all()
+
+    data = {
+        "exported_at": datetime.utcnow().isoformat(),
+        "user_id": user_id,
+        "records": [r.to_dict() for r in records],
+        "reports": [r.to_dict() for r in reports],
+        "goals": [g.to_dict() for g in goals],
+    }
+    filename = f"browsemind_{user_id}_{datetime.utcnow().strftime('%Y%m%d')}.json"
+    return StreamingResponse(
+        iter([json.dumps(data, ensure_ascii=False, indent=2)]),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
 
