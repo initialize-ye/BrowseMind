@@ -484,68 +484,66 @@ class WebsiteClassifier {
 class StatisticsAnalyzer {
   constructor(data) {
     this.data = data;
+    this._cache = null;
   }
 
-  // 按分类统计
-  analyzeByCategory() {
+  // 单次遍历计算所有统计（缓存结果）
+  _computeAll() {
+    if (this._cache) return this._cache;
+    const today = new Date().toISOString().split('T')[0];
     const categoryStats = {};
+    const todayCategoryStats = {};
+    const hourlyStats = Array(24).fill(0).map((_, hour) => ({ hour, duration: 0, visits: 0 }));
 
-    this.data.forEach(record => {
+    for (const record of this.data) {
       const category = record.category || 'other';
+      const duration = record.duration || 0;
+      const hour = new Date(record.visitTime).getHours();
 
+      // 分类统计
       if (!categoryStats[category]) {
-        categoryStats[category] = {
-          category,
-          visits: 0,
-          totalDuration: 0,
-          domains: new Set()
-        };
+        categoryStats[category] = { category, visits: 0, totalDuration: 0, domains: new Set() };
+      }
+      categoryStats[category].visits++;
+      categoryStats[category].totalDuration += duration;
+      categoryStats[category].domains.add(record.domain);
+
+      // 今日分类统计
+      if (record.date === today) {
+        if (!todayCategoryStats[category]) {
+          todayCategoryStats[category] = { category, visits: 0, totalDuration: 0, domains: new Set() };
+        }
+        todayCategoryStats[category].visits++;
+        todayCategoryStats[category].totalDuration += duration;
+        todayCategoryStats[category].domains.add(record.domain);
       }
 
-      categoryStats[category].visits++;
-      categoryStats[category].totalDuration += record.duration || 0;
-      categoryStats[category].domains.add(record.domain);
-    });
+      // 小时分布
+      hourlyStats[hour].duration += duration;
+      hourlyStats[hour].visits++;
+    }
 
     // 计算占比
-    const totalDuration = Object.values(categoryStats)
-      .reduce((sum, stat) => sum + stat.totalDuration, 0);
+    const totalDuration = Object.values(categoryStats).reduce((s, st) => s + st.totalDuration, 0);
+    const todayTotalDuration = Object.values(todayCategoryStats).reduce((s, st) => s + st.totalDuration, 0);
 
-    return Object.entries(categoryStats).map(([category, stat]) => ({
-      category,
-      visits: stat.visits,
-      totalDuration: stat.totalDuration,
-      percentage: totalDuration > 0 ? (stat.totalDuration / totalDuration * 100).toFixed(1) : 0,
-      uniqueDomains: stat.domains.size
-    }))
-    .sort((a, b) => b.totalDuration - a.totalDuration);
+    const format = (stats, total) => Object.entries(stats).map(([cat, st]) => ({
+      category: cat, visits: st.visits, totalDuration: st.totalDuration,
+      percentage: total > 0 ? (st.totalDuration / total * 100).toFixed(1) : 0,
+      uniqueDomains: st.domains.size
+    })).sort((a, b) => b.totalDuration - a.totalDuration);
+
+    this._cache = {
+      categoryStats: format(categoryStats, totalDuration),
+      todayStats: format(todayCategoryStats, todayTotalDuration),
+      hourlyStats
+    };
+    return this._cache;
   }
 
-  // 今日统计
-  getTodayStats() {
-    const today = new Date().toISOString().split('T')[0];
-    const todayData = this.data.filter(r => r.date === today);
-
-    const analyzer = new StatisticsAnalyzer(todayData);
-    return analyzer.analyzeByCategory();
-  }
-
-  // 获取时间分布（按小时）
-  getHourlyDistribution() {
-    const hourlyStats = Array(24).fill(0).map((_, hour) => ({
-      hour,
-      duration: 0,
-      visits: 0
-    }));
-
-    this.data.forEach(record => {
-      const hour = new Date(record.visitTime).getHours();
-      hourlyStats[hour].duration += record.duration || 0;
-      hourlyStats[hour].visits++;
-    });
-
-    return hourlyStats;
-  }
+  analyzeByCategory() { return this._computeAll().categoryStats; }
+  getTodayStats() { return this._computeAll().todayStats; }
+  getHourlyDistribution() { return this._computeAll().hourlyStats; }
 }
 
 /**

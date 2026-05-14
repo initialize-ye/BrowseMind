@@ -211,10 +211,32 @@ async function switchSidebarTab(tab, options = {}) {
     console.warn('保存标签状态失败:', e);
   }
   if (tab === 'dashboard') {
-    requestAnimationFrame(() => {
-      if (trendChart) trendChart.resize();
-      if (hourlyChart) hourlyChart.resize();
-    });
+    // 重新渲染图表（从其他标签切回时）
+    if (!trendChart || !hourlyChart) {
+      const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback', 'analysisDays']);
+      const browsingData = validateBrowsingData(storage.browsingData);
+      if (browsingData.length) {
+        const processor = new DataProcessor(browsingData);
+        const cleanedData = processor.clean().getData();
+        const classifier = new WebsiteClassifier(storage.classificationOverrides || {}, storage.classificationFeedback || {});
+        const classifiedData = classifier.classifyBatch(cleanedData);
+        const analyzer = new StatisticsAnalyzer(classifiedData);
+        const analysisDays = Number(storage.analysisDays || DEFAULT_PREFERENCES.analysisDays);
+        const dailyTrend = calculateDailyTrend(classifiedData, analysisDays);
+        const hourlyDist = analyzer.getHourlyDistribution();
+        renderTrendChart(dailyTrend);
+        renderHourlyChart(hourlyDist);
+      }
+    } else {
+      requestAnimationFrame(() => {
+        if (trendChart) trendChart.resize();
+        if (hourlyChart) hourlyChart.resize();
+      });
+    }
+  } else {
+    // 离开仪表盘标签时销毁图表释放内存
+    if (trendChart) { trendChart.destroy(); trendChart = null; }
+    if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
   }
   if (tab === 'settings') {
     try { await loadPreferences(); } catch (e) { console.warn('加载设置失败:', e); }
@@ -1054,12 +1076,14 @@ async function refreshDashboard() {
   document.getElementById('analysisWindowDesc').textContent = `${greeting} — 查看最近 ${days} 天的访问、分类、时段和高频站点。`;
   document.getElementById('weekVisitsLabel').textContent = `${days} 天访问`;
   document.getElementById('trendChartTitle').textContent = `${days} 天趋势`;
-  await loadGoals();
+
+  // 并行加载独立模块
+  const tasks = [loadGoals()];
   if (activeSidebarTab === 'insights') {
-    await loadAdvancedInsights();
-    await loadReports();
-    await loadFocusStats();
+    tasks.push(loadAdvancedInsights(), loadReports(), loadFocusStats());
   }
+  await Promise.allSettled(tasks);
+
   if (activeSidebarTab === 'settings') {
     renderOverrideRules();
   }
