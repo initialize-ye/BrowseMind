@@ -22,7 +22,7 @@ async function cachedCheckConnection() {
 }
 let trendChart = null;
 let hourlyChart = null;
-let activeSidebarTab = 'actions';
+let activeSidebarTab = 'dashboard';
 let isSidebarCollapsed = false;
 let attentionChart = null;
 let currentClassifiedData = [];
@@ -144,7 +144,7 @@ async function getApiBaseUrl() {
   return apiBaseUrl;
 }
 async function loadSidebarState() {
-  const { dashboardSidebarCollapsed = false, dashboardActiveSidebarTab = 'actions' } = await chrome.storage.local.get(['dashboardSidebarCollapsed', 'dashboardActiveSidebarTab']);
+  const { dashboardSidebarCollapsed = false, dashboardActiveSidebarTab = 'dashboard' } = await chrome.storage.local.get(['dashboardSidebarCollapsed', 'dashboardActiveSidebarTab']);
   isSidebarCollapsed = Boolean(dashboardSidebarCollapsed);
   activeSidebarTab = dashboardActiveSidebarTab;
 }
@@ -179,7 +179,7 @@ async function toggleSidebar() {
 }
 async function switchSidebarTab(tab, options = {}) {
   if (!SIDEBAR_TABS.includes(tab)) {
-    tab = 'actions';
+    tab = 'dashboard';
   }
   const { focusPanel = false } = options;
   activeSidebarTab = tab;
@@ -198,7 +198,11 @@ async function switchSidebarTab(tab, options = {}) {
       view.focus();
     }
   });
-  await chrome.storage.local.set({ dashboardActiveSidebarTab: tab });
+  try {
+    await chrome.storage.local.set({ dashboardActiveSidebarTab: tab });
+  } catch (e) {
+    console.warn('保存标签状态失败:', e);
+  }
   if (tab === 'dashboard') {
     requestAnimationFrame(() => {
       if (trendChart) trendChart.resize();
@@ -206,7 +210,7 @@ async function switchSidebarTab(tab, options = {}) {
     });
   }
   if (tab === 'settings') {
-    await loadPreferences();
+    try { await loadPreferences(); } catch (e) { console.warn('加载设置失败:', e); }
     renderOverrideRules();
   }
   if (tab === 'insights') {
@@ -1324,7 +1328,7 @@ document.querySelectorAll('[data-pref]').forEach(el => {
 });
 document.getElementById('notificationsEnabledInput').addEventListener('change', updateInterventionWarning);
 document.getElementById('interventionsEnabledInput').addEventListener('change', updateInterventionWarning);
-document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
+document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true }).catch(e => console.error('切换标签失败:', e))); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
 
 const _dashLoadingMsgs = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
 let _dashLoadTimer = null;
@@ -1336,7 +1340,21 @@ function startDashLoadingRotation() {
 }
 function stopDashLoadingRotation() { clearInterval(_dashLoadTimer); _dashLoadTimer = null; }
 
-document.addEventListener('DOMContentLoaded', async () => { startDashLoadingRotation(); await loadSidebarState(); bindEvents(); applySidebarState(); await loadTheme(); await switchSidebarTab(activeSidebarTab); await refreshDashboard(); stopDashLoadingRotation(); });
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    startDashLoadingRotation();
+    await loadSidebarState();
+    bindEvents();
+    applySidebarState();
+    await loadTheme();
+    await switchSidebarTab(activeSidebarTab);
+    await refreshDashboard();
+  } catch (e) {
+    console.error('仪表盘初始化失败:', e);
+  } finally {
+    stopDashLoadingRotation();
+  }
+});
 window.addEventListener('resize', () => {
   if (activeSidebarTab === 'dashboard') {
     if (trendChart) trendChart.resize();
