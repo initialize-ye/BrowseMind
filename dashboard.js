@@ -278,8 +278,10 @@ function readPreferencesFromForm() {
 }
 async function initDataSync() {
   const apiBaseUrl = await getApiBaseUrl();
-  dataSync = new DataSync(apiBaseUrl);
-  _connectionCache = { result: null, time: 0 }; // invalidate on new instance
+  if (!dataSync || dataSync.apiBaseUrl !== apiBaseUrl) {
+    dataSync = new DataSync(apiBaseUrl);
+    _connectionCache = { result: null, time: 0 };
+  }
   return dataSync;
 }
 
@@ -947,7 +949,10 @@ async function loadLatestAIAnalysis() {
   const container = document.getElementById('aiAnalysisResult');
   try {
     await initDataSync();
-    if (!(await cachedCheckConnection())) return;
+    if (!(await cachedCheckConnection())) {
+      container.innerHTML = '<div class="empty">后端未连接，无法加载 AI 分析。</div>';
+      return;
+    }
     await dataSync.initUserId();
     const response = await authFetch(`${dataSync.apiBaseUrl}/api/reports/${dataSync.userId}?limit=1`);
     if (!response.ok) return;
@@ -1392,4 +1397,10 @@ window.addEventListener('resize', () => {
     if (trendChart) trendChart.resize();
     if (hourlyChart) hourlyChart.resize();
   }
+  if (attentionChart) attentionChart.resize();
+});
+window.addEventListener('beforeunload', () => {
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
+  if (attentionChart) { attentionChart.destroy(); attentionChart = null; }
 });

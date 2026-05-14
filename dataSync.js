@@ -78,10 +78,14 @@ function formatDuration(seconds) {
 }
 
 // 带认证头的 fetch 封装（供 popup/dashboard 直接调用后端 API 时使用）
+let _cachedAuthToken = null;
 async function authFetch(url, options = {}) {
-  const { authToken } = await chrome.storage.local.get('authToken');
+  if (!_cachedAuthToken) {
+    const { authToken } = await chrome.storage.local.get('authToken');
+    _cachedAuthToken = authToken || '';
+  }
   const headers = { ...(options.headers || {}) };
-  if (authToken) headers['X-Auth-Token'] = authToken;
+  if (_cachedAuthToken) headers['X-Auth-Token'] = _cachedAuthToken;
   return fetch(url, { ...options, headers });
 }
 

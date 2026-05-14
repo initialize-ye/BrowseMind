@@ -3,7 +3,7 @@
 let currentChart = null;
 let chartData = null;
 let attentionChart = null;
-let dataSync = new DataSync();
+let dataSync = null;
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const chartAnimation = prefersReducedMotion ? false : undefined;
 function getChartPalette() {
@@ -16,6 +16,24 @@ async function initDataSync() {
   const preferences = await getPreferences();
   dataSync = new DataSync(preferences.apiBaseUrl);
   return dataSync;
+}
+
+// popup 内轻量 toast 通知（替代 alert）
+function notifyPopup(type, message, duration = 3000) {
+  let toast = document.getElementById('popupToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'popupToast';
+    toast.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9999;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:500;opacity:0;transition:opacity 0.2s;pointer-events:none;max-width:90%;text-align:center;';
+    document.body.appendChild(toast);
+  }
+  const colors = { info: 'var(--accent)', warning: 'var(--red)', success: 'var(--green)' };
+  toast.style.background = colors[type] || colors.info;
+  toast.style.color = '#fff';
+  toast.textContent = message;
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
 
 document.addEventListener('DOMContentLoaded', loadData);
@@ -114,6 +132,7 @@ async function loadFocusStatus() {
 }
 
 const loadingMessages = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
+const goalTypeNames = { daily_learning: '学习时长', daily_entertainment: '娱乐限制', daily_coding: '编程时长', daily_social: '社交限制' };
 let _loadingMsgTimer = null;
 function startLoadingRotation() {
   const el = document.getElementById('loadingMsg');
@@ -204,6 +223,8 @@ async function loadData() {
     console.error('加载数据失败:', error);
     stopLoadingRotation(); loading.style.display = 'none';
     emptyState.style.display = 'block';
+    const p = emptyState.querySelector('p:last-child');
+    if (p) p.textContent = `加载出错：${error.message || '未知错误'}，点击刷新重试`;
   }
 }
 
@@ -611,29 +632,24 @@ async function syncToCloud() {
   const originalText = syncBtn.textContent;
 
   try {
-    syncBtn.textContent = '⏳ 同步中...';
+    syncBtn.textContent = '同步中...';
     syncBtn.disabled = true;
 
-    // 检查服务器连接
     const isConnected = await dataSync.checkConnection();
     if (!isConnected) {
-      alert('无法连接到服务器\n请确保后端服务已启动：\ncd backend && python main.py');
+      notifyPopup('warning', '无法连接服务器，请检查后端服务');
       return;
     }
 
-    // 同步数据
     const result = await dataSync.syncLocalData();
-
-    if (result.success) {
-      syncBtn.textContent = '同步成功';
-      alert(`同步成功\n${result.message}`);
-      await loadAdvancedAnalysis();
-    }
+    syncBtn.textContent = '同步成功';
+    notifyPopup('info', result.message || '同步完成');
+    await loadData();
 
   } catch (error) {
     console.error('同步失败:', error);
     syncBtn.textContent = '同步失败';
-    alert(`同步失败\n${error.message}\n\n请确保后端服务已启动`);
+    notifyPopup('warning', `同步失败：${error.message}`);
   } finally {
     setTimeout(() => {
       syncBtn.textContent = originalText;
@@ -991,7 +1007,10 @@ function drawAttentionChart(hourlyFocus) {
 async function loadGoals() {
   try {
     const { userId } = await chrome.storage.local.get('userId');
-    if (!userId) return;
+    if (!userId || !dataSync) return;
+
+    const isConnected = await dataSync.checkConnection().catch(() => false);
+    if (!isConnected) return;
 
     const today = new Date().toISOString().split('T')[0];
     const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${userId}?date=${today}&is_active=1`);
@@ -1031,17 +1050,10 @@ function displayGoals(goals) {
       statusText = '即将超标';
     }
 
-    const goalTypeMap = {
-      'daily_learning': '学习时长',
-      'daily_entertainment': '娱乐限制',
-      'daily_coding': '编程时长',
-      'daily_social': '社交限制'
-    };
-
     return `
       <div class="goal-item ${isAchieved ? 'achieved' : ''}">
         <div class="goal-header">
-          <span class="goal-type">${goalTypeMap[goal.goal_type] || goal.goal_type}</span>
+          <span class="goal-type">${goalTypeNames[goal.goal_type] || goal.goal_type}</span>
           <div>
             <span class="goal-status ${statusClass}">${statusText}</span>
             <button class="goal-delete" data-goal-id="${goal.id}" aria-label="删除目标">×</button>
@@ -1079,7 +1091,7 @@ async function saveGoal() {
   try {
     const { userId } = await chrome.storage.local.get('userId');
     if (!userId) {
-      alert('请先同步数据');
+      notifyPopup('warning', '请先同步数据');
       return;
     }
 
@@ -1087,7 +1099,7 @@ async function saveGoal() {
     const durationMinutes = parseInt(document.getElementById('goalDurationInput').value);
 
     if (!durationMinutes || durationMinutes <= 0) {
-      alert('请输入有效的时长');
+      notifyPopup('warning', '请输入有效的时长');
       return;
     }
 
@@ -1114,16 +1126,16 @@ async function saveGoal() {
 
     if (!response.ok) {
       const error = await response.json();
-      alert(error.detail || '创建目标失败');
+      notifyPopup('warning', error.detail || '创建目标失败');
       return;
     }
 
     closeGoalModal();
     await loadGoals();
-    alert('目标创建成功！');
+    notifyPopup('success', '目标已创建');
   } catch (error) {
     console.error('保存目标失败:', error);
-    alert('保存失败，请重试');
+    notifyPopup('warning', '保存失败，请重试');
   }
 }
 
@@ -1138,14 +1150,14 @@ async function deleteGoal(goalId) {
     });
 
     if (!response.ok) {
-      alert('删除失败');
+      notifyPopup('warning', '删除失败');
       return;
     }
 
     await loadGoals();
   } catch (error) {
     console.error('删除目标失败:', error);
-    alert('删除失败，请重试');
+    notifyPopup('warning', '删除失败，请重试');
   }
 }
 
