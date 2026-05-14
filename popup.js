@@ -71,9 +71,16 @@ async function stopFocusFromPopup() {
 }
 
 async function loadFocusStatus() {
-  const status = await new Promise(resolve => {
-    chrome.runtime.sendMessage({ action: 'focusStatus' }, res => resolve(res?.status || { active: false }));
-  });
+  let status = { active: false };
+  try {
+    status = await new Promise(resolve => {
+      const timer = setTimeout(() => resolve({ active: false }), 2000);
+      chrome.runtime.sendMessage({ action: 'focusStatus' }, res => {
+        clearTimeout(timer);
+        resolve(res?.status || { active: false });
+      });
+    });
+  } catch {}
   const bar = document.getElementById('focusStatusBar');
   const text = document.getElementById('focusStatusText');
   const stopBtn = document.getElementById('focusStopBtn');

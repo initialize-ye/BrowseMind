@@ -764,9 +764,16 @@ let _focusTimer = null;
 
 async function loadFocusStats() {
   // 查询当前会话状态
-  const status = await new Promise(resolve => {
-    chrome.runtime.sendMessage({ action: 'focusStatus' }, res => resolve(res?.status || { active: false }));
-  });
+  let status = { active: false };
+  try {
+    status = await new Promise(resolve => {
+      const timer = setTimeout(() => resolve({ active: false }), 2000);
+      chrome.runtime.sendMessage({ action: 'focusStatus' }, res => {
+        clearTimeout(timer);
+        resolve(res?.status || { active: false });
+      });
+    });
+  } catch {}
   renderFocusSessionInfo(status);
 
   // 统计今日专注时长
