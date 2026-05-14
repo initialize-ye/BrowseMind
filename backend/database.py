@@ -4,7 +4,7 @@ BrowseMind 后端服务 - 数据库模型
 
 import json
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Index
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Index, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -144,7 +144,8 @@ def init_db():
     # 增量迁移：为已有表补上新增列（create_all 不会 ALTER）
     with engine.connect() as conn:
         try:
-            conn.execute("ALTER TABLE analysis_reports ADD COLUMN top_domains TEXT")
+            conn.execute(text("ALTER TABLE analysis_reports ADD COLUMN top_domains TEXT"))
+            conn.commit()
             print("迁移：已添加 analysis_reports.top_domains 列")
         except Exception:
             pass  # 列已存在则忽略
