@@ -197,6 +197,14 @@ class DataSync {
   // 同步本地数据到服务器
   async syncLocalData() {
     try {
+      // 同步设置
+      try {
+        const settingsResult = await this.syncSettings();
+        console.log('设置同步:', settingsResult.message);
+      } catch (e) {
+        console.warn('设置同步失败（不影响数据同步）:', e);
+      }
+
       // 获取本地数据和分类覆盖规则
       const { browsingData = [], classificationOverrides = {} } = await chrome.storage.local.get(['browsingData', 'classificationOverrides']);
 
@@ -266,6 +274,77 @@ class DataSync {
       console.error('服务器连接失败:', error.message || error);
       return false;
     }
+  }
+
+  // 上传设置到云端
+  async pushSettings(preferences) {
+    await this.initUserId();
+    const authHeaders = await this._getAuthHeaders();
+    const response = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify(preferences)
+    });
+    if (!response.ok) throw new Error(`推送设置失败: ${response.status}`);
+    return response.json();
+  }
+
+  // 从云端拉取设置
+  async pullSettings() {
+    await this.initUserId();
+    const response = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`);
+    if (!response.ok) throw new Error(`拉取设置失败: ${response.status}`);
+    return response.json();
+  }
+
+  // 双向同步设置（冲突解决：最后修改时间较新者优先）
+  async syncSettings() {
+    await this.initUserId();
+    const authHeaders = await this._getAuthHeaders();
+
+    // 拉取云端设置
+    let cloudData;
+    try {
+      const resp = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`);
+      if (!resp.ok) throw new Error('拉取失败');
+      cloudData = await resp.json();
+    } catch {
+      return { action: 'skip', message: '无法拉取云端设置' };
+    }
+
+    const cloudSettings = cloudData.settings || {};
+    const cloudUpdatedAt = cloudData.updated_at ? new Date(cloudData.updated_at).getTime() : 0;
+    const { settingsSyncTime = 0 } = await chrome.storage.local.get('settingsSyncTime');
+
+    // 本地设置
+    const localPrefs = await getPreferences();
+
+    if (!cloudUpdatedAt) {
+      // 云端无设置，推送本地设置
+      await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(localPrefs)
+      });
+      await chrome.storage.local.set({ settingsSyncTime: Date.now() });
+      return { action: 'push', message: '首次同步：已推送本地设置到云端' };
+    }
+
+    if (cloudUpdatedAt > settingsSyncTime) {
+      // 云端更新，拉取到本地（合并：云端覆盖本地，但保留本地独有的键）
+      const merged = { ...localPrefs, ...cloudSettings };
+      await chrome.storage.local.set({ ...merged, settingsSyncTime: Date.now() });
+      return { action: 'pull', message: '已从云端拉取最新设置' };
+    }
+
+    // 本地更新或相同，推送本地设置
+    await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify(localPrefs)
+    });
+    await chrome.storage.local.set({ settingsSyncTime: Date.now() });
+    return { action: 'push', message: '已推送本地设置到云端' };
   }
 }
 

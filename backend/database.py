@@ -142,6 +142,16 @@ class UserToken(Base):
     last_used_at = Column(DateTime, default=datetime.utcnow)
 
 
+class UserSettings(Base):
+    """用户设置（云端同步）"""
+    __tablename__ = 'user_settings'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), unique=True, nullable=False, index=True)
+    settings_json = Column(Text, nullable=False, default='{}')
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # 数据库引擎和会话
 DATABASE_URL = "sqlite:///./browsemind.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

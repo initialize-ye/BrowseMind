@@ -17,7 +17,7 @@ import io
 import json
 import os
 
-from database import init_db, get_db, BrowsingRecord, AnalysisReport, UserGoal, UserToken
+from database import init_db, get_db, BrowsingRecord, AnalysisReport, UserGoal, UserToken, UserSettings
 from schemas import (
     BrowsingRecordBatch,
     BrowsingRecordResponse,
@@ -878,6 +878,34 @@ async def update_goals_progress(
             "notifications": notifications
         }
     )
+
+
+# ==================== 设置同步 ====================
+
+@app.get("/api/settings/{user_id}")
+def get_settings(user_id: str, db: Session = Depends(get_db)):
+    """获取用户设置"""
+    settings = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    if not settings:
+        return {"settings": {}, "updated_at": None}
+    return {
+        "settings": json.loads(settings.settings_json),
+        "updated_at": settings.updated_at.isoformat() if settings.updated_at else None
+    }
+
+
+@app.put("/api/settings/{user_id}")
+def update_settings(user_id: str, body: dict, db: Session = Depends(get_db)):
+    """更新用户设置（全量覆盖）"""
+    settings = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+    if settings:
+        settings.settings_json = json.dumps(body, ensure_ascii=False)
+        settings.updated_at = datetime.utcnow()
+    else:
+        settings = UserSettings(user_id=user_id, settings_json=json.dumps(body, ensure_ascii=False))
+        db.add(settings)
+    db.commit()
+    return {"success": True, "updated_at": settings.updated_at.isoformat()}
 
 
 # ==================== 数据导出 ====================
