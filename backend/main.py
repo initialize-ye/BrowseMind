@@ -17,7 +17,7 @@ import io
 import json
 import os
 
-from database import init_db, get_db, BrowsingRecord, AnalysisReport, UserGoal, UserToken, UserSettings
+from database import init_db, get_db, BrowsingRecord, AnalysisReport, UserGoal, UserToken, UserSettings, UserClassificationRule
 from schemas import (
     BrowsingRecordBatch,
     BrowsingRecordResponse,
@@ -118,9 +118,46 @@ app.add_middleware(AuthMiddleware)
 
 @app.on_event("startup")
 async def startup_event():
-    """启动时初始化数据库"""
+    """启动时初始化数据库并清理过期数据"""
     init_db()
+    cleanup_expired_data()
     print("BrowseMind 后端服务已启动")
+
+
+# 数据保留天数（与前端 dataRetentionDays 默认值对齐）
+DATA_RETENTION_DAYS = int(os.environ.get('DATA_RETENTION_DAYS', '30'))
+
+
+def cleanup_expired_data():
+    """清理超过保留期的浏览记录和报告"""
+    db = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=DATA_RETENTION_DAYS)
+        cutoff_str = cutoff.strftime('%Y-%m-%d')
+
+        # 清理旧浏览记录
+        deleted_records = db.query(BrowsingRecord).filter(
+            BrowsingRecord.date < cutoff_str
+        ).delete(synchronize_session=False)
+
+        # 清理旧报告
+        deleted_reports = db.query(AnalysisReport).filter(
+            AnalysisReport.report_date < cutoff_str
+        ).delete(synchronize_session=False)
+
+        # 清理旧目标
+        deleted_goals = db.query(UserGoal).filter(
+            UserGoal.date < cutoff_str
+        ).delete(synchronize_session=False)
+
+        db.commit()
+        if deleted_records or deleted_reports or deleted_goals:
+            print(f"TTL 清理：记录 {deleted_records} 条，报告 {deleted_reports} 条，目标 {deleted_goals} 条")
+    except Exception as e:
+        db.rollback()
+        print(f"TTL 清理失败: {e}")
+    finally:
+        db.close()
 
 
 @app.get("/")
@@ -906,6 +943,32 @@ def update_settings(user_id: str, body: dict, db: Session = Depends(get_db)):
         db.add(settings)
     db.commit()
     return {"success": True, "updated_at": settings.updated_at.isoformat()}
+
+
+@app.get("/api/classification-rules/{user_id}")
+def get_classification_rules(user_id: str, db: Session = Depends(get_db)):
+    """获取用户分类规则"""
+    rules = db.query(UserClassificationRule).filter(UserClassificationRule.user_id == user_id).first()
+    if not rules:
+        return {"rules": {}, "updated_at": None}
+    return {
+        "rules": json.loads(rules.rules_json),
+        "updated_at": rules.updated_at.isoformat() if rules.updated_at else None
+    }
+
+
+@app.put("/api/classification-rules/{user_id}")
+def update_classification_rules(user_id: str, body: dict, db: Session = Depends(get_db)):
+    """更新用户分类规则（全量覆盖）"""
+    rules = db.query(UserClassificationRule).filter(UserClassificationRule.user_id == user_id).first()
+    if rules:
+        rules.rules_json = json.dumps(body, ensure_ascii=False)
+        rules.updated_at = datetime.utcnow()
+    else:
+        rules = UserClassificationRule(user_id=user_id, rules_json=json.dumps(body, ensure_ascii=False))
+        db.add(rules)
+    db.commit()
+    return {"success": True, "updated_at": rules.updated_at.isoformat()}
 
 
 # ==================== 数据导出 ====================

@@ -31,6 +31,71 @@ document.querySelectorAll('.chart-tab').forEach(btn => {
   btn.addEventListener('click', () => switchChart(btn.dataset.chart, btn));
 });
 
+// 专注会话
+document.getElementById('focusBtn').addEventListener('click', showFocusPicker);
+document.getElementById('focusStopBtn').addEventListener('click', stopFocusFromPopup);
+
+let _popupFocusTimer = null;
+
+function showFocusPicker() {
+  const btn = document.getElementById('focusBtn');
+  if (btn.dataset.picking) {
+    btn.dataset.picking = '';
+    btn.textContent = '专注';
+    return;
+  }
+  btn.dataset.picking = '1';
+  btn.textContent = '25 / 45 / 60';
+  // 简单实现：直接弹出选择
+  const minutes = prompt('专注时长（分钟）：25、45 或 60', '25');
+  btn.dataset.picking = '';
+  btn.textContent = '专注';
+  if (!minutes) return;
+  const m = parseInt(minutes, 10);
+  if (![25, 45, 60].includes(m)) return;
+  startFocusFromPopup(m);
+}
+
+async function startFocusFromPopup(minutes) {
+  await new Promise(resolve => {
+    chrome.runtime.sendMessage({ action: 'startFocus', durationMinutes: minutes }, resolve);
+  });
+  loadFocusStatus();
+}
+
+async function stopFocusFromPopup() {
+  await new Promise(resolve => {
+    chrome.runtime.sendMessage({ action: 'stopFocus' }, resolve);
+  });
+  loadFocusStatus();
+}
+
+async function loadFocusStatus() {
+  const status = await new Promise(resolve => {
+    chrome.runtime.sendMessage({ action: 'focusStatus' }, res => resolve(res?.status || { active: false }));
+  });
+  const bar = document.getElementById('focusStatusBar');
+  const text = document.getElementById('focusStatusText');
+  const stopBtn = document.getElementById('focusStopBtn');
+  const focusBtn = document.getElementById('focusBtn');
+
+  if (status.active) {
+    bar.style.display = 'flex';
+    const remaining = status.remainingSeconds;
+    const min = Math.floor(remaining / 60);
+    const sec = remaining % 60;
+    text.textContent = `专注中 ${min}:${String(sec).padStart(2, '0')} · 打断 ${status.interruptions} 次`;
+    focusBtn.disabled = true;
+    clearInterval(_popupFocusTimer);
+    _popupFocusTimer = setInterval(loadFocusStatus, 1000);
+  } else {
+    bar.style.display = 'none';
+    focusBtn.disabled = false;
+    clearInterval(_popupFocusTimer);
+    _popupFocusTimer = null;
+  }
+}
+
 const loadingMessages = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
 let _loadingMsgTimer = null;
 function startLoadingRotation() {
@@ -107,9 +172,10 @@ async function loadData() {
     // 绘制默认图表（饼图）
     drawPieChart();
 
-    // 加载目标和高级分析
+    // 加载目标、高级分析和专注状态
     await loadGoals();
     await loadAdvancedAnalysis();
+    await loadFocusStatus();
 
     stopLoadingRotation(); loading.style.display = 'none';
     content.style.display = 'block';

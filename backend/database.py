@@ -152,6 +152,16 @@ class UserSettings(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class UserClassificationRule(Base):
+    """用户分类规则（云端同步）"""
+    __tablename__ = 'user_classification_rules'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    rules_json = Column(Text, nullable=False, default='{}')
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # 数据库引擎和会话
 DATABASE_URL = "sqlite:///./browsemind.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

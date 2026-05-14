@@ -197,12 +197,18 @@ class DataSync {
   // 同步本地数据到服务器
   async syncLocalData() {
     try {
-      // 同步设置
+      // 同步设置和分类规则
       try {
         const settingsResult = await this.syncSettings();
         console.log('设置同步:', settingsResult.message);
       } catch (e) {
         console.warn('设置同步失败（不影响数据同步）:', e);
+      }
+      try {
+        const rulesResult = await this.syncClassificationRules();
+        console.log('分类规则同步:', rulesResult.message);
+      } catch (e) {
+        console.warn('分类规则同步失败（不影响数据同步）:', e);
       }
 
       // 获取本地数据和分类覆盖规则
@@ -345,6 +351,52 @@ class DataSync {
     });
     await chrome.storage.local.set({ settingsSyncTime: Date.now() });
     return { action: 'push', message: '已推送本地设置到云端' };
+  }
+
+  // 同步分类规则（双向）
+  async syncClassificationRules() {
+    await this.initUserId();
+    const authHeaders = await this._getAuthHeaders();
+
+    let cloudData;
+    try {
+      const resp = await fetch(`${this.apiBaseUrl}/api/classification-rules/${this.userId}`);
+      if (!resp.ok) throw new Error('拉取失败');
+      cloudData = await resp.json();
+    } catch {
+      return { action: 'skip', message: '无法拉取云端分类规则' };
+    }
+
+    const cloudRules = cloudData.rules || {};
+    const cloudUpdatedAt = cloudData.updated_at ? new Date(cloudData.updated_at).getTime() : 0;
+    const { rulesSyncTime = 0, classificationOverrides = {} } = await chrome.storage.local.get(['rulesSyncTime', 'classificationOverrides']);
+
+    if (!cloudUpdatedAt) {
+      // 云端无规则，推送本地
+      await fetch(`${this.apiBaseUrl}/api/classification-rules/${this.userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(classificationOverrides)
+      });
+      await chrome.storage.local.set({ rulesSyncTime: Date.now() });
+      return { action: 'push', message: '首次同步：已推送本地分类规则到云端' };
+    }
+
+    if (cloudUpdatedAt > rulesSyncTime) {
+      // 云端更新，合并到本地（两边都有的取最新，只一边有的保留）
+      const merged = { ...classificationOverrides, ...cloudRules };
+      await chrome.storage.local.set({ classificationOverrides: merged, rulesSyncTime: Date.now() });
+      return { action: 'pull', message: '已从云端合并分类规则' };
+    }
+
+    // 本地更新或相同，推送
+    await fetch(`${this.apiBaseUrl}/api/classification-rules/${this.userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify(classificationOverrides)
+    });
+    await chrome.storage.local.set({ rulesSyncTime: Date.now() });
+    return { action: 'push', message: '已推送本地分类规则到云端' };
   }
 }
 
