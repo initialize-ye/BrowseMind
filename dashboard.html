@@ -349,7 +349,7 @@
 
         <section class="main-view" id="mainViewInsights" data-main-view="insights" role="tabpanel" aria-labelledby="sidebarTabInsights" tabindex="0" hidden>
           <div class="view-shell">
-            <div class="view-header panel"><div class="view-copy"><h2>行为洞察</h2><p>结合云端高级分析、AI 建议和历史报告，定位时间黑洞与专注时段。</p></div><button id="refreshInsightsBtn" class="secondary">刷新洞察</button></div>
+            <div class="view-header panel"><div class="view-copy"><h2>行为洞察</h2><p>结合云端高级分析、AI 建议和历史报告，定位时间黑洞与专注时段。</p></div><div class="button-row compact"><button id="refreshInsightsBtn" class="secondary">刷新洞察</button><button id="aiBtn">AI 分析</button></div></div>
             <section class="inline-grid">
               <div class="panel"><div class="section-title"><div><h2>时间黑洞</h2><p>超过阈值的长时间访问</p></div></div><div id="blackholeStats" aria-live="polite"><div class="empty">同步云端数据后显示时间黑洞。</div></div></div>
               <div class="panel"><div class="section-title"><div><h2>专注曲线</h2><p>按小时估算专注度</p></div></div><div id="attentionStats" aria-live="polite"><div class="empty">同步云端数据后显示专注曲线。</div></div><div class="chart-box small"><canvas id="attentionChart"></canvas></div></div>
@@ -361,8 +361,8 @@
 
         <section class="main-view" id="mainViewActions" data-main-view="actions" role="tabpanel" aria-labelledby="sidebarTabActions" tabindex="0" hidden>
           <div class="view-shell">
-            <div class="view-header panel"><div class="view-copy"><h2>插件操作</h2><p>同步数据、执行 AI 分析，并查看最近操作日志。</p></div><button id="refreshBtnActions" class="secondary">刷新状态</button></div>
-            <div class="panel"><div class="button-row compact"><button id="syncBtn">立即同步</button><button id="aiBtn" class="secondary">AI 分析</button><button id="exportJsonBtn" class="ghost">导出 JSON</button><button id="clearLocalBtn" class="danger">清空本地数据</button></div><div class="note" id="operationNote" aria-live="polite"></div><div class="log-box" id="logBox" aria-live="polite" style="margin-top:14px;">等待操作...</div></div>
+            <div class="view-header panel"><div class="view-copy"><h2>插件操作</h2><p>同步数据、导出记录，并查看最近操作日志。</p></div><button id="refreshBtnActions" class="secondary">刷新状态</button></div>
+            <div class="panel"><div class="button-row compact"><button id="syncBtn">立即同步</button><button id="exportJsonBtn" class="ghost">导出 JSON</button><button id="clearLocalBtn" class="danger">清空本地数据</button></div><div class="note" id="operationNote" aria-live="polite"></div><div class="log-box" id="logBox" aria-live="polite" style="margin-top:14px;">等待操作...</div></div>
           </div>
         </section>
 
