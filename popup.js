@@ -178,7 +178,7 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
   document.getElementById('totalVisits').textContent = stats.totalVisits;
   document.getElementById('uniqueSites').textContent = stats.uniqueSites;
 
-  // 更新分类统计（7天）
+  // 更新分类统计
   updateCategoryStats(categoryStats, classifier);
 
   // 更新今日分类统计
@@ -204,7 +204,7 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
   }).join('');
 }
 
-// 更新分类统计（7天）
+// 更新分类统计
 function updateCategoryStats(categoryStats, classifier) {
   const container = document.getElementById('categoryStats');
   const categories = classifier.getAllCategories();
@@ -333,6 +333,7 @@ function drawPieChart() {
 function drawBarChart() {
   if (!chartData) return;
 
+  const colors = getChartPalette();
   const { hourlyDist } = chartData;
 
   // 准备数据（只显示有数据的小时）
@@ -389,6 +390,7 @@ function drawBarChart() {
 function drawLineChart() {
   if (!chartData) return;
 
+  const colors = getChartPalette();
   const { dailyTrend } = chartData;
 
   // 准备数据
@@ -1092,9 +1094,6 @@ async function updateGoalsProgress() {
 }
 
 function showNotification(type, message) {
-  // Popup context cannot use chrome.notifications (MV3 restriction).
-  // Log the notification so the user can see it in console, and
-  // the background service worker handles actual system notifications.
-  const prefix = type === 'achieved' ? '目标达成' : '时间提醒';
-  console.log(`${prefix}: ${message}`);
+  // MV3 popup 无法直接调用 chrome.notifications，委托 background 代发
+  chrome.runtime.sendMessage({ action: 'showNotification', type, message }).catch(() => {});
 }

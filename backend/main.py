@@ -35,12 +35,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 配置 CORS（允许浏览器插件访问）
+# 配置 CORS（Chrome 扩展 + 本地开发）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应该限制具体域名
+    allow_origin_regex=r"chrome-extension://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+",
+    allow_origins=[],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 

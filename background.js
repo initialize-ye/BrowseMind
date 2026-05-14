@@ -552,3 +552,11 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     scheduleAutoSync();
   }
 });
+
+// 监听 popup/dashboard 发来的消息
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.action === 'showNotification') {
+    showNotification(msg.type, msg.message);
+    sendResponse({ ok: true });
+  }
+});
