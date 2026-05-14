@@ -114,11 +114,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 // 一次性读取偏好与分类覆盖（供 saveTabDuration + checkTabIntervention 共用）
 async function getSharedContext() {
-  const [preferences, { classificationOverrides = {} }] = await Promise.all([
+  const [preferences, { classificationOverrides = {}, classificationFeedback = {} }] = await Promise.all([
     getPreferences(),
-    chrome.storage.local.get('classificationOverrides')
+    chrome.storage.local.get(['classificationOverrides', 'classificationFeedback'])
   ]);
-  return { preferences, classificationOverrides };
+  return { preferences, classificationOverrides, classificationFeedback };
 }
 
 // 监听标签页激活（用户切换标签）
@@ -174,7 +174,8 @@ async function checkTabIntervention(tab, ctx) {
     const preferences = ctx?.preferences || await getPreferences();
     if (!preferences.interventionsEnabled) return;
     const overrides = ctx?.classificationOverrides ?? (await chrome.storage.local.get('classificationOverrides')).classificationOverrides ?? {};
-    const classifier = new WebsiteClassifier(overrides);
+    const feedback = ctx?.classificationFeedback ?? (await chrome.storage.local.get('classificationFeedback')).classificationFeedback ?? {};
+    const classifier = new WebsiteClassifier(overrides, feedback);
     const domain = WebsiteClassifier.normalizeDomain(new URL(tab.url).hostname);
     const category = classifier.classify(domain, tab.title || '', tab.url);
     await checkInterventions(domain, category);
@@ -192,7 +193,8 @@ async function saveTabDuration(ctx) {
   if (duration < preferences.minVisitDurationSeconds) return;
 
   const overrides = ctx?.classificationOverrides ?? (await chrome.storage.local.get('classificationOverrides')).classificationOverrides ?? {};
-  const classifier = new WebsiteClassifier(overrides);
+  const feedback = ctx?.classificationFeedback ?? (await chrome.storage.local.get('classificationFeedback')).classificationFeedback ?? {};
+  const classifier = new WebsiteClassifier(overrides, feedback);
   let domain = null;
   try { domain = WebsiteClassifier.normalizeDomain(new URL(activeTab.url).hostname); } catch {}
   const category = classifier.classify(domain || '', activeTab.title || '', activeTab.url);
@@ -265,8 +267,8 @@ async function collectHistoryData() {
   });
 
   // 初始化分类器，为历史记录补充 domain 和 category
-  const { classificationOverrides = {} } = await chrome.storage.local.get('classificationOverrides');
-  const classifier = new WebsiteClassifier(classificationOverrides);
+  const { classificationOverrides = {}, classificationFeedback = {} } = await chrome.storage.local.get(['classificationOverrides', 'classificationFeedback']);
+  const classifier = new WebsiteClassifier(classificationOverrides, classificationFeedback);
 
   const records = historyItems
     .filter(item => item.url && !item.url.startsWith('chrome://'))

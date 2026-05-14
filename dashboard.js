@@ -278,6 +278,19 @@ async function saveClassificationOverride(domain, category) {
   const overrides = await getClassificationOverrides();
   overrides[domain] = category;
   await chrome.storage.local.set({ classificationOverrides: overrides });
+  // 记录分类反馈
+  await saveClassificationFeedback(domain, category);
+}
+async function saveClassificationFeedback(domain, category) {
+  const { classificationFeedback = {} } = await chrome.storage.local.get('classificationFeedback');
+  const key = domain.toLowerCase();
+  if (!classificationFeedback[key]) {
+    classificationFeedback[key] = { category, count: 0, lastTime: 0 };
+  }
+  classificationFeedback[key].count++;
+  classificationFeedback[key].category = category;
+  classificationFeedback[key].lastTime = Date.now();
+  await chrome.storage.local.set({ classificationFeedback });
 }
 async function removeClassificationOverride(domain) {
   const overrides = await getClassificationOverrides();
@@ -931,7 +944,7 @@ async function refreshInsights() {
 }
 
 async function loadAnalytics() {
-  const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'analysisDays']);
+  const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback', 'analysisDays']);
   const browsingData = storage.browsingData || [];
   if (!browsingData.length) {
     renderMetrics([]);
@@ -945,7 +958,8 @@ async function loadAnalytics() {
   const processor = new DataProcessor(browsingData);
   const cleanedData = processor.clean().getData();
   const classificationOverrides = storage.classificationOverrides || {};
-  const classifier = new WebsiteClassifier(classificationOverrides);
+  const classificationFeedback = storage.classificationFeedback || {};
+  const classifier = new WebsiteClassifier(classificationOverrides, classificationFeedback);
   const classifiedData = classifier.classifyBatch(cleanedData);
   const analyzer = new StatisticsAnalyzer(classifiedData);
   const categoryStats = analyzer.analyzeByCategory();

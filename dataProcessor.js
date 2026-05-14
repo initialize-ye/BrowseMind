@@ -151,8 +151,25 @@ class WebsiteClassifier {
     return WebsiteClassifier.SVG[category] || WebsiteClassifier.SVG.other;
   }
 
-  constructor(overrides = {}) {
+  // 路径级分类规则：域名 + 路径前缀 → 分类
+  static PATH_RULES = [
+    { domain: 'youtube.com', path: '/feed/subscriptions', category: 'social' },
+    { domain: 'youtube.com', path: '/playlist', category: 'learning' },
+    { domain: 'github.com', path: '/trending', category: 'learning' },
+    { domain: 'github.com', path: '/explore', category: 'learning' },
+    { domain: 'bilibili.com', path: '/cheese', category: 'learning' },
+    { domain: 'bilibili.com', path: '/read', category: 'learning' },
+    { domain: 'zhihu.com', path: '/courses', category: 'learning' },
+    { domain: 'douyin.com', path: '/learning', category: 'learning' },
+    { domain: 'google.com', path: '/scholar', category: 'learning' },
+    { domain: 'google.com', path: '/maps', category: 'tools' },
+    { domain: 'google.com', path: '/translate', category: 'tools' },
+    { domain: 'notion.so', path: '/wiki', category: 'learning' },
+  ];
+
+  constructor(overrides = {}, feedback = {}) {
     this.overrides = overrides; // { normalizedDomain: category, ... }
+    this.feedback = feedback; // { domain: { category, count, lastTime }, ... }
     this.rules = {
       learning: {
         name: '学习',
@@ -380,11 +397,26 @@ class WebsiteClassifier {
       }
     }
 
+    // Check path-level rules (domain + path prefix)
+    const urlPath = path.split(' ')[0] || ''; // strip query string
+    for (const rule of WebsiteClassifier.PATH_RULES) {
+      if (this.matchesDomain(hostname, rule.domain) && urlPath.startsWith(rule.path)) {
+        return { category: rule.category, confidence: 95, matchedBy: 'path-rule', reason: `${hostname}${rule.path}` };
+      }
+    }
+
     const scores = {};
     for (const [category, rule] of Object.entries(this.rules)) {
       scores[category] = this.calculateRuleScore(rule, hostname, lowerTitle, path);
     }
     this.applyAmbiguousOverrides(scores, hostname, lowerTitle);
+
+    // 反馈学习：被用户修正 3 次以上的域名，提升对应分类得分
+    const fb = this.feedback[hostname];
+    if (fb && fb.count >= 3 && scores[fb.category]) {
+      scores[fb.category].score += 40;
+      scores[fb.category].matchedBy.push('feedback');
+    }
 
     const ranked = Object.entries(scores)
       .map(([category, result]) => ({ category, ...result }))
