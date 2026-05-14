@@ -17,7 +17,7 @@ import io
 import json
 import os
 
-from database import init_db, get_db, BrowsingRecord, AnalysisReport, UserGoal, UserToken, UserSettings, UserClassificationRule
+from database import init_db, get_db, SessionLocal, BrowsingRecord, AnalysisReport, UserGoal, UserToken, UserSettings, UserClassificationRule
 from schemas import (
     BrowsingRecordBatch,
     BrowsingRecordResponse,
