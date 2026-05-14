@@ -653,21 +653,30 @@ function renderAdvancedEmpty(message) {
 async function loadAdvancedInsights() {
   const preferences = await getPreferences();
   await initDataSync();
-  if (!(await cachedCheckConnection())) {
-    renderAdvancedEmpty('后端未连接，暂时无法加载高级分析。');
+
+  if (await cachedCheckConnection()) {
+    await dataSync.initUserId();
+    const response = await fetch(`${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=${preferences.analysisDays}&blackhole_threshold=${preferences.blackholeThresholdMinutes}`);
+    if (response.ok) {
+      const analysis = await response.json();
+      renderBlackholes(analysis.blackholes);
+      renderAttentionCurve(analysis.attention_curve);
+      return;
+    }
+    if (response.status !== 404) {
+      const error = await response.json();
+      throw new Error(error.detail || '高级分析失败');
+    }
+  }
+
+  // 后端不可用或无云端数据 — 使用本地离线分析
+  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+  if (!browsingData.length) {
+    renderAdvancedEmpty('暂无浏览数据，无法进行高级分析。');
     return;
   }
-  await dataSync.initUserId();
-  const response = await fetch(`${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=${preferences.analysisDays}&blackhole_threshold=${preferences.blackholeThresholdMinutes}`);
-  if (response.status === 404) {
-    renderAdvancedEmpty('云端数据正在准备中，同步后再刷新洞察。');
-    return;
-  }
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || '高级分析失败');
-  }
-  const analysis = await response.json();
+  const localAnalyzer = new LocalAdvancedAnalyzer(preferences.blackholeThresholdMinutes);
+  const analysis = localAnalyzer.analyzeAll(browsingData, preferences.blackholeThresholdMinutes);
   renderBlackholes(analysis.blackholes);
   renderAttentionCurve(analysis.attention_curve);
 }

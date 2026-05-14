@@ -724,30 +724,36 @@ function displayAdvancedAnalysisEmptyState(message = '同步云端数据后将�
 async function loadAdvancedAnalysis() {
   try {
     const isConnected = await dataSync.checkConnection();
-    if (!isConnected) {
-      displayAdvancedAnalysisEmptyState('后端未连接，暂时无法加载高级分析');
-      return;
+    if (isConnected) {
+      await dataSync.initUserId();
+      const preferences = await getPreferences();
+      const response = await fetch(
+        `${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=${preferences.analysisDays}&blackhole_threshold=${preferences.blackholeThresholdMinutes}`
+      );
+
+      if (response.ok) {
+        const analysis = await response.json();
+        displayBlackholes(analysis.blackholes);
+        displayAttentionCurve(analysis.attention_curve);
+        return;
+      }
+
+      if (response.status !== 404) {
+        let detail = '分析失败';
+        try { const err = await response.json(); detail = err.detail || detail; } catch {}
+        throw new Error(detail);
+      }
     }
 
-    await dataSync.initUserId();
-
+    // 后端不可用或无云端数据 — 使用本地离线分析
+    const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+    if (!browsingData.length) {
+      displayAdvancedAnalysisEmptyState('暂无浏览数据，无法进行高级分析');
+      return;
+    }
     const preferences = await getPreferences();
-    const response = await fetch(
-      `${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=${preferences.analysisDays}&blackhole_threshold=${preferences.blackholeThresholdMinutes}`
-    );
-
-    if (response.status === 404) {
-      displayAdvancedAnalysisEmptyState('云端数据正在准备中，稍后再打开插件即可看到高级分析');
-      return;
-    }
-
-    if (!response.ok) {
-      let detail = '分析失败';
-      try { const err = await response.json(); detail = err.detail || detail; } catch {}
-      throw new Error(detail);
-    }
-
-    const analysis = await response.json();
+    const localAnalyzer = new LocalAdvancedAnalyzer(preferences.blackholeThresholdMinutes);
+    const analysis = localAnalyzer.analyzeAll(browsingData, preferences.blackholeThresholdMinutes);
     displayBlackholes(analysis.blackholes);
     displayAttentionCurve(analysis.attention_curve);
   } catch (error) {

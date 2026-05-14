@@ -516,7 +516,190 @@ class StatisticsAnalyzer {
   }
 }
 
+/**
+ * 本地高级分析器（后端不可用时的 fallback）
+ * 移植自 backend/advanced_analyzer.py
+ */
+class LocalAdvancedAnalyzer {
+  static DISTRACTION_CATEGORIES = new Set(['entertainment', 'social']);
+  static FOCUS_CATEGORIES = new Set(['learning', 'coding', 'tools']);
+  static HIGH_FREQUENCY_VISITS = 10;
+
+  constructor(thresholdMinutes = 30) {
+    this.thresholdSeconds = thresholdMinutes * 60;
+  }
+
+  // 时间黑洞检测
+  detectBlackholes(records) {
+    const blackholes = [];
+    let totalDuration = 0;
+    const domainStats = {};
+
+    for (const record of records) {
+      const domain = record.domain || '';
+      const duration = record.duration || 0;
+      totalDuration += duration;
+      if (!domain) continue;
+
+      if (!domainStats[domain]) {
+        domainStats[domain] = { domain, total_duration: 0, visit_count: 0, long_sessions: [], category: '' };
+      }
+      const s = domainStats[domain];
+      s.total_duration += duration;
+      s.visit_count++;
+      s.category = record.category || 'other';
+
+      if (duration >= this.thresholdSeconds) {
+        s.long_sessions.push({ duration, date: record.date || '', title: record.title || '', url: record.url || '' });
+      }
+    }
+
+    for (const stats of Object.values(domainStats)) {
+      const isLong = stats.long_sessions.length > 0;
+      const isHighFreq = stats.visit_count >= LocalAdvancedAnalyzer.HIGH_FREQUENCY_VISITS && stats.total_duration >= this.thresholdSeconds;
+      if (!isLong && !isHighFreq) continue;
+
+      const blackhole_type = isLong && isHighFreq ? 'both' : isLong ? 'long_session' : 'high_frequency';
+      blackholes.push({
+        domain: stats.domain,
+        category: stats.category,
+        total_duration: stats.total_duration,
+        visit_count: stats.visit_count,
+        long_sessions_count: stats.long_sessions.length,
+        longest_session: stats.long_sessions.length ? Math.max(...stats.long_sessions.map(s => s.duration)) : 0,
+        sessions: stats.long_sessions.slice(0, 5),
+        blackhole_type
+      });
+    }
+
+    blackholes.sort((a, b) => {
+      const wa = LocalAdvancedAnalyzer.DISTRACTION_CATEGORIES.has(a.category) ? 1.5 : 1;
+      const wb = LocalAdvancedAnalyzer.DISTRACTION_CATEGORIES.has(b.category) ? 1.5 : 1;
+      return (b.total_duration * wb) - (a.total_duration * wa);
+    });
+
+    const blackholeTime = blackholes.reduce((s, b) => s + b.total_duration, 0);
+    return {
+      blackholes,
+      total_wasted_time: blackholeTime,
+      waste_percentage: totalDuration > 0 ? Math.round(blackholeTime / totalDuration * 1000) / 10 : 0,
+      top_blackholes: blackholes.slice(0, 5),
+      threshold_minutes: this.thresholdSeconds / 60
+    };
+  }
+
+  // 注意力曲线分析
+  analyzeAttention(records) {
+    const hourlyStats = Array(24).fill(null).map(() => ({
+      total_duration: 0, focus_duration: 0, entertainment_duration: 0, other_duration: 0
+    }));
+
+    for (const record of records) {
+      const vt = record.visitTime;
+      let hour;
+      if (typeof vt === 'number') {
+        hour = new Date(vt).getHours();
+      } else if (typeof vt === 'string') {
+        const d = new Date(vt);
+        if (isNaN(d)) continue;
+        hour = d.getHours();
+      } else {
+        continue;
+      }
+
+      const duration = record.duration || 0;
+      const category = record.category || 'other';
+      hourlyStats[hour].total_duration += duration;
+
+      if (LocalAdvancedAnalyzer.FOCUS_CATEGORIES.has(category)) {
+        hourlyStats[hour].focus_duration += duration;
+      } else if (LocalAdvancedAnalyzer.DISTRACTION_CATEGORIES.has(category)) {
+        hourlyStats[hour].entertainment_duration += duration;
+      } else {
+        hourlyStats[hour].other_duration += duration;
+      }
+    }
+
+    const hourlyFocus = hourlyStats.map((s, hour) => {
+      let score = 0;
+      if (s.total_duration > 0) {
+        const focusRatio = s.focus_duration / s.total_duration;
+        const entRatio = s.entertainment_duration / s.total_duration;
+        score = Math.max(0, Math.min(100, focusRatio * 100 - entRatio * 50));
+      }
+      return {
+        hour,
+        score: Math.round(score * 10) / 10,
+        total_duration: s.total_duration,
+        focus_duration: s.focus_duration,
+        entertainment_duration: s.entertainment_duration
+      };
+    });
+
+    const activeHours = hourlyFocus.filter(h => h.total_duration > 0);
+    let avgScore = 0, peakHours = [], lowHours = [];
+
+    if (activeHours.length) {
+      avgScore = activeHours.reduce((s, h) => s + h.score, 0) / activeHours.length;
+      peakHours = activeHours.filter(h => h.score >= avgScore + 20);
+      lowHours = activeHours.filter(h => h.score <= avgScore - 20);
+    }
+
+    const recommendations = this._generateRecommendations(peakHours, lowHours, hourlyFocus);
+
+    return {
+      hourly_focus: hourlyFocus,
+      peak_hours: peakHours.map(h => h.hour),
+      low_hours: lowHours.map(h => h.hour),
+      focus_score: Math.round(avgScore * 10) / 10,
+      recommendations
+    };
+  }
+
+  _generateRecommendations(peakHours, lowHours, hourlyFocus) {
+    const recs = [];
+    if (peakHours.length) {
+      recs.push(`你的高效时段是 ${this._formatTimeRanges(peakHours.map(h => h.hour))}，建议在这些时间处理重要工作`);
+    }
+    if (lowHours.length) {
+      recs.push(`你在 ${this._formatTimeRanges(lowHours.map(h => h.hour))} 容易分心，建议减少娱乐网站访问`);
+    }
+    const morning = hourlyFocus.filter(h => h.hour >= 6 && h.hour <= 11 && h.total_duration > 0);
+    if (morning.length) {
+      const morningAvg = morning.reduce((s, h) => s + h.score, 0) / morning.length;
+      if (morningAvg < 50) recs.push('早晨效率较低，建议调整作息或减少早晨的娱乐时间');
+    }
+    const lateNight = hourlyFocus.filter(h => h.hour >= 23 || h.hour <= 2);
+    const lateDuration = lateNight.reduce((s, h) => s + h.total_duration, 0);
+    if (lateDuration > 3600) recs.push('深夜浏览时间较长，建议早点休息以保证第二天效率');
+    if (!recs.length) recs.push('保持当前的浏览习惯，继续加油！');
+    return recs;
+  }
+
+  _formatTimeRanges(hours) {
+    if (!hours.length) return '';
+    hours = [...hours].sort((a, b) => a - b);
+    const ranges = [];
+    let start = hours[0], end = hours[0];
+    for (let i = 1; i < hours.length; i++) {
+      if (hours[i] === end + 1) { end = hours[i]; }
+      else { ranges.push(`${start}:00-${end + 1}:00`); start = end = hours[i]; }
+    }
+    ranges.push(`${start}:00-${end + 1}:00`);
+    return ranges.join('、');
+  }
+
+  // 整合分析
+  analyzeAll(records, thresholdMinutes) {
+    const detector = new LocalAdvancedAnalyzer(thresholdMinutes || this.thresholdSeconds / 60);
+    return {
+      blackholes: detector.detectBlackholes(records),
+      attention_curve: detector.analyzeAttention(records)
+    };
+  }
+}
+
 // 导出模块
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DataProcessor, WebsiteClassifier, StatisticsAnalyzer };
+  module.exports = { DataProcessor, WebsiteClassifier, StatisticsAnalyzer, LocalAdvancedAnalyzer };
 }
