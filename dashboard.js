@@ -680,6 +680,70 @@ async function loadAdvancedInsights() {
   renderBlackholes(analysis.blackholes);
   renderAttentionCurve(analysis.attention_curve);
 }
+
+async function runComparison() {
+  const button = document.getElementById('compareBtn');
+  const container = document.getElementById('compareResult');
+  setButtonBusy(button, true, '对比中...');
+  try {
+    await initDataSync();
+    if (!(await cachedCheckConnection())) {
+      container.innerHTML = '<div class="empty">后端未连接，无法进行周期对比。</div>';
+      return;
+    }
+    await dataSync.initUserId();
+    const p1 = document.getElementById('comparePeriod1').value;
+    const p2 = document.getElementById('comparePeriod2').value;
+    const response = await fetch(`${dataSync.apiBaseUrl}/api/analysis/${dataSync.userId}/compare?period1=${p1}&period2=${p2}`);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || '对比失败');
+    }
+    const data = await response.json();
+    renderComparison(data, p1, p2);
+  } catch (error) {
+    container.innerHTML = `<div class="empty">对比失败：${escapeHtml(error.message)}</div>`;
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+function renderComparison(data, p1Days, p2Days) {
+  const container = document.getElementById('compareResult');
+  const dur = data.duration_change_pct;
+  const durIcon = dur > 0 ? '+' : '';
+  const durColor = dur > 0 ? 'var(--red)' : dur < 0 ? 'var(--green)' : 'var(--muted)';
+
+  let html = `<div class="insight-cards">
+    <div class="insight-card"><span>近 ${p1Days} 天 vs ${p2Days} 天前</span><strong style="color:${durColor}">${durIcon}${dur}%</strong><small>总时长变化</small></div>
+    <div class="insight-card"><span>近期访问</span><strong>${data.period1.total_visits}</strong><small>${formatDuration(data.period1.total_duration)}</small></div>
+    <div class="insight-card"><span>对比期访问</span><strong>${data.period2.total_visits}</strong><small>${formatDuration(data.period2.total_duration)}</small></div>
+  </div>`;
+
+  // 分类占比变化
+  const cats = Object.entries(data.category_changes).sort((a, b) => Math.abs(b[1].delta) - Math.abs(a[1].delta));
+  if (cats.length) {
+    html += '<div style="margin-top:12px;">';
+    for (const [cat, info] of cats) {
+      const catName = WebsiteClassifier.CATEGORY_NAMES[cat] || cat;
+      const deltaIcon = info.delta > 0 ? '+' : '';
+      const deltaColor = info.delta > 0 ? 'var(--red)' : info.delta < 0 ? 'var(--green)' : 'var(--muted)';
+      html += `<div class="domain-row"><div><div class="domain-name">${catName}</div><div class="domain-meta">${p1Days}天: ${info.period1_pct}% · ${p2Days}天前: ${info.period2_pct}%</div></div><div style="color:${deltaColor};font-weight:600;font-size:13px;">${deltaIcon}${info.delta}%</div></div>`;
+    }
+    html += '</div>';
+  }
+
+  // 新增/消失域名
+  if (data.new_domains.length) {
+    html += `<div style="margin-top:12px;"><div style="font-size:12px;font-weight:600;margin-bottom:6px;">近期新增域名 (${data.new_domains.length})</div><div style="font-size:11px;color:var(--muted);">${data.new_domains.map(d => escapeHtml(d)).join('、')}</div></div>`;
+  }
+  if (data.disappeared_domains.length) {
+    html += `<div style="margin-top:8px;"><div style="font-size:12px;font-weight:600;margin-bottom:6px;">消失的域名 (${data.disappeared_domains.length})</div><div style="font-size:11px;color:var(--muted);">${data.disappeared_domains.map(d => escapeHtml(d)).join('、')}</div></div>`;
+  }
+
+  container.innerHTML = html;
+}
+
 async function loadReports() {
   try {
     await initDataSync();
@@ -987,7 +1051,7 @@ function moveSidebarTabFocus(currentTab, direction) {
 function bindEvents() { document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', () => {
   clearTimeout(domainFilterTimer);
   domainFilterTimer = setTimeout(renderFilteredDomains, 250);
-}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
+}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('compareBtn').addEventListener('click', runComparison); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
 document.getElementById('themeToggleBtn').addEventListener('click', cycleTheme);
 document.querySelectorAll('[data-pref]').forEach(el => {
   const evt = el.type === 'checkbox' ? 'change' : (el.tagName === 'SELECT' ? 'change' : 'input');

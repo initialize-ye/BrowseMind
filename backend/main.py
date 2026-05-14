@@ -252,6 +252,88 @@ async def get_analysis(
     )
 
 
+@app.get("/api/analysis/{user_id}/compare")
+async def compare_periods(
+    user_id: str,
+    period1: int = Query(7, ge=1, description="近期天数"),
+    period2: int = Query(14, ge=1, description="对比天数（period2 应 > period1）"),
+    db: Session = Depends(get_db)
+):
+    """对比两个时间段的浏览数据"""
+    now = datetime.now()
+    # Period 1: 最近 period1 天
+    p1_start = now - timedelta(days=period1)
+    # Period 2: period1 天前到 period1+period2 天前
+    p2_start = now - timedelta(days=period1 + period2)
+    p2_end = p1_start
+
+    p1_records = db.query(BrowsingRecord).filter(
+        BrowsingRecord.user_id == user_id,
+        BrowsingRecord.visit_time >= p1_start
+    ).all()
+
+    p2_records = db.query(BrowsingRecord).filter(
+        BrowsingRecord.user_id == user_id,
+        BrowsingRecord.visit_time >= p2_start,
+        BrowsingRecord.visit_time < p2_end
+    ).all()
+
+    def summarize(records):
+        total_duration = sum(r.duration for r in records)
+        unique_domains = set(r.domain for r in records if r.domain)
+        cat_stats = {}
+        for r in records:
+            cat = r.category or 'other'
+            if cat not in cat_stats:
+                cat_stats[cat] = {'visits': 0, 'duration': 0, 'domains': set()}
+            cat_stats[cat]['visits'] += 1
+            cat_stats[cat]['duration'] += r.duration
+            if r.domain:
+                cat_stats[cat]['domains'].add(r.domain)
+        return {
+            'total_visits': len(records),
+            'total_duration': total_duration,
+            'unique_domains': len(unique_domains),
+            'domains': unique_domains,
+            'category_stats': {k: {'visits': v['visits'], 'duration': v['duration'], 'unique_domains': len(v['domains'])} for k, v in cat_stats.items()},
+        }
+
+    s1 = summarize(p1_records)
+    s2 = summarize(p2_records)
+
+    # 分类占比变化
+    def pct_map(stats):
+        total = stats['total_duration'] or 1
+        return {k: round(v['duration'] / total * 100, 1) for k, v in stats['category_stats'].items()}
+
+    p1_pct = pct_map(s1)
+    p2_pct = pct_map(s2)
+    all_cats = set(list(p1_pct.keys()) + list(p2_pct.keys()))
+    category_changes = {}
+    for cat in all_cats:
+        category_changes[cat] = {
+            'period1_pct': p1_pct.get(cat, 0),
+            'period2_pct': p2_pct.get(cat, 0),
+            'delta': round(p1_pct.get(cat, 0) - p2_pct.get(cat, 0), 1)
+        }
+
+    # 域名变化
+    new_domains = sorted(s1['domains'] - s2['domains'])
+    disappeared_domains = sorted(s2['domains'] - s1['domains'])
+
+    # 时长变化率
+    duration_change_pct = round((s1['total_duration'] - s2['total_duration']) / (s2['total_duration'] or 1) * 100, 1)
+
+    return {
+        'period1': {'days': period1, **s1, 'domains': None},
+        'period2': {'days': period2, **s2, 'domains': None},
+        'duration_change_pct': duration_change_pct,
+        'category_changes': category_changes,
+        'new_domains': new_domains[:20],
+        'disappeared_domains': disappeared_domains[:20],
+    }
+
+
 @app.delete("/api/records/{user_id}")
 async def delete_user_records(
     user_id: str,
