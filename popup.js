@@ -12,9 +12,9 @@ function getChartPalette() {
 }
 // getPreferences(), DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
 
-async function initDataSync() {
-  const preferences = await getPreferences();
-  dataSync = new DataSync(preferences.apiBaseUrl);
+async function initDataSync(preferences) {
+  const prefs = preferences || await getPreferences();
+  dataSync = new DataSync(prefs.apiBaseUrl);
   return dataSync;
 }
 
@@ -52,6 +52,15 @@ document.querySelectorAll('.chart-tab').forEach(btn => {
 // 专注会话
 document.getElementById('focusBtn').addEventListener('click', showFocusPicker);
 document.getElementById('focusStopBtn').addEventListener('click', stopFocusFromPopup);
+
+// 快捷键
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'r' || e.key === 'R') { e.preventDefault(); loadData(); }
+  else if (e.key === 's' || e.key === 'S') { e.preventDefault(); syncToCloud(); }
+  else if (e.key === 'd' || e.key === 'D') { e.preventDefault(); openDashboard(); }
+  else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); showFocusPicker(); }
+});
 
 let _popupFocusTimer = null;
 
@@ -165,6 +174,20 @@ function updateCurrentSite() {
   });
 }
 
+// 连接状态指示器
+async function updateConnectionStatus() {
+  const dot = document.getElementById('connStatus');
+  if (!dot || !dataSync) return;
+  try {
+    const connected = await dataSync.checkConnection();
+    dot.style.background = connected ? 'var(--green)' : 'var(--red)';
+    dot.title = connected ? '已连接后端' : '后端未连接';
+  } catch {
+    dot.style.background = 'var(--red)';
+    dot.title = '后端未连接';
+  }
+}
+
 const loadingMessages = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
 const goalTypeNames = { daily_learning: '学习时长', daily_entertainment: '娱乐限制', daily_coding: '编程时长', daily_social: '社交限制' };
 let _loadingMsgTimer = null;
@@ -187,9 +210,10 @@ async function loadData() {
   startLoadingRotation();
 
   try {
-    await initDataSync();
     // Batch all storage reads into one call
-    const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'themeMode']);
+    const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback', 'themeMode']);
+    const preferences = await getPreferences();
+    await initDataSync(preferences);
     const { themeMode = 'light' } = storage;
     const html = document.documentElement;
     if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -213,7 +237,8 @@ async function loadData() {
     const cleanedData = processor.clean().getData();
 
     const classificationOverrides = storage.classificationOverrides || {};
-    const classifier = new WebsiteClassifier(classificationOverrides);
+    const classificationFeedback = storage.classificationFeedback || {};
+    const classifier = new WebsiteClassifier(classificationOverrides, classificationFeedback);
     const classifiedData = classifier.classifyBatch(cleanedData);
 
     // 统计分析
@@ -221,7 +246,6 @@ async function loadData() {
     const categoryStats = analyzer.analyzeByCategory();
     const todayStats = analyzer.getTodayStats();
     const hourlyDist = analyzer.getHourlyDistribution();
-    const preferences = await getPreferences();
     const dailyTrend = calculateDailyTrend(classifiedData, preferences.analysisDays);
     // Update analysis window labels
     document.getElementById('categoryStatsLabel').textContent = `${preferences.analysisDays} 天`;
@@ -246,6 +270,7 @@ async function loadData() {
     drawPieChart();
 
     // 加载目标、高级分析和专注状态
+    updateConnectionStatus();
     await loadGoals();
     await loadAdvancedAnalysis();
     await loadFocusStatus();
@@ -500,6 +525,7 @@ function drawBarChart() {
       responsive: true,
       maintainAspectRatio: false,
       animation: chartAnimation,
+      normalized: true,
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -575,6 +601,8 @@ function drawLineChart() {
       responsive: true,
       maintainAspectRatio: false,
       animation: chartAnimation,
+      normalized: true,
+      spanGaps: true,
       interaction: {
         mode: 'index',
         intersect: false
