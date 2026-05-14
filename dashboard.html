@@ -352,6 +352,7 @@
           <div class="view-shell">
             <div class="view-header panel"><div class="view-copy"><h2>行为洞察</h2><p>结合云端高级分析、AI 建议和历史报告，定位时间黑洞与专注时段。</p></div><div class="button-row compact"><button id="refreshInsightsBtn" class="secondary">刷新洞察</button><button id="aiBtn">AI 分析</button></div></div>
             <section class="inline-grid">
+              <div class="panel"><div class="section-title"><div><h2>专注会话</h2><p>番茄钟式专注计时</p></div><div class="button-row compact"><button id="focusStartBtn" class="secondary">开始专注</button></div></div><div id="focusPanel"><div class="insight-cards"><div class="insight-card"><span>今日专注</span><strong id="focusTodayTime">0</strong><small>分钟</small></div><div class="insight-card"><span>连续天数</span><strong id="focusStreak">0</strong><small>天</small></div></div><div id="focusSessionInfo" style="display:none;margin-top:10px;padding:10px;background:var(--accent-soft);border-radius:8px;font-size:12px;"></div><div id="focusHistory" style="margin-top:10px;"></div></div></div>
               <div class="panel"><div class="section-title"><div><h2>时间黑洞</h2><p>超过阈值的长时间访问</p></div></div><div id="blackholeStats" aria-live="polite"><div class="empty">同步云端数据后显示时间黑洞。</div></div></div>
               <div class="panel"><div class="section-title"><div><h2>专注曲线</h2><p>按小时估算专注度</p></div></div><div id="attentionStats" aria-live="polite"><div class="empty">同步云端数据后显示专注曲线。</div></div><div class="chart-box small"><canvas id="attentionChart"></canvas></div></div>
             </section>

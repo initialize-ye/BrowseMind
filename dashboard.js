@@ -210,6 +210,7 @@ async function switchSidebarTab(tab, options = {}) {
     loadLatestAIAnalysis().catch(() => {});
     loadAdvancedInsights().catch(() => {});
     loadReports().catch(() => {});
+    loadFocusStats().catch(() => {});
   }
 }
 function applyPreferencesToForm(preferences) {
@@ -744,6 +745,127 @@ function renderComparison(data, p1Days, p2Days) {
   container.innerHTML = html;
 }
 
+// ==================== 专注会话 ====================
+
+let _focusTimer = null;
+
+async function loadFocusStats() {
+  // 查询当前会话状态
+  const status = await new Promise(resolve => {
+    chrome.runtime.sendMessage({ action: 'focusStatus' }, res => resolve(res?.status || { active: false }));
+  });
+  renderFocusSessionInfo(status);
+
+  // 统计今日专注时长
+  const { focusSessions = [] } = await chrome.storage.local.get('focusSessions');
+  const today = todayString();
+  const todaySessions = focusSessions.filter(s => {
+    const d = new Date(s.startTime).toISOString().split('T')[0];
+    return d === today;
+  });
+  const todayMinutes = Math.round(todaySessions.reduce((sum, s) => sum + (s.completed ? s.actualDuration : 0), 0) / 60);
+  document.getElementById('focusTodayTime').textContent = todayMinutes;
+
+  // 计算连续天数
+  const streak = calculateFocusStreak(focusSessions);
+  document.getElementById('focusStreak').textContent = streak;
+
+  // 最近会话历史
+  renderFocusHistory(focusSessions.slice(-5).reverse());
+}
+
+function calculateFocusStreak(sessions) {
+  if (!sessions.length) return 0;
+  const completedDates = new Set(
+    sessions.filter(s => s.completed).map(s => new Date(s.startTime).toISOString().split('T')[0])
+  );
+  let streak = 0;
+  const d = new Date();
+  while (true) {
+    const dateStr = d.toISOString().split('T')[0];
+    if (completedDates.has(dateStr)) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+function renderFocusSessionInfo(status) {
+  const infoEl = document.getElementById('focusSessionInfo');
+  const startBtn = document.getElementById('focusStartBtn');
+
+  if (status.active) {
+    const remaining = status.remainingSeconds;
+    const min = Math.floor(remaining / 60);
+    const sec = remaining % 60;
+    infoEl.style.display = 'block';
+    infoEl.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;"><span>专注中 — 剩余 <strong>${min}:${String(sec).padStart(2, '0')}</strong> · 打断 ${status.interruptions} 次</span><button id="focusStopBtn" class="danger" style="font-size:11px;padding:4px 10px;">停止</button></div>`;
+    startBtn.disabled = true;
+    startBtn.textContent = '专注中...';
+
+    document.getElementById('focusStopBtn').addEventListener('click', stopFocusSession);
+
+    // 倒计时
+    clearInterval(_focusTimer);
+    _focusTimer = setInterval(() => {
+      loadFocusStats();
+    }, 1000);
+  } else {
+    infoEl.style.display = 'none';
+    startBtn.disabled = false;
+    startBtn.textContent = '开始专注';
+    clearInterval(_focusTimer);
+    _focusTimer = null;
+  }
+}
+
+function renderFocusHistory(sessions) {
+  const container = document.getElementById('focusHistory');
+  if (!sessions.length) {
+    container.innerHTML = '';
+    return;
+  }
+  const html = sessions.map(s => {
+    const start = new Date(s.startTime);
+    const timeStr = `${start.getHours()}:${String(start.getMinutes()).padStart(2, '0')}`;
+    const dur = Math.round(s.actualDuration / 60);
+    const status = s.completed ? '<span style="color:var(--green);">完成</span>' : '<span style="color:var(--red);">中断</span>';
+    return `<div class="domain-row"><div><div class="domain-name">${timeStr} · ${dur} 分钟</div><div class="domain-meta">打断 ${s.interruptions} 次</div></div>${status}</div>`;
+  }).join('');
+  container.innerHTML = `<div style="font-size:12px;font-weight:600;margin-bottom:6px;">最近会话</div>${html}`;
+}
+
+function showFocusDurationPicker() {
+  const durations = [25, 45, 60];
+  const infoEl = document.getElementById('focusSessionInfo');
+  infoEl.style.display = 'block';
+  infoEl.innerHTML = `<div style="font-size:12px;margin-bottom:8px;">选择专注时长</div><div class="button-row compact">${durations.map(m => `<button class="ghost focus-duration-pick" data-minutes="${m}" style="font-size:12px;">${m} 分钟</button>`).join('')}</div>`;
+  infoEl.querySelectorAll('.focus-duration-pick').forEach(btn => {
+    btn.addEventListener('click', () => startFocusSession(parseInt(btn.dataset.minutes)));
+  });
+}
+
+async function startFocusSession(minutes) {
+  await new Promise(resolve => {
+    chrome.runtime.sendMessage({ action: 'startFocus', durationMinutes: minutes }, resolve);
+  });
+  await loadFocusStats();
+  setNote(`专注会话开始：${minutes} 分钟`, 'success');
+  log(`专注会话开始：${minutes} 分钟`);
+}
+
+async function stopFocusSession() {
+  await new Promise(resolve => {
+    chrome.runtime.sendMessage({ action: 'stopFocus' }, resolve);
+  });
+  await loadFocusStats();
+  setNote('专注会话已停止', 'info');
+  log('专注会话已手动停止');
+}
+
 async function loadReports() {
   try {
     await initDataSync();
@@ -797,6 +919,7 @@ async function refreshInsights() {
     await loadAdvancedInsights();
     await loadReports();
     await loadLatestAIAnalysis();
+    await loadFocusStats();
     setNote('洞察已刷新', 'success');
     log('洞察页已刷新');
   } catch (error) {
@@ -862,6 +985,7 @@ async function refreshDashboard() {
   if (activeSidebarTab === 'insights') {
     await loadAdvancedInsights();
     await loadReports();
+    await loadFocusStats();
   }
   if (activeSidebarTab === 'settings') {
     renderOverrideRules();
@@ -1051,7 +1175,7 @@ function moveSidebarTabFocus(currentTab, direction) {
 function bindEvents() { document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', () => {
   clearTimeout(domainFilterTimer);
   domainFilterTimer = setTimeout(renderFilteredDomains, 250);
-}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('compareBtn').addEventListener('click', runComparison); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
+}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('compareBtn').addEventListener('click', runComparison); document.getElementById('focusStartBtn').addEventListener('click', showFocusDurationPicker); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
 document.getElementById('themeToggleBtn').addEventListener('click', cycleTheme);
 document.querySelectorAll('[data-pref]').forEach(el => {
   const evt = el.type === 'checkbox' ? 'change' : (el.tagName === 'SELECT' ? 'change' : 'input');

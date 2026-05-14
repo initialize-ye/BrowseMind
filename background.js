@@ -18,6 +18,16 @@ let activeTab = {
   startTime: null
 };
 
+// 专注会话状态
+let focusSession = {
+  active: false,
+  startTime: null,
+  durationMinutes: 0,
+  endTime: null,
+  interruptions: 0,
+  domains: new Set()
+};
+
 // 初始化：加载历史记录 + 创建右键菜单
 chrome.runtime.onInstalled.addListener(() => {
   console.log('BrowseMind 已安装');
@@ -295,6 +305,68 @@ async function collectHistoryData() {
 // 定期清理旧数据（每小时执行一次）
 chrome.alarms.create('cleanOldData', { periodInMinutes: 60 });
 
+// ==================== 专注会话 ====================
+
+function startFocusSession(durationMinutes) {
+  const now = Date.now();
+  focusSession = {
+    active: true,
+    startTime: now,
+    durationMinutes,
+    endTime: now + durationMinutes * 60 * 1000,
+    interruptions: 0,
+    domains: new Set()
+  };
+  chrome.alarms.create('focusSessionEnd', { delayInMinutes: durationMinutes });
+  chrome.action.setBadgeText({ text: 'F' });
+  chrome.action.setBadgeBackgroundColor({ color: '#6366f1' });
+  console.log(`专注会话开始：${durationMinutes} 分钟`);
+}
+
+async function endFocusSession(completed = true) {
+  if (!focusSession.active) return;
+  const now = Date.now();
+  const actualDuration = Math.floor((now - focusSession.startTime) / 1000);
+
+  const session = {
+    startTime: focusSession.startTime,
+    endTime: now,
+    plannedDuration: focusSession.durationMinutes * 60,
+    actualDuration,
+    completed,
+    interruptions: focusSession.interruptions,
+    domains: Array.from(focusSession.domains)
+  };
+
+  // 保存到本地
+  const { focusSessions = [] } = await chrome.storage.local.get('focusSessions');
+  focusSessions.push(session);
+  await chrome.storage.local.set({ focusSessions });
+
+  focusSession = { active: false, startTime: null, durationMinutes: 0, endTime: null, interruptions: 0, domains: new Set() };
+  chrome.alarms.clear('focusSessionEnd');
+  chrome.action.setBadgeText({ text: '' });
+  console.log(`专注会话结束：${completed ? '完成' : '中断'}，实际 ${actualDuration} 秒`);
+}
+
+function getFocusStatus() {
+  if (!focusSession.active) return { active: false };
+  return {
+    active: true,
+    startTime: focusSession.startTime,
+    durationMinutes: focusSession.durationMinutes,
+    endTime: focusSession.endTime,
+    remainingSeconds: Math.max(0, Math.floor((focusSession.endTime - Date.now()) / 1000)),
+    interruptions: focusSession.interruptions
+  };
+}
+
+function recordFocusInterruption(domain) {
+  if (!focusSession.active) return;
+  focusSession.interruptions++;
+  focusSession.domains.add(domain);
+}
+
 // 定期更新目标进度（每5分钟）
 chrome.alarms.create('updateGoalsProgress', { periodInMinutes: 5 });
 
@@ -325,6 +397,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       updateGoalsProgress().catch(e => console.error('updateGoalsProgress failed:', e));
     } else if (alarm.name === 'syncBrowsingData') {
       syncLocalDataInBackground('alarm');
+    } else if (alarm.name === 'focusSessionEnd') {
+      endFocusSession(true);
+      showNotification('info', '专注会话完成！你做到了。');
     }
   } catch (e) {
     console.error('alarm handler error:', e);
@@ -480,6 +555,14 @@ async function checkInterventions(domain, category) {
     return;
   }
 
+  // 专注会话期间访问娱乐/社交站点 — 记录打断并提醒
+  if (focusSession.active && (category === 'entertainment' || category === 'social')) {
+    recordFocusInterruption(domain);
+    const catNames = { entertainment: '娱乐', social: '社交' };
+    await showNotification('warning', `专注会话中！你正在访问${catNames[category]}类站点，已记录打断。`);
+    return;
+  }
+
   const normalizedDomain = (domain || '').toLowerCase();
   const allowlist = parseListString(preferences.domainAllowlist);
   const blocklist = parseListString(preferences.domainBlocklist);
@@ -558,5 +641,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'showNotification') {
     showNotification(msg.type, msg.message);
     sendResponse({ ok: true });
+  } else if (msg.action === 'startFocus') {
+    startFocusSession(msg.durationMinutes);
+    sendResponse({ ok: true, status: getFocusStatus() });
+  } else if (msg.action === 'stopFocus') {
+    endFocusSession(false).then(() => {
+      sendResponse({ ok: true, status: getFocusStatus() });
+    });
+    return true; // async sendResponse
+  } else if (msg.action === 'focusStatus') {
+    sendResponse({ ok: true, status: getFocusStatus() });
   }
 });
