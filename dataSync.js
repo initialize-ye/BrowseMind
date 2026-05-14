@@ -342,7 +342,22 @@ class DataSync {
   }
 
   // 检查服务器连接
+  // 连接检查去重：并发调用共享同一个 Promise
+  _connectionPromise = null;
+  _connectionTime = 0;
+
   async checkConnection() {
+    const now = Date.now();
+    // 10 秒内复用上次结果
+    if (this._connectionPromise && now - this._connectionTime < 10000) {
+      return this._connectionPromise;
+    }
+    this._connectionTime = now;
+    this._connectionPromise = this._doCheckConnection();
+    return this._connectionPromise;
+  }
+
+  async _doCheckConnection() {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
@@ -353,7 +368,6 @@ class DataSync {
       clearTimeout(timer);
       return response.ok;
     } catch (error) {
-      console.error('服务器连接失败:', error.message || error);
       return false;
     }
   }

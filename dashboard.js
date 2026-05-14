@@ -1072,7 +1072,8 @@ async function refreshDashboard() {
   const days = preferences.analysisDays;
   const hour = new Date().getHours();
   const greeting = hour < 6 ? '夜深了' : hour < 12 ? '早上好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
-  document.getElementById('statusNote').textContent = `${connected ? '云服务器连接正常。' : '无法连接云服务器。'} 已载入 ${analytics.count} 条本地记录。${analytics.topCategoryText} ${syncText} 当前分析窗口：${days} 天。`;
+  const connDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${connected ? 'var(--green)' : 'var(--red)'};vertical-align:middle;margin-right:4px;"></span>`;
+  document.getElementById('statusNote').innerHTML = `${connDot}${connected ? '云服务器连接正常' : '后端未连接'} · 已载入 ${analytics.count} 条本地记录 · ${syncText} · 分析窗口 ${days} 天`;
   document.getElementById('analysisWindowDesc').textContent = `${greeting} — 查看最近 ${days} 天的访问、分类、时段和高频站点。`;
   document.getElementById('weekVisitsLabel').textContent = `${days} 天访问`;
   document.getElementById('trendChartTitle').textContent = `${days} 天趋势`;

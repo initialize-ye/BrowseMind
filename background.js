@@ -227,22 +227,41 @@ function recordKey(r) {
 }
 
 // 初始化记录指纹缓存
-function ensureRecordCache(browsingData) {
+async function ensureRecordCache(browsingData) {
   if (!_recentRecordKeys) {
+    if (!browsingData) {
+      const { browsingData: data = [] } = await chrome.storage.local.get('browsingData');
+      browsingData = data;
+    }
     _recentRecordKeys = new Set(browsingData.map(recordKey));
   }
 }
 
 // 添加浏览记录到存储（O(1) 去重，保留由 cleanOldData alarm 处理）
-async function addBrowsingRecord(record) {
-  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+// 写入缓冲：批量合并多次写入为一次 storage.set
+let _pendingRecords = [];
+let _flushTimer = null;
 
-  ensureRecordCache(browsingData);
+async function addBrowsingRecord(record) {
+  ensureRecordCache(null);
   const key = recordKey(record);
   if (_recentRecordKeys.has(key)) return;
 
   _recentRecordKeys.add(key);
-  browsingData.push(record);
+  _pendingRecords.push(record);
+
+  // 50ms 内的多次写入合并为一次
+  if (!_flushTimer) {
+    _flushTimer = setTimeout(flushPendingRecords, 50);
+  }
+}
+
+async function flushPendingRecords() {
+  _flushTimer = null;
+  if (!_pendingRecords.length) return;
+  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+  browsingData.push(..._pendingRecords);
+  _pendingRecords = [];
   await chrome.storage.local.set({ browsingData });
 }
 
