@@ -65,6 +65,34 @@ function validateBrowsingData(data) {
   return data.filter(r => r && typeof r === 'object' && r.url && r.visitTime);
 }
 
+// 压缩浏览记录：移除冗余字段，缩短键名
+function compressRecords(records) {
+  return records.map(r => {
+    const compressed = {};
+    if (r.url) compressed.u = r.url;
+    if (r.title) compressed.t = r.title;
+    if (r.domain) compressed.d = r.domain;
+    if (r.category && r.category !== 'other') compressed.c = r.category;
+    if (r.visitTime) compressed.v = r.visitTime;
+    if (r.duration) compressed.s = r.duration;
+    if (r.date) compressed.dt = r.date;
+    return compressed;
+  });
+}
+
+// 解压浏览记录：恢复完整字段名
+function decompressRecords(records) {
+  return records.map(r => ({
+    url: r.u || '',
+    title: r.t || '',
+    domain: r.d || '',
+    category: r.c || 'other',
+    visitTime: r.v || 0,
+    duration: r.s || 0,
+    date: r.dt || ''
+  }));
+}
+
 // 带重试的 fetch 封装
 async function fetchWithRetry(url, options = {}, maxRetries = 2) {
   for (let i = 0; i <= maxRetries; i++) {

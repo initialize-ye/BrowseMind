@@ -458,14 +458,20 @@ function calculateTopDomains(data) {
 }
 function renderMetrics(data) {
   const today = todayString();
-  const todayData = data.filter(record => record.date === today);
-  const todayDuration = todayData.reduce((sum, record) => sum + (record.duration || 0), 0);
-  const uniqueSites = new Set(data.map(record => record.domain).filter(Boolean)).size;
+  let todayVisits = 0, todayDuration = 0;
+  const domains = new Set();
+  for (const r of data) {
+    if (r.domain) domains.add(r.domain);
+    if (r.date === today) {
+      todayVisits++;
+      todayDuration += r.duration || 0;
+    }
+  }
   document.getElementById('todayDate').textContent = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
-  document.getElementById('metricTodayVisits').textContent = todayData.length;
+  document.getElementById('metricTodayVisits').textContent = todayVisits;
   document.getElementById('metricTodayDuration').textContent = formatDuration(todayDuration);
   document.getElementById('metricWeekVisits').textContent = data.length;
-  document.getElementById('metricUniqueSites').textContent = uniqueSites;
+  document.getElementById('metricUniqueSites').textContent = domains.size;
 }
 function renderCategoryList(categoryStats, classifier) {
   const container = document.getElementById('categoryList');
@@ -480,16 +486,34 @@ function renderCategoryList(categoryStats, classifier) {
     return `<div class="category-row"><div><strong>${info.icon} ${escapeHtml(info.name)}</strong><div class="category-meta">${stat.visits} 次</div></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(percentage, 100)}%; background:${palette[index % palette.length]}"></div></div><div class="category-meta">${percentage.toFixed(1)}%</div></div>`;
   }).join('');
 }
+const DOMAIN_PAGE_SIZE = 50;
+let _allDomains = [];
+let _domainPage = 1;
+
 function renderDomainList(domains) {
+  _allDomains = domains;
+  _domainPage = 1;
+  _renderDomainPage();
+}
+
+function _renderDomainPage() {
   const container = document.getElementById('domainList');
-  if (!domains.length) {
+  if (!_allDomains.length) {
     container.innerHTML = '<div class="empty">暂无站点数据。</div>';
     return;
   }
-  container.innerHTML = domains.map(domain => {
+  const page = _allDomains.slice(0, _domainPage * DOMAIN_PAGE_SIZE);
+  container.innerHTML = page.map(domain => {
     const encDomain = (domain.domain || '').replace(/"/g, '&quot;');
     return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta"><span>${formatDuration(domain.duration)}</span> <button class="ghost" data-correct-domain="${encDomain}" data-correct-cat="${domain.category || 'other'}" style="min-height:28px;padding:2px 8px;font-size:11px;">修改分类</button></div></div>`;
   }).join('');
+  if (page.length < _allDomains.length) {
+    container.innerHTML += `<div style="text-align:center;padding:10px;"><button class="ghost" id="loadMoreDomains" style="font-size:12px;min-height:32px;">加载更多 (${_allDomains.length - page.length} 条)</button></div>`;
+    document.getElementById('loadMoreDomains').addEventListener('click', () => {
+      _domainPage++;
+      _renderDomainPage();
+    });
+  }
   container.querySelectorAll('[data-correct-domain]').forEach(btn => {
     btn.addEventListener('click', () => {
       showCategoryPicker(btn.dataset.correctDomain, btn.dataset.correctCat);
@@ -1415,7 +1439,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     startDashLoadingRotation();
     await loadSidebarState();
-    // 旧用户 storage 中保存了 'actions'，强制迁移到 'dashboard'
     if (activeSidebarTab === 'actions') activeSidebarTab = 'dashboard';
     bindEvents();
     applySidebarState();
