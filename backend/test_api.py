@@ -131,7 +131,7 @@ def test_get_stats():
 
 def run_all_tests():
     """运行所有测试"""
-    print("🧠 BrowseMind 后端 API 测试")
+    print("[TEST] BrowseMind 后端 API 测试")
     print("=" * 50)
 
     tests = [
@@ -148,14 +148,14 @@ def run_all_tests():
             success = test_func()
             results.append((name, success))
         except Exception as e:
-            print(f"❌ 测试失败: {e}")
+            print(f"[FAIL] 测试失败: {e}")
             results.append((name, False))
 
     # 输出测试结果
     print("\n" + "=" * 50)
     print("测试结果汇总:")
     for name, success in results:
-        status = "✅ 通过" if success else "❌ 失败"
+        status = "[OK] 通过" if success else "[FAIL] 失败"
         print(f"  {name}: {status}")
 
     passed = sum(1 for _, success in results if success)
@@ -167,6 +167,6 @@ if __name__ == "__main__":
     try:
         run_all_tests()
     except requests.exceptions.ConnectionError:
-        print("\n❌ 无法连接到后端服务")
+        print("\n[FAIL] 无法连接到后端服务")
         print("请确保后端服务已启动: python backend/main.py")
         print("或运行: cd backend && python main.py")

@@ -32,11 +32,19 @@ sizes.forEach(size => {
   ctx.closePath();
   ctx.fill();
   
-  // 绘制大脑emoji
-  ctx.font = `${size * 0.6}px Arial`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('🧠', size / 2, size / 2 + size * 0.05);
+  // 绘制脑形图标
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.lineWidth = Math.max(1.5, size * 0.06);
+  ctx.lineCap = 'round';
+  const cx = size / 2, cy = size * 0.48, r = size * 0.28;
+  // 左半弧
+  ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 0); ctx.stroke();
+  // 右半弧（偏移）
+  ctx.beginPath(); ctx.arc(cx + r * 0.15, cy, r * 0.85, Math.PI, 0); ctx.stroke();
+  // 中线
+  ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r * 0.6); ctx.stroke();
+  // 底部连接
+  ctx.beginPath(); ctx.arc(cx, cy + r * 0.7, r * 0.5, 0, Math.PI); ctx.stroke();
   
   // 下载
   canvas.toBlob(blob => {

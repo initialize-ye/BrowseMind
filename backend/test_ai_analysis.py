@@ -16,7 +16,7 @@ USER_ID = "test_user_001"
 def test_api_health():
     """测试 API 健康状态"""
     print("\n" + "=" * 50)
-    print("1️⃣  测试 API 健康状态")
+    print("[1]  测试 API 健康状态")
     print("=" * 50)
 
     try:
@@ -24,17 +24,17 @@ def test_api_health():
         print(f"状态码: {response.status_code}")
         print(f"响应: {response.json()}")
         assert response.status_code == 200
-        print("✅ API 健康检查通过")
+        print("[OK] API 健康检查通过")
         return True
     except Exception as e:
-        print(f"❌ API 健康检查失败: {e}")
+        print(f"[FAIL] API 健康检查失败: {e}")
         return False
 
 
 def test_upload_data():
     """测试上传浏览数据"""
     print("\n" + "=" * 50)
-    print("2️⃣  测试上传浏览数据")
+    print("[2]  测试上传浏览数据")
     print("=" * 50)
 
     # 构造测试数据
@@ -91,17 +91,17 @@ def test_upload_data():
         result = response.json()
         print(f"响应: {json.dumps(result, ensure_ascii=False, indent=2)}")
         assert response.status_code == 200
-        print(f"✅ 成功上传 {len(test_records)} 条记录")
+        print(f"[OK] 成功上传 {len(test_records)} 条记录")
         return True
     except Exception as e:
-        print(f"❌ 上传数据失败: {e}")
+        print(f"[FAIL] 上传数据失败: {e}")
         return False
 
 
 def test_get_analysis():
     """测试获取分析数据"""
     print("\n" + "=" * 50)
-    print("3️⃣  测试获取分析数据")
+    print("[3]  测试获取分析数据")
     print("=" * 50)
 
     try:
@@ -115,17 +115,17 @@ def test_get_analysis():
         for stat in result['category_stats']:
             print(f"  - {stat['category']}: {stat['percentage']}% ({stat['total_duration']}秒)")
         assert response.status_code == 200
-        print("✅ 分析数据获取成功")
+        print("[OK] 分析数据获取成功")
         return True
     except Exception as e:
-        print(f"❌ 获取分析数据失败: {e}")
+        print(f"[FAIL] 获取分析数据失败: {e}")
         return False
 
 
 def test_ai_analysis():
     """测试 AI 智能分析"""
     print("\n" + "=" * 50)
-    print("4️⃣  测试 AI 智能分析")
+    print("[4]  测试 AI 智能分析")
     print("=" * 50)
 
     try:
@@ -134,30 +134,30 @@ def test_ai_analysis():
 
         if response.status_code == 200:
             result = response.json()
-            print(f"\n📝 行为总结:")
+            print(f"\n[SUMMARY] 行为总结:")
             print(f"  {result['summary']}")
-            print(f"\n⚠️  发现的问题:")
+            print(f"\n[WARN]  发现的问题:")
             for issue in result['issues']:
                 print(f"  • {issue}")
-            print(f"\n💡 优化建议:")
+            print(f"\n[TIP] 优化建议:")
             for suggestion in result['suggestions']:
                 print(f"  ✓ {suggestion}")
-            print("\n✅ AI 分析成功")
+            print("\n[OK] AI 分析成功")
             return True
         else:
             error = response.json()
-            print(f"❌ AI 分析失败: {error.get('detail', '未知错误')}")
+            print(f"[FAIL] AI 分析失败: {error.get('detail', '未知错误')}")
             return False
 
     except Exception as e:
-        print(f"❌ AI 分析失败: {e}")
+        print(f"[FAIL] AI 分析失败: {e}")
         return False
 
 
 def test_get_reports():
     """测试获取历史报告"""
     print("\n" + "=" * 50)
-    print("5️⃣  测试获取历史报告")
+    print("[5]  测试获取历史报告")
     print("=" * 50)
 
     try:
@@ -175,17 +175,17 @@ def test_get_reports():
             print(f"  AI 总结: {latest['ai_summary'][:100]}...")
 
         assert response.status_code == 200
-        print("✅ 历史报告获取成功")
+        print("[OK] 历史报告获取成功")
         return True
     except Exception as e:
-        print(f"❌ 获取历史报告失败: {e}")
+        print(f"[FAIL] 获取历史报告失败: {e}")
         return False
 
 
 def main():
     """运行所有测试"""
     print("\n" + "=" * 50)
-    print("🧪 BrowseMind AI 分析功能测试")
+    print("[TEST] BrowseMind AI 分析功能测试")
     print("=" * 50)
     print(f"API 地址: {API_BASE_URL}")
     print(f"测试用户: {USER_ID}")
@@ -201,11 +201,11 @@ def main():
 
     # 汇总结果
     print("\n" + "=" * 50)
-    print("📊 测试结果汇总")
+    print("[REPORT] 测试结果汇总")
     print("=" * 50)
 
     for name, result in results:
-        status = "✅ 通过" if result else "❌ 失败"
+        status = "[OK] 通过" if result else "[FAIL] 失败"
         print(f"{name}: {status}")
 
     passed = sum(1 for _, r in results if r)
@@ -214,9 +214,9 @@ def main():
     print(f"\n总计: {passed}/{total} 通过")
 
     if passed == total:
-        print("\n🎉 所有测试通过！")
+        print("\n[DONE] 所有测试通过！")
     else:
-        print(f"\n⚠️  {total - passed} 个测试失败")
+        print(f"\n[WARN]  {total - passed} 个测试失败")
 
 
 if __name__ == "__main__":

@@ -532,7 +532,7 @@ async function syncToCloud() {
     // 检查服务器连接
     const isConnected = await dataSync.checkConnection();
     if (!isConnected) {
-      alert('❌ 无法连接到服务器\n请确保后端服务已启动：\ncd backend && python main.py');
+      alert('无法连接到服务器\n请确保后端服务已启动：\ncd backend && python main.py');
       return;
     }
 
@@ -540,15 +540,15 @@ async function syncToCloud() {
     const result = await dataSync.syncLocalData();
 
     if (result.success) {
-      syncBtn.textContent = '✅ 同步成功';
-      alert(`✅ 同步成功\n${result.message}`);
+      syncBtn.textContent = '同步成功';
+      alert(`同步成功\n${result.message}`);
       await loadAdvancedAnalysis();
     }
 
   } catch (error) {
     console.error('同步失败:', error);
-    syncBtn.textContent = '❌ 同步失败';
-    alert(`❌ 同步失败\n${error.message}\n\n请确保后端服务已启动`);
+    syncBtn.textContent = '同步失败';
+    alert(`同步失败\n${error.message}\n\n请确保后端服务已启动`);
   } finally {
     setTimeout(() => {
       syncBtn.textContent = originalText;
@@ -1095,6 +1095,6 @@ function showNotification(type, message) {
   // Popup context cannot use chrome.notifications (MV3 restriction).
   // Log the notification so the user can see it in console, and
   // the background service worker handles actual system notifications.
-  const prefix = type === 'achieved' ? '🎉 目标达成' : '⚠️ 时间提醒';
+  const prefix = type === 'achieved' ? '目标达成' : '时间提醒';
   console.log(`${prefix}: ${message}`);
 }

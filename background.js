@@ -381,10 +381,10 @@ async function showNotification(type, message) {
     }
 
     const title =
-      type === 'achieved' ? '🎉 目标达成' :
-      type === 'info' ? '✅ BrowseMind' :
-      type === 'intervention' || type === 'warning' ? '🧠 浏览提醒' :
-      '⚠️ 时间提醒';
+      type === 'achieved' ? '目标达成' :
+      type === 'info' ? 'BrowseMind' :
+      type === 'intervention' || type === 'warning' ? '浏览提醒' :
+      '时间提醒';
 
     const notificationId = await chrome.notifications.create({
       type: 'basic',
