@@ -505,12 +505,10 @@ function renderBlackholes(blackholes) {
     container.innerHTML = '<div class="empty">没有明显的时间黑洞 — 你的浏览节奏很健康。</div>';
     return;
   }
-  const catNames = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具', other: '其他' };
-  const typeLabels = { long_session: '长时间沉浸', high_frequency: '频繁访问', both: '沉浸 + 频繁' };
   const items = blackholes.top_blackholes.slice(0, 5).map(item => {
     const pct = blackholes.total_wasted_time > 0 ? Math.round(item.total_duration / blackholes.total_wasted_time * 100) : 0;
-    const catName = catNames[item.category] || '其他';
-    const typeLabel = typeLabels[item.blackhole_type] || '';
+    const catName = WebsiteClassifier.CATEGORY_NAMES[item.category] || '其他';
+    const typeLabel = WebsiteClassifier.BLACKHOLE_TYPE_LABELS[item.blackhole_type] || '';
     const meta = item.blackhole_type === 'high_frequency'
       ? `${item.visit_count} 次访问 · 累计 ${formatDuration(item.total_duration)}`
       : `${item.long_sessions_count} 次长访问 · 最长 ${formatDuration(item.longest_session)}`;

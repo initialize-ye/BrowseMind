@@ -18,6 +18,7 @@
       margin-bottom: 30px;
     }
     .cat-icon { width: 16px; height: 16px; vertical-align: -2px; margin-right: 2px; }
+    .cat-icon-lg .cat-icon { width: 32px; height: 32px; }
 
     .test-section {
       background: white;
@@ -278,7 +279,7 @@
         const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
         return `
           <div class="stat-card">
-            <div style="margin-bottom: 8px;">${categoryInfo.icon.replace('class="cat-icon"', 'class="cat-icon" style="width:32px;height:32px;"')}</div>
+            <div class="cat-icon-lg" style="margin-bottom: 8px;">${categoryInfo.icon}</div>
             <div class="stat-value">${stat.percentage}%</div>
             <div class="stat-label">${categoryInfo.name}</div>
             <div style="font-size: 11px; color: #999; margin-top: 4px;">

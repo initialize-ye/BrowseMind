@@ -147,8 +147,9 @@ def init_db():
             conn.execute(text("ALTER TABLE analysis_reports ADD COLUMN top_domains TEXT"))
             conn.commit()
             print("迁移：已添加 analysis_reports.top_domains 列")
-        except Exception:
-            pass  # 列已存在则忽略
+        except Exception as e:
+            if "duplicate column" not in str(e).lower():
+                print(f"迁移警告: {e}")
 
     print("数据库初始化完成")
 

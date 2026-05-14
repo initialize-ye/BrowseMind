@@ -78,7 +78,6 @@ async function openDashboard() {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const url = info.linkUrl || info.pageUrl;
   const domain = extractDomainFromUrl(url);
-  const dashboardUrl = chrome.runtime.getURL('dashboard.html');
 
   switch (info.menuItemId) {
     case 'bm-allowlist':

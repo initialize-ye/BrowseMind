@@ -104,7 +104,14 @@ class DataProcessor {
  * 网站分类器 - 基于规则的分类系统
  */
 class WebsiteClassifier {
-  // 分类 SVG 图标（16×16，currentColor 继承文字颜色）
+  // 分类名称映射
+  static CATEGORY_NAMES = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具', other: '其他' };
+  // 黑洞类型标签
+  static BLACKHOLE_TYPE_LABELS = { long_session: '长时间沉浸', high_frequency: '频繁访问', both: '沉浸 + 频繁' };
+  // popup 用的简短版本
+  static BLACKHOLE_TYPE_LABELS_SHORT = { long_session: '沉浸', high_frequency: '频繁', both: '沉浸+频繁' };
+
+  // 分类 SVG 图标（16×16，currentColor 继承文字颜色，静态硬编码无用户输入，XSS 安全）
   static SVG = {
     learning: `<svg class="cat-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12.5V3a1 1 0 011-1h4.5L12 6.5V12.5"/><path d="M7.5 2v4.5H12"/><path d="M4.5 9h3"/><path d="M4.5 11.5h5"/></svg>`,
     coding: `<svg class="cat-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4L1.5 8L5 12"/><path d="M11 4l3.5 4-3.5 4"/><path d="M9.5 2.5L6.5 13.5"/></svg>`,

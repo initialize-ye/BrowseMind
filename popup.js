@@ -763,8 +763,6 @@ function displayBlackholes(blackholes) {
     return;
   }
 
-  const catNames = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具', other: '其他' };
-  const typeLabels = { long_session: '沉浸', high_frequency: '频繁', both: '沉浸+频繁' };
   const wastePercentage = blackholes.waste_percentage;
   const totalWasted = formatDuration(blackholes.total_wasted_time);
 
@@ -776,8 +774,8 @@ function displayBlackholes(blackholes) {
   `;
 
   html += blackholes.top_blackholes.slice(0, 3).map(bh => {
-    const catName = catNames[bh.category] || '其他';
-    const typeLabel = typeLabels[bh.blackhole_type] || '';
+    const catName = WebsiteClassifier.CATEGORY_NAMES[bh.category] || '其他';
+    const typeLabel = WebsiteClassifier.BLACKHOLE_TYPE_LABELS_SHORT[bh.blackhole_type] || '';
     const meta = bh.blackhole_type === 'high_frequency'
       ? `${bh.visit_count} 次访问 · 累计 ${formatDuration(bh.total_duration)}`
       : `${bh.long_sessions_count} 次长时间访问 · 最长 ${formatDuration(bh.longest_session)}`;
