@@ -1067,6 +1067,124 @@ function showSettingsStatus(text) {
 }
 async function resetApiBaseUrl() { const button = document.getElementById('resetApiBtn'); setButtonBusy(button, true, '恢复中...'); try { await chrome.storage.local.set({ ...DEFAULT_PREFERENCES }); await initDataSync(); await loadPreferences(); setNote('已恢复默认插件设置', 'success'); log('已恢复默认插件设置'); await refreshDashboard(); } finally { setButtonBusy(button, false); } }
 async function testApiConnection() { const button = document.getElementById('testApiBtn'); setButtonBusy(button, true, '测试中...'); try { await initDataSync(); const connected = await dataSync.checkConnection(); _connectionCache = { result: connected, time: Date.now() }; setNote(connected ? '连接成功' : '连接失败，请检查云服务器服务', connected ? 'success' : 'danger'); log(connected ? '后端连接测试成功' : '后端连接测试失败'); } finally { setButtonBusy(button, false); } }
+
+async function generateShareCard() {
+  const { browsingData = [], classificationOverrides = {}, classificationFeedback = {} } = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback']);
+  if (!browsingData.length) { setNote('暂无数据，无法生成分享卡片', 'danger'); return; }
+
+  const classifier = new WebsiteClassifier(classificationOverrides, classificationFeedback);
+  const processor = new DataProcessor(browsingData);
+  const cleanedData = processor.clean().getData();
+  const classifiedData = classifier.classifyBatch(cleanedData);
+  const analyzer = new StatisticsAnalyzer(classifiedData);
+
+  // 最近 7 天数据
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const weekData = classifiedData.filter(r => r.visitTime > sevenDaysAgo);
+  const totalDuration = weekData.reduce((s, r) => s + (r.duration || 0), 0);
+  const uniqueDomains = new Set(weekData.map(r => r.domain).filter(Boolean)).size;
+
+  // 分类统计
+  const catStats = {};
+  for (const r of weekData) {
+    const cat = r.category || 'other';
+    catStats[cat] = (catStats[cat] || 0) + (r.duration || 0);
+  }
+
+  // 创建 Canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = 600;
+  canvas.height = 400;
+  const ctx = canvas.getContext('2d');
+
+  // 背景
+  const cs = getComputedStyle(document.documentElement);
+  const bg = cs.getPropertyValue('--surface-1').trim() || '#1a1a2e';
+  const text = cs.getPropertyValue('--text').trim() || '#e8e8e8';
+  const muted = cs.getPropertyValue('--muted').trim() || '#888';
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 600, 400);
+
+  // 标题
+  ctx.fillStyle = text;
+  ctx.font = 'bold 22px system-ui, sans-serif';
+  ctx.fillText('BrowseMind', 24, 40);
+  ctx.font = '13px system-ui, sans-serif';
+  ctx.fillStyle = muted;
+  ctx.fillText(`最近 7 天浏览摘要 · ${todayString()}`, 24, 60);
+
+  // 关键数据
+  ctx.fillStyle = text;
+  ctx.font = 'bold 28px system-ui, sans-serif';
+  ctx.fillText(formatDuration(totalDuration), 24, 110);
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.fillStyle = muted;
+  ctx.fillText('总浏览时长', 24, 128);
+
+  ctx.fillStyle = text;
+  ctx.font = 'bold 28px system-ui, sans-serif';
+  ctx.fillText(String(uniqueDomains), 200, 110);
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.fillStyle = muted;
+  ctx.fillText('独立站点', 200, 128);
+
+  ctx.fillStyle = text;
+  ctx.font = 'bold 28px system-ui, sans-serif';
+  ctx.fillText(String(weekData.length), 340, 110);
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.fillStyle = muted;
+  ctx.fillText('访问次数', 340, 128);
+
+  // 分类饼图
+  const cats = Object.entries(catStats).sort((a, b) => b[1] - a[1]);
+  const palette = [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
+  const pieX = 480, pieY = 220, pieR = 70;
+  let startAngle = -Math.PI / 2;
+  const totalCat = cats.reduce((s, [, d]) => s + d, 0) || 1;
+
+  for (let i = 0; i < cats.length; i++) {
+    const [cat, duration] = cats[i];
+    const sliceAngle = (duration / totalCat) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(pieX, pieY);
+    ctx.arc(pieX, pieY, pieR, startAngle, startAngle + sliceAngle);
+    ctx.fillStyle = palette[i % palette.length];
+    ctx.fill();
+    startAngle += sliceAngle;
+  }
+
+  // 饼图标签
+  let labelY = 160;
+  for (let i = 0; i < Math.min(cats.length, 6); i++) {
+    const [cat, duration] = cats[i];
+    const catName = WebsiteClassifier.CATEGORY_NAMES[cat] || cat;
+    const pct = Math.round(duration / totalCat * 100);
+    ctx.fillStyle = palette[i % palette.length];
+    ctx.fillRect(24, labelY - 8, 10, 10);
+    ctx.fillStyle = text;
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText(`${catName} ${pct}%`, 40, labelY);
+    labelY += 20;
+  }
+
+  // 品牌标识
+  ctx.fillStyle = muted;
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.fillText('browsemind.app', 24, 385);
+
+  // 导出
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `browsemind-share-${todayString()}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setNote('分享卡片已生成', 'success');
+    log('分享卡片已生成并下载');
+  }, 'image/png');
+}
+
 async function exportJson() { const { browsingData = [] } = await chrome.storage.local.get('browsingData'); const blob = new Blob([JSON.stringify(browsingData, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `browsemind-local-${todayString()}.json`; a.click(); URL.revokeObjectURL(url); setNote('本地 JSON 已导出', 'success'); log(`已导出 ${browsingData.length} 条本地记录`); }
 
 async function exportCloudData() {
@@ -1189,7 +1307,7 @@ function moveSidebarTabFocus(currentTab, direction) {
 function bindEvents() { document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', () => {
   clearTimeout(domainFilterTimer);
   domainFilterTimer = setTimeout(renderFilteredDomains, 250);
-}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('compareBtn').addEventListener('click', runComparison); document.getElementById('focusStartBtn').addEventListener('click', showFocusDurationPicker); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
+}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('shareCardBtn').addEventListener('click', generateShareCard); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('compareBtn').addEventListener('click', runComparison); document.getElementById('focusStartBtn').addEventListener('click', showFocusDurationPicker); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
 document.getElementById('themeToggleBtn').addEventListener('click', cycleTheme);
 document.querySelectorAll('[data-pref]').forEach(el => {
   const evt = el.type === 'checkbox' ? 'change' : (el.tagName === 'SELECT' ? 'change' : 'input');
