@@ -18,10 +18,89 @@ let activeTab = {
   startTime: null
 };
 
-// 初始化：加载历史记录
+// 初始化：加载历史记录 + 创建右键菜单
 chrome.runtime.onInstalled.addListener(() => {
   console.log('BrowseMind 已安装');
   collectHistoryData();
+  createContextMenus();
+});
+
+// ==================== 右键菜单 ====================
+
+function createContextMenus() {
+  chrome.contextMenus.create({
+    id: 'bm-parent',
+    title: 'BrowseMind',
+    contexts: ['page', 'link']
+  });
+  chrome.contextMenus.create({
+    id: 'bm-allowlist',
+    parentId: 'bm-parent',
+    title: '将此站点加入白名单',
+    contexts: ['page', 'link']
+  });
+  chrome.contextMenus.create({
+    id: 'bm-blocklist',
+    parentId: 'bm-parent',
+    title: '将此站点加入黑名单',
+    contexts: ['page', 'link']
+  });
+  chrome.contextMenus.create({
+    id: 'bm-dashboard',
+    parentId: 'bm-parent',
+    title: '打开仪表盘',
+    contexts: ['page', 'link']
+  });
+}
+
+function extractDomainFromUrl(url) {
+  try {
+    return WebsiteClassifier.normalizeDomain(new URL(url).hostname);
+  } catch {
+    return null;
+  }
+}
+
+async function appendToList(listKey, domain) {
+  const stored = await chrome.storage.local.get(listKey);
+  const list = (stored[listKey] || '').split(/[,，\n\r]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (list.includes(domain)) return false;
+  list.push(domain);
+  await chrome.storage.local.set({ [listKey]: list.join(',') });
+  return true;
+}
+
+async function openDashboard() {
+  const url = chrome.runtime.getURL('dashboard.html');
+  await chrome.tabs.create({ url });
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  const url = info.linkUrl || info.pageUrl;
+  const domain = extractDomainFromUrl(url);
+  const dashboardUrl = chrome.runtime.getURL('dashboard.html');
+
+  switch (info.menuItemId) {
+    case 'bm-allowlist':
+      if (!domain) return;
+      if (await appendToList('domainAllowlist', domain)) {
+        showNotification('info', `已将 ${domain} 加入白名单`);
+      } else {
+        showNotification('info', `${domain} 已在白名单中`);
+      }
+      break;
+    case 'bm-blocklist':
+      if (!domain) return;
+      if (await appendToList('domainBlocklist', domain)) {
+        showNotification('warning', `已将 ${domain} 加入黑名单`);
+      } else {
+        showNotification('info', `${domain} 已在黑名单中`);
+      }
+      break;
+    case 'bm-dashboard':
+      openDashboard();
+      break;
+  }
 });
 
 // 一次性读取偏好与分类覆盖（供 saveTabDuration + checkTabIntervention 共用）
@@ -304,6 +383,7 @@ async function showNotification(type, message) {
 
     const title =
       type === 'achieved' ? '🎉 目标达成' :
+      type === 'info' ? '✅ BrowseMind' :
       type === 'intervention' || type === 'warning' ? '🧠 浏览提醒' :
       '⚠️ 时间提醒';
 
