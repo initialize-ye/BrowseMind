@@ -738,35 +738,58 @@ async function runComparison() {
 
 function renderComparison(data, p1Days, p2Days) {
   const container = document.getElementById('compareResult');
-  const dur = data.duration_change_pct;
-  const durIcon = dur > 0 ? '+' : '';
-  const durColor = dur > 0 ? 'var(--red)' : dur < 0 ? 'var(--green)' : 'var(--muted)';
+  const p1Dur = data.period1.total_duration;
+  const p2Dur = data.period2.total_duration;
+  const absDiff = p1Dur - p2Dur;
+  const absIcon = absDiff > 0 ? '+' : '';
+
+  // 百分比：对比期数据太少时显示绝对值而非百分比
+  let pctText = '';
+  let pctColor = 'var(--muted)';
+  if (p2Dur < 60) {
+    pctText = '—';
+  } else {
+    const pct = data.duration_change_pct;
+    const capped = Math.max(-999, Math.min(999, pct));
+    pctText = `${capped > 0 ? '+' : ''}${Math.round(capped)}%`;
+    pctColor = capped > 5 ? 'var(--red)' : capped < -5 ? 'var(--green)' : 'var(--muted)';
+  }
 
   let html = `<div class="insight-cards">
-    <div class="insight-card"><span>近 ${p1Days} 天 vs ${p2Days} 天前</span><strong style="color:${durColor}">${durIcon}${dur}%</strong><small>总时长变化</small></div>
-    <div class="insight-card"><span>近期访问</span><strong>${data.period1.total_visits}</strong><small>${formatDuration(data.period1.total_duration)}</small></div>
-    <div class="insight-card"><span>对比期访问</span><strong>${data.period2.total_visits}</strong><small>${formatDuration(data.period2.total_duration)}</small></div>
+    <div class="insight-card"><span>时长变化</span><strong style="color:${pctColor}">${pctText}</strong><small>${absIcon}${formatDuration(Math.abs(absDiff))}</small></div>
+    <div class="insight-card"><span>近 ${p1Days} 天</span><strong>${data.period1.total_visits}</strong><small>${formatDuration(p1Dur)}</small></div>
+    <div class="insight-card"><span>${p2Days} 天前</span><strong>${data.period2.total_visits}</strong><small>${formatDuration(p2Dur)}</small></div>
   </div>`;
 
-  // 分类占比变化
-  const cats = Object.entries(data.category_changes).sort((a, b) => Math.abs(b[1].delta) - Math.abs(a[1].delta));
+  // 分类占比变化（仅显示有变化的）
+  const cats = Object.entries(data.category_changes)
+    .filter(([, info]) => Math.abs(info.delta) >= 1)
+    .sort((a, b) => Math.abs(b[1].delta) - Math.abs(a[1].delta));
   if (cats.length) {
-    html += '<div style="margin-top:12px;">';
+    html += '<div style="margin-top:14px;">';
     for (const [cat, info] of cats) {
       const catName = WebsiteClassifier.CATEGORY_NAMES[cat] || cat;
-      const deltaIcon = info.delta > 0 ? '+' : '';
       const deltaColor = info.delta > 0 ? 'var(--red)' : info.delta < 0 ? 'var(--green)' : 'var(--muted)';
-      html += `<div class="domain-row"><div><div class="domain-name">${catName}</div><div class="domain-meta">${p1Days}天: ${info.period1_pct}% · ${p2Days}天前: ${info.period2_pct}%</div></div><div style="color:${deltaColor};font-weight:600;font-size:13px;">${deltaIcon}${info.delta}%</div></div>`;
+      const arrow = info.delta > 0 ? '↑' : info.delta < 0 ? '↓' : '';
+      html += `<div class="domain-row"><div><div class="domain-name">${catName}</div><div class="domain-meta">${p1Days}天 ${info.period1_pct}% · ${p2Days}天前 ${info.period2_pct}%</div></div><div style="color:${deltaColor};font-weight:600;font-size:13px;">${arrow} ${Math.abs(info.delta)}%</div></div>`;
     }
     html += '</div>';
   }
 
   // 新增/消失域名
-  if (data.new_domains.length) {
-    html += `<div style="margin-top:12px;"><div style="font-size:12px;font-weight:600;margin-bottom:6px;">近期新增域名 (${data.new_domains.length})</div><div style="font-size:11px;color:var(--muted);">${data.new_domains.map(d => escapeHtml(d)).join('、')}</div></div>`;
-  }
-  if (data.disappeared_domains.length) {
-    html += `<div style="margin-top:8px;"><div style="font-size:12px;font-weight:600;margin-bottom:6px;">消失的域名 (${data.disappeared_domains.length})</div><div style="font-size:11px;color:var(--muted);">${data.disappeared_domains.map(d => escapeHtml(d)).join('、')}</div></div>`;
+  const newD = (data.new_domains || []).slice(0, 10);
+  const goneD = (data.disappeared_domains || []).slice(0, 10);
+  if (newD.length || goneD.length) {
+    html += '<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    if (newD.length) {
+      html += `<div><div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--green);">新增 (${newD.length})</div><div style="font-size:11px;color:var(--muted);line-height:1.6;">${newD.map(d => escapeHtml(d)).join('<br>')}</div></div>`;
+    } else {
+      html += '<div></div>';
+    }
+    if (goneD.length) {
+      html += `<div><div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--muted);">消失 (${goneD.length})</div><div style="font-size:11px;color:var(--muted);line-height:1.6;">${goneD.map(d => escapeHtml(d)).join('<br>')}</div></div>`;
+    }
+    html += '</div>';
   }
 
   container.innerHTML = html;
