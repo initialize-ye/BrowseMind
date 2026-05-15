@@ -6,6 +6,7 @@ let attentionChart = null;
 let dataSync = null;
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const chartAnimation = prefersReducedMotion ? false : undefined;
+function todayString() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function getChartPalette() {
   const cs = getComputedStyle(document.documentElement);
   return [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
@@ -115,6 +116,7 @@ async function loadFocusStatus() {
       const timer = setTimeout(() => resolve({ active: false }), 2000);
       chrome.runtime.sendMessage({ action: 'focusStatus' }, res => {
         clearTimeout(timer);
+        if (chrome.runtime.lastError) { resolve({ active: false }); return; }
         resolve(res?.status || { active: false });
       });
     });
@@ -303,7 +305,7 @@ function openDashboard() {
 }
 
 function calculateStats(data) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayString();
 
   // 今日数据
   const todayData = data.filter(r => r.date === today);
@@ -381,6 +383,10 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
 // 更新分类统计
 function updateCategoryStats(categoryStats, classifier) {
   const container = document.getElementById('categoryStats');
+  if (!categoryStats || categoryStats.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:12px;">暂无分类数据</div>';
+    return;
+  }
   const categories = classifier.getAllCategories();
   const catColors = { learning: getChartPalette()[0], coding: getChartPalette()[1], entertainment: getChartPalette()[3], social: getChartPalette()[2], tools: getChartPalette()[5], other: getChartPalette()[4] };
 
@@ -676,6 +682,7 @@ function extractDomain(url) {
 // 格式化时间
 function formatTime(timestamp) {
   const date = new Date(timestamp);
+  if (isNaN(date.getTime())) return '';
   const now = new Date();
   const diff = now - date;
 
@@ -737,7 +744,10 @@ async function syncToCloud() {
 }
 
 // 显示 AI 分析
+let _aiAnalysisRunning = false;
 async function showAIAnalysis() {
+  if (_aiAnalysisRunning) return;
+  _aiAnalysisRunning = true;
   const modal = document.getElementById('aiAnalysisModal');
   const content = document.getElementById('aiAnalysisContent');
 
@@ -778,10 +788,12 @@ async function showAIAnalysis() {
     content.innerHTML = `
       <p style="color: var(--red); text-align: center;">
         AI 分析失败<br>
-        ${error.message}<br><br>
+        ${escapeHtml(error.message)}<br><br>
         ${error.message.includes('API') ? '请配置 AI_API_KEY 环境变量' : ''}
       </p>
     `;
+  } finally {
+    _aiAnalysisRunning = false;
   }
 }
 
@@ -1137,7 +1149,7 @@ async function loadGoals() {
     const isConnected = await dataSync.checkConnection().catch(() => false);
     if (!isConnected) return;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayString();
     const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${userId}?date=${today}&is_active=1`);
 
     if (!response.ok) {
@@ -1150,6 +1162,8 @@ async function loadGoals() {
     displayGoals(goals);
   } catch (error) {
     console.error('加载目标失败:', error);
+    const container = document.getElementById('goalsContainer');
+    if (container) container.innerHTML = '<p class="empty-line">加载目标失败，请稍后重试</p>';
   }
 }
 
@@ -1179,7 +1193,7 @@ function displayGoals(goals) {
     return `
       <div class="goal-item ${isAchieved ? 'achieved' : ''}">
         <div class="goal-header">
-          <span class="goal-type">${goalTypeNames[goal.goal_type] || goal.goal_type}</span>
+          <span class="goal-type">${escapeHtml(goalTypeNames[goal.goal_type] || goal.goal_type)}</span>
           <div>
             <span class="goal-status ${statusClass}">${statusText}</span>
             <button class="goal-delete" data-goal-id="${goal.id}" aria-label="删除目标">×</button>
@@ -1219,7 +1233,12 @@ function closeGoalModal() {
   if (modal._returnFocus && typeof modal._returnFocus.focus === 'function') modal._returnFocus.focus();
 }
 
+let _savingGoal = false;
 async function saveGoal() {
+  if (_savingGoal) return;
+  _savingGoal = true;
+  const saveBtn = document.getElementById('saveGoalBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '保存中...'; }
   try {
     const { userId } = await chrome.storage.local.get('userId');
     if (!userId) {
@@ -1230,8 +1249,8 @@ async function saveGoal() {
     const goalType = document.getElementById('goalTypeSelect').value;
     const durationMinutes = parseInt(document.getElementById('goalDurationInput').value);
 
-    if (!durationMinutes || durationMinutes <= 0) {
-      notifyPopup('warning', '请输入有效的时长');
+    if (!durationMinutes || durationMinutes <= 0 || durationMinutes > 1440) {
+      notifyPopup('warning', '请输入有效的时长（1-1440 分钟）');
       return;
     }
 
@@ -1243,7 +1262,7 @@ async function saveGoal() {
       'daily_social': 'social'
     };
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayString();
 
     const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${userId}`, {
       method: 'POST',
@@ -1257,7 +1276,7 @@ async function saveGoal() {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json().catch(() => ({}));
       notifyPopup('warning', error.detail || '创建目标失败');
       return;
     }
@@ -1268,14 +1287,19 @@ async function saveGoal() {
   } catch (error) {
     console.error('保存目标失败:', error);
     notifyPopup('warning', '保存失败，请重试');
+  } finally {
+    _savingGoal = false;
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '添加目标'; }
   }
 }
 
+let _deletingGoal = false;
 async function deleteGoal(goalId) {
+  if (_deletingGoal) return;
   if (!confirm('确定要删除这个目标吗？')) {
     return;
   }
-
+  _deletingGoal = true;
   try {
     const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, {
       method: 'DELETE'
@@ -1290,6 +1314,8 @@ async function deleteGoal(goalId) {
   } catch (error) {
     console.error('删除目标失败:', error);
     notifyPopup('warning', '删除失败，请重试');
+  } finally {
+    _deletingGoal = false;
   }
 }
 

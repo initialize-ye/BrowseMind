@@ -29,7 +29,7 @@ let currentClassifiedData = [];
 let domainFilterTimer = null;
 const SIDEBAR_TABS = ['dashboard', 'insights', 'actions', 'goals', 'settings'];
 
-function todayString() { return new Date().toISOString().split('T')[0]; }
+function todayString() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 // formatDuration() is defined in dataSync.js (shared with popup)
 function log(message) {
   const box = document.getElementById('logBox');
@@ -600,7 +600,7 @@ function renderHeatmap(browsingData) {
   // Aggregate duration by date
   const dailyDuration = {};
   for (const r of browsingData) {
-    const d = r.date || (r.visitTime ? new Date(r.visitTime).toISOString().split('T')[0] : null);
+    const d = r.date || (r.visitTime ? (() => { const dt = new Date(r.visitTime); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; })() : null);
     if (d) dailyDuration[d] = (dailyDuration[d] || 0) + (r.duration || 0);
   }
 
@@ -679,7 +679,7 @@ function _applyTimelineFilter() {
   const countEl = document.getElementById('timelineCount');
   if (!list) return;
 
-  const search = (document.getElementById('timelineSearch')?.value || '').toLowerCase().trim();
+  const search = (document.getElementById('timelineSearch')?.value || '').toLowerCase().trim().slice(0, 200);
   const category = document.getElementById('timelineCategory')?.value || 'all';
   const dateFrom = document.getElementById('timelineDateFrom')?.value || '';
   const dateTo = document.getElementById('timelineDateTo')?.value || '';
@@ -898,7 +898,7 @@ async function loadAdvancedInsights() {
       return;
     }
     if (response.status !== 404) {
-      const error = await response.json();
+      const error = await response.json().catch(() => ({}));
       throw new Error(error.detail || '高级分析失败');
     }
   }
@@ -974,7 +974,7 @@ function renderComparison(data, p1Days, p2Days) {
   if (cats.length) {
     html += '<div style="margin-top:14px;">';
     for (const [cat, info] of cats) {
-      const catName = WebsiteClassifier.CATEGORY_NAMES[cat] || cat;
+      const catName = escapeHtml(WebsiteClassifier.CATEGORY_NAMES[cat] || cat);
       const deltaColor = info.delta > 0 ? 'var(--red)' : info.delta < 0 ? 'var(--green)' : 'var(--muted)';
       const arrow = info.delta > 0 ? '↑' : info.delta < 0 ? '↓' : '';
       html += `<div class="domain-row"><div><div class="domain-name">${catName}</div><div class="domain-meta">${p1Days}天 ${info.period1_pct}% · ${p2Days}天前 ${info.period2_pct}%</div></div><div style="color:${deltaColor};font-weight:600;font-size:13px;">${arrow} ${Math.abs(info.delta)}%</div></div>`;
@@ -1024,7 +1024,8 @@ async function loadFocusStats() {
   const { focusSessions = [] } = await chrome.storage.local.get('focusSessions');
   const today = todayString();
   const todaySessions = focusSessions.filter(s => {
-    const d = new Date(s.startTime).toISOString().split('T')[0];
+    const dt = new Date(s.startTime);
+    const d = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
     return d === today;
   });
   const todayMinutes = Math.round(todaySessions.reduce((sum, s) => sum + (s.completed ? s.actualDuration : 0), 0) / 60);
@@ -1040,13 +1041,14 @@ async function loadFocusStats() {
 
 function calculateFocusStreak(sessions) {
   if (!sessions.length) return 0;
+  const toLocalDate = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const completedDates = new Set(
-    sessions.filter(s => s.completed).map(s => new Date(s.startTime).toISOString().split('T')[0])
+    sessions.filter(s => s.completed).map(s => toLocalDate(s.startTime))
   );
   let streak = 0;
   const d = new Date();
   while (true) {
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = toLocalDate(d);
     if (completedDates.has(dateStr)) {
       streak++;
       d.setDate(d.getDate() - 1);
@@ -1362,12 +1364,12 @@ async function syncNow() {
 async function runAIAnalysis() {
   const button = document.getElementById('aiBtn');
   setButtonBusy(button, true, '分析中...');
-  try { const preferences = await getPreferences(); await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); renderAIAnalysis(analysis); await loadReports(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); await switchSidebarTab('insights', { focusPanel: true }); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); } finally { setButtonBusy(button, false); }
+  try { const preferences = await getPreferences(); await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); renderAIAnalysis(analysis); await loadReports(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); await switchSidebarTab('insights', { focusPanel: true }); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
 async function createGoal() {
   const button = document.getElementById('createGoalBtn');
   setButtonBusy(button, true, '添加中...');
-  try { await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const goalType = document.getElementById('goalTypeSelect').value; const durationMinutes = parseInt(document.getElementById('goalDurationInput').value, 10); if (!durationMinutes || durationMinutes <= 0) throw new Error('请输入有效的目标时长'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal_type: goalType, category: categoryMap[goalType], target_duration: durationMinutes * 60, date: todayString() }) }); if (!response.ok) { const error = await response.json(); throw new Error(error.detail || '创建目标失败'); } setNote('目标已添加', 'success'); log(`已添加目标：${goalTypeNames[goalType]} ${durationMinutes} 分钟`); await loadGoals(); } catch (error) { setNote(`创建目标失败：${error.message}`, 'danger'); log(`创建目标失败：${error.message}`); } finally { setButtonBusy(button, false); }
+  try { await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const goalType = document.getElementById('goalTypeSelect').value; const durationMinutes = parseInt(document.getElementById('goalDurationInput').value, 10); if (!durationMinutes || durationMinutes <= 0 || durationMinutes > 1440) throw new Error('请输入有效的目标时长（1-1440 分钟）'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal_type: goalType, category: categoryMap[goalType], target_duration: durationMinutes * 60, date: todayString() }) }); if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || '创建目标失败'); } setNote('目标已添加', 'success'); log(`已添加目标：${goalTypeNames[goalType]} ${durationMinutes} 分钟`); await loadGoals(); } catch (error) { setNote(`创建目标失败：${error.message}`, 'danger'); log(`创建目标失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
 async function loadGoals() {
   const list = document.getElementById('goalList');
@@ -1389,7 +1391,7 @@ async function editGoalDuration(goalId, currentMinutes) {
   input.select();
   row.querySelector('[data-goal-save-id]').addEventListener('click', async () => {
     const minutes = Number(input.value);
-    if (!minutes || minutes <= 0) { setNote('请输入有效的目标时长', 'danger'); return; }
+    if (!minutes || minutes <= 0 || minutes > 1440) { setNote('请输入有效的目标时长（1-1440 分钟）', 'danger'); return; }
     try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_duration: Math.round(minutes * 60) }) }); if (!response.ok) throw new Error('编辑失败'); setNote('目标已更新', 'success'); log(`已更新目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标编辑失败：${error.message}`, 'danger'); log(`目标编辑失败：${error.message}`); }
   });
   row.querySelector('[data-goal-cancel]').addEventListener('click', () => loadGoals());
@@ -1770,10 +1772,15 @@ window.addEventListener('beforeunload', () => {
   if (attentionChart) { attentionChart.destroy(); attentionChart = null; }
   clearTimeout(_focusTimer);
   clearTimeout(_autoSaveTimer);
+  clearTimeout(_timelineTimer);
+  clearTimeout(domainFilterTimer);
+  clearTimeout(_settingsStatusTimer);
+  clearInterval(_dashLoadTimer);
+  clearInterval(_cacheCleanupInterval);
 });
 
 // 定期清理过期缓存（每 5 分钟）
-setInterval(() => {
+const _cacheCleanupInterval = setInterval(() => {
   _connectionCache = { result: null, time: 0 };
   // 清理过大的域名列表缓存
   if (_allDomains.length > 500) {

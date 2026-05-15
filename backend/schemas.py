@@ -9,13 +9,13 @@ from datetime import datetime
 
 class BrowsingRecordCreate(BaseModel):
     """创建浏览记录的请求模型"""
-    url: str
-    title: Optional[str] = None
-    domain: Optional[str] = None
-    category: Optional[str] = None
-    visit_time: int  # 时间戳（毫秒）
-    duration: int = 0
-    date: str  # YYYY-MM-DD
+    url: str = Field(..., max_length=2048)
+    title: Optional[str] = Field(None, max_length=2000)
+    domain: Optional[str] = Field(None, max_length=253)
+    category: Optional[str] = Field(None, max_length=50)
+    visit_time: int = Field(..., description="时间戳（毫秒）")
+    duration: int = Field(0, ge=0, description="停留时长（秒）")
+    date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
 class BrowsingRecordBatch(BaseModel):
@@ -96,10 +96,10 @@ class UserGoalCreate(BaseModel):
 
 class UserGoalUpdate(BaseModel):
     """更新用户目标"""
-    target_duration: Optional[int] = Field(None, description="目标时长（秒）", gt=0)
+    target_duration: Optional[int] = Field(None, description="目标时长（秒）", gt=0, le=86400)
     current_progress: Optional[int] = Field(None, description="当前进度（秒）", ge=0)
-    is_active: Optional[int] = Field(None, description="是否激活")
-    notified: Optional[int] = Field(None, description="是否已通知")
+    is_active: Optional[int] = Field(None, description="是否激活", ge=0, le=1)
+    notified: Optional[int] = Field(None, description="是否已通知", ge=0, le=1)
 
 
 class UserGoalResponse(BaseModel):

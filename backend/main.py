@@ -169,6 +169,17 @@ async def startup_event():
 # 数据保留天数（与前端 dataRetentionDays 默认值对齐）
 DATA_RETENTION_DAYS = int(os.environ.get('DATA_RETENTION_DAYS', '30'))
 
+def safe_timestamp_to_datetime(ts_ms):
+    """安全地将毫秒时间戳转换为 datetime，防止无效时间戳导致崩溃"""
+    try:
+        ts_sec = ts_ms / 1000
+        # 限制在合理范围内：2000-01-01 到 2100-01-01
+        if ts_sec < 946684800 or ts_sec > 4102444800:
+            return datetime.utcnow()
+        return datetime.fromtimestamp(ts_sec)
+    except (OSError, ValueError, OverflowError):
+        return datetime.utcnow()
+
 
 def cleanup_expired_data():
     """清理超过保留期的浏览记录、报告、排行榜条目和过期 token"""
@@ -239,10 +250,11 @@ async def upload_browsing_data(
 
         for record_data in batch.records:
             # 检查是否已存在（避免重复，用 url + visit_time 去重）
+            visit_dt = safe_timestamp_to_datetime(record_data.visit_time)
             existing = db.query(BrowsingRecord).filter(
                 BrowsingRecord.user_id == batch.user_id,
                 BrowsingRecord.url == record_data.url,
-                BrowsingRecord.visit_time == datetime.fromtimestamp(record_data.visit_time / 1000)
+                BrowsingRecord.visit_time == visit_dt
             ).first()
 
             if existing:
@@ -266,7 +278,7 @@ async def upload_browsing_data(
                 title=record_data.title,
                 domain=record_data.domain,
                 category=record_data.category,
-                visit_time=datetime.fromtimestamp(record_data.visit_time / 1000),
+                visit_time=visit_dt,
                 duration=record_data.duration,
                 date=record_data.date
             )
@@ -284,13 +296,14 @@ async def upload_browsing_data(
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
+        print(f"上传失败: {e}")
+        raise HTTPException(status_code=500, detail="上传失败，请稍后重试")
 
 
 @app.get("/api/records/{user_id}", response_model=List[BrowsingRecordResponse])
 async def get_user_records(
     user_id: str,
-    days: int = 7,
+    days: int = Query(7, ge=1, le=365),
     db: Session = Depends(get_db)
 ):
     """
@@ -686,13 +699,14 @@ async def get_ai_analysis(
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI 分析失败: {str(e)}")
+        print(f"AI 分析失败: {e}")
+        raise HTTPException(status_code=500, detail="AI 分析失败，请稍后重试")
 
 
 @app.get("/api/reports/{user_id}")
 async def get_user_reports(
     user_id: str,
-    limit: int = 10,
+    limit: int = Query(10, ge=1, le=100),
     report_type: str = None,
     db: Session = Depends(get_db)
 ):
@@ -714,8 +728,8 @@ async def get_user_reports(
 @app.get("/api/advanced-analysis/{user_id}")
 async def get_advanced_analysis(
     user_id: str,
-    days: int = 7,
-    blackhole_threshold: int = 30,
+    days: int = Query(7, ge=1, le=90),
+    blackhole_threshold: int = Query(30, ge=1, le=480),
     db: Session = Depends(get_db)
 ):
     """
@@ -803,7 +817,7 @@ async def create_goal(
 async def get_user_goals(
     user_id: str,
     date: str = None,
-    is_active: int = None,
+    is_active: int = Query(None, ge=0, le=1),
     db: Session = Depends(get_db)
 ):
     """

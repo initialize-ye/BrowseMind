@@ -474,7 +474,7 @@ class TestEdgeCases:
     def test_very_long_title(self, client, auth_headers, test_user_id):
         records = [{
             "url": "https://example.com",
-            "title": "A" * 5000,
+            "title": "A" * 2000,
             "domain": "example.com",
             "visit_time": int(datetime.now().timestamp() * 1000),
             "duration": 60,
