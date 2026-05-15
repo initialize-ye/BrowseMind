@@ -264,6 +264,9 @@ function applyPreferencesToForm(preferences) {
   document.getElementById('focusDurationsInput').value = preferences.focusDurations || '25,45,60';
   document.getElementById('dailySummaryEnabledInput').checked = Boolean(preferences.dailySummaryEnabled);
   document.getElementById('dailySummaryHourInput').value = preferences.dailySummaryHour || 21;
+  document.getElementById('continuousEntertainmentInput').value = preferences.continuousEntertainmentMinutes || 20;
+  document.getElementById('learningDropAlertEnabledInput').checked = Boolean(preferences.learningDropAlertEnabled);
+  document.getElementById('adaptiveThresholdEnabledInput').checked = Boolean(preferences.adaptiveThresholdEnabled);
 }
 function updateInterventionWarning() {
   const warnEl = document.getElementById('interventionWarning');
@@ -298,7 +301,10 @@ function readPreferencesFromForm() {
     quietHoursEnd: document.getElementById('quietHoursEndInput').value || '',
     focusDurations: document.getElementById('focusDurationsInput').value.trim() || '25,45,60',
     dailySummaryEnabled: document.getElementById('dailySummaryEnabledInput').checked,
-    dailySummaryHour: Math.max(0, Math.min(23, Number(document.getElementById('dailySummaryHourInput').value || 21)))
+    dailySummaryHour: Math.max(0, Math.min(23, Number(document.getElementById('dailySummaryHourInput').value || 21))),
+    continuousEntertainmentMinutes: Math.max(5, Math.min(120, Number(document.getElementById('continuousEntertainmentInput').value || 20))),
+    learningDropAlertEnabled: document.getElementById('learningDropAlertEnabledInput').checked,
+    adaptiveThresholdEnabled: document.getElementById('adaptiveThresholdEnabledInput').checked
   };
 }
 async function initDataSync() {
@@ -466,6 +472,24 @@ function renderMetrics(data) {
   document.getElementById('metricWeekVisits').textContent = data.length;
   document.getElementById('metricUniqueSites').textContent = domains.size;
 }
+function renderHabitCard(classifiedData) {
+  const card = document.getElementById('habitCard');
+  const content = document.getElementById('habitCardContent');
+  if (!card || !content) return;
+  try {
+    const scorer = new HabitScorer(classifiedData);
+    const score = scorer.computeDailyScore(todayString());
+    const productivity = scorer.computeProductivityIndex(7);
+    const recommendation = scorer.getRecommendation(score);
+    const scoreColor = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--yellow)' : 'var(--red)';
+    const prodPct = Math.round(productivity * 100);
+    content.innerHTML = `<div style="text-align:center;min-width:80px;"><div style="font-size:42px;font-weight:800;letter-spacing:-0.04em;color:${scoreColor};line-height:1;">${score ?? '--'}</div><div style="font-size:11px;color:var(--muted);margin-top:4px;">今日评分</div></div><div style="flex:1;min-width:0;"><div style="display:flex;gap:var(--space-4);margin-bottom:var(--space-2);"><div><span style="font-size:11px;color:var(--muted);">生产力指数</span><div style="font-size:18px;font-weight:700;color:var(--accent);">${prodPct}%</div></div></div><p style="font-size:13px;color:var(--muted);line-height:1.5;">${escapeHtml(recommendation)}</p></div>`;
+    card.style.display = '';
+  } catch (e) {
+    console.warn('习惯评分渲染失败:', e);
+    card.style.display = 'none';
+  }
+}
 function renderCategoryList(categoryStats, classifier) {
   const container = document.getElementById('categoryList');
   if (!categoryStats.length) {
@@ -577,6 +601,174 @@ function renderHourlyChart(hourlyDist) {
   const ctx = document.getElementById('hourlyChart').getContext('2d');
   hourlyChart = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: '分钟', data, backgroundColor: bgColors, borderRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: getGridColor() } }, x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } } } } });
   hourlyChart._activeHours = activeHours;
+}
+
+// ==================== 图表切换器 ====================
+let _dashboardActiveChart = 'trend';
+let _dashboardChartSwitcherBound = false;
+
+function switchDashboardChart(chartType) {
+  _dashboardActiveChart = chartType;
+  const tabs = document.querySelectorAll('#dashboardChartTabs .chart-tab');
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.chart === chartType));
+  const desc = document.getElementById('trendChartDesc');
+  const titles = { trend: ['趋势', '时长与访问次数'], radar: ['雷达', '本周 vs 上周分类对比'], sunburst: ['层级', '分类 → 域名分布'], scatter: ['散点', '访问时间 vs 停留时长'] };
+  const [title, descText] = titles[chartType] || titles.trend;
+  document.getElementById('trendChartTitle').textContent = title;
+  if (desc) desc.textContent = descText;
+  _renderActiveDashboardChart();
+}
+
+function _renderActiveDashboardChart() {
+  switch (_dashboardActiveChart) {
+    case 'radar': renderRadarChart(); break;
+    case 'sunburst': renderSunburstChart(); break;
+    case 'scatter': renderScatterChart(); break;
+    default: if (currentClassifiedData.length) { const analyzer = new StatisticsAnalyzer(currentClassifiedData); renderTrendChart(calculateDailyTrend(currentClassifiedData)); } break;
+  }
+}
+
+function bindDashboardChartSwitcher() {
+  if (_dashboardChartSwitcherBound) return;
+  _dashboardChartSwitcherBound = true;
+  document.getElementById('dashboardChartTabs')?.addEventListener('click', (e) => {
+    const tab = e.target.closest('.chart-tab');
+    if (tab) switchDashboardChart(tab.dataset.chart);
+  });
+  // Date range picker
+  const fromInput = document.getElementById('dateRangeFrom');
+  const toInput = document.getElementById('dateRangeTo');
+  const quickBtns = document.querySelectorAll('[data-range]');
+  const applyRange = () => applyDateRange(fromInput.value, toInput.value);
+  fromInput?.addEventListener('change', applyRange);
+  toInput?.addEventListener('change', applyRange);
+  quickBtns.forEach(btn => btn.addEventListener('click', () => {
+    const days = btn.dataset.range;
+    const to = new Date();
+    if (days === 'all') { fromInput.value = ''; toInput.value = ''; }
+    else {
+      const from = new Date(to); from.setDate(to.getDate() - parseInt(days) + 1);
+      fromInput.value = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
+      toInput.value = `${to.getFullYear()}-${String(to.getMonth() + 1).padStart(2, '0')}-${String(to.getDate()).padStart(2, '0')}`;
+    }
+    applyRange();
+  }));
+  // Set defaults
+  const today = new Date();
+  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 6);
+  toInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  fromInput.value = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth() + 1).padStart(2, '0')}-${String(weekAgo.getDate()).padStart(2, '0')}`;
+}
+
+function applyDateRange(from, to) {
+  const filtered = currentClassifiedData.filter(r => {
+    if (from && r.date < from) return false;
+    if (to && r.date > to) return false;
+    return true;
+  });
+  const analyzer = new StatisticsAnalyzer(filtered);
+  renderMetrics(filtered);
+  renderCategoryList(analyzer.analyzeByCategory(), new WebsiteClassifier());
+  renderFilteredDomains();
+  const dailyTrend = calculateDailyTrend(filtered);
+  renderTrendChart(dailyTrend);
+  renderHourlyChart(analyzer.getHourlyDistribution());
+  _renderActiveDashboardChart();
+}
+
+function destroyDashboardChart() { if (trendChart) { trendChart.destroy(); trendChart = null; } }
+
+// 雷达图：本周 vs 上周分类对比
+function renderRadarChart() {
+  destroyDashboardChart();
+  const categories = ['learning', 'coding', 'entertainment', 'social', 'tools', 'other'];
+  const catLabels = ['学习', '编程', '娱乐', '社交', '工具', '其他'];
+  const today = new Date();
+  const toStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const thisWeekStart = new Date(today); thisWeekStart.setDate(today.getDate() - 6);
+  const lastWeekStart = new Date(today); lastWeekStart.setDate(today.getDate() - 13);
+  const lastWeekEnd = new Date(today); lastWeekEnd.setDate(today.getDate() - 7);
+  const sumByCat = (data, from, to) => {
+    const fromStr = toStr(from), toStr2 = toStr(to);
+    const filtered = data.filter(r => r.date >= fromStr && r.date <= toStr2);
+    const total = filtered.reduce((s, r) => s + (r.duration || 0), 0) || 1;
+    return categories.map(c => {
+      const catDur = filtered.filter(r => r.category === c).reduce((s, r) => s + (r.duration || 0), 0);
+      return Math.round(catDur / total * 100);
+    });
+  };
+  const thisData = sumByCat(currentClassifiedData, thisWeekStart, today);
+  const lastData = sumByCat(currentClassifiedData, lastWeekStart, lastWeekEnd);
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  trendChart = new Chart(ctx, {
+    type: 'radar',
+    data: { labels: catLabels, datasets: [
+      { label: '本周', data: thisData, borderColor: palette[0], backgroundColor: palette[0] + '26', pointBackgroundColor: palette[0] },
+      { label: '上周', data: lastData, borderColor: palette[1], backgroundColor: palette[1] + '1a', pointBackgroundColor: palette[1] }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, scales: { r: { beginAtZero: true, max: 100, ticks: { display: false }, grid: { color: getGridColor() }, pointLabels: { font: { size: 11 } } } }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } } } }
+  });
+}
+
+// 嵌套环形图：分类 → 域名层级
+function renderSunburstChart() {
+  destroyDashboardChart();
+  const categories = ['learning', 'coding', 'entertainment', 'social', 'tools', 'other'];
+  const catTotals = {};
+  const domainByCat = {};
+  currentClassifiedData.forEach(r => {
+    const c = r.category || 'other';
+    catTotals[c] = (catTotals[c] || 0) + (r.duration || 0);
+    if (!domainByCat[c]) domainByCat[c] = {};
+    domainByCat[c][r.domain] = (domainByCat[c][r.domain] || 0) + (r.duration || 0);
+  });
+  const innerLabels = [], innerData = [], innerColors = [];
+  const outerLabels = [], outerData = [], outerColors = [];
+  categories.forEach((c, i) => {
+    if (!catTotals[c]) return;
+    innerLabels.push(c);
+    innerData.push(Math.round(catTotals[c] / 60));
+    innerColors.push(palette[i]);
+    const domains = Object.entries(domainByCat[c] || {}).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    domains.forEach(([domain, dur]) => {
+      outerLabels.push(domain);
+      outerData.push(Math.round(dur / 60));
+      // Slightly desaturated version of parent color
+      outerColors.push(palette[i] + 'aa');
+    });
+  });
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  trendChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: [...innerLabels, ...outerLabels], datasets: [
+      { data: innerData, backgroundColor: innerColors, weight: 2 },
+      { data: outerData, backgroundColor: outerColors, weight: 1 }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, cutout: '30%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, font: { size: 10 } } }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.parsed} 分钟` } } } }
+  });
+}
+
+// 散点图：访问时间 vs 停留时长
+function renderScatterChart() {
+  destroyDashboardChart();
+  const catColorMap = { learning: palette[0], coding: palette[1], entertainment: palette[2], social: palette[3], tools: palette[4], other: palette[5] };
+  const datasets = [];
+  const grouped = {};
+  currentClassifiedData.forEach(r => {
+    const c = r.category || 'other';
+    if (!grouped[c]) grouped[c] = [];
+    const hour = new Date(r.visitTime).getHours() + new Date(r.visitTime).getMinutes() / 60;
+    grouped[c].push({ x: Math.round(hour * 10) / 10, y: Math.round((r.duration || 0) / 60) });
+  });
+  Object.entries(grouped).forEach(([cat, points]) => {
+    datasets.push({ label: cat, data: points, backgroundColor: (catColorMap[cat] || palette[5]) + '99', pointRadius: 3 });
+  });
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  trendChart = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets },
+    options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, scales: { x: { min: 0, max: 24, title: { display: true, text: '小时' }, grid: { color: getGridColor() } }, y: { beginAtZero: true, title: { display: true, text: '分钟' }, grid: { color: getGridColor() } } }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } }, tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}时, ${ctx.parsed.y}分钟` } } } }
+  });
 }
 
 // ==================== 活跃热力图 ====================
@@ -1303,6 +1495,7 @@ async function loadAnalytics() {
   renderHourlyChart(hourlyDist);
   renderHeatmap(classifiedData);
   renderTimeline(classifiedData);
+  renderHabitCard(classifiedData);
   const topCategoryText = categoryStats[0] ? `${classifier.getCategoryInfo(categoryStats[0].category).name}占比最高，约 ${Number(categoryStats[0].percentage).toFixed(1)}%。` : '分类数据正在积累。';
   return { count: classifiedData.length, topCategoryText };
 }
@@ -1742,6 +1935,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSidebarState();
     if (activeSidebarTab === 'actions') activeSidebarTab = 'dashboard';
     bindEvents();
+    bindDashboardChartSwitcher();
     applySidebarState();
     await loadTheme();
     await switchSidebarTab(activeSidebarTab);

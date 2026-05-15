@@ -259,6 +259,9 @@ async function loadData() {
     // 计算基础统计（使用已清洗和分类的数据，避免重复计算）
     const stats = calculateStats(classifiedData);
 
+    // 摘要卡片（今日 vs 昨日）
+    renderSummaryCard(classifiedData);
+
     // 更新UI
     updateUI(stats, classifiedData, categoryStats, todayStats, classifier);
 
@@ -270,6 +273,20 @@ async function loadData() {
     await loadGoals();
     await loadAdvancedAnalysis();
     await loadFocusStatus();
+
+    // 习惯评分
+    try {
+      const { focusSessions = [] } = await chrome.storage.local.get('focusSessions');
+      const scorer = new HabitScorer(classifiedData, focusSessions);
+      const todayScore = scorer.computeDailyScore(todayString());
+      const scoreEl = document.getElementById('habitScore');
+      if (scoreEl) {
+        scoreEl.textContent = todayScore ?? '--';
+        if (todayScore !== null) {
+          scoreEl.style.color = todayScore >= 70 ? 'var(--green)' : todayScore >= 40 ? 'var(--yellow)' : 'var(--red)';
+        }
+      }
+    } catch (e) { console.warn('习惯评分计算失败:', e); }
 
     stopLoadingRotation(); loading.style.display = 'none';
     content.style.display = 'block';
@@ -364,14 +381,140 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
     const domain = extractDomain(record.url);
     const time = formatTime(record.visitTime);
     const duration = record.duration > 0 ? ` · ${formatDuration(record.duration)}` : '';
-
+    const cat = record.category || 'other';
     return `
-      <div class="record-item">
+      <div class="record-item" data-domain="${escapeHtml(domain)}" data-category="${cat}">
         <div class="record-title">${escapeHtml(record.title || domain)}</div>
         <div class="record-meta">${domain} · ${time}${duration}</div>
       </div>
     `;
   }).join('');
+  // Bind context menu on record items
+  recordsContainer.querySelectorAll('.record-item').forEach(item => {
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showDomainContextMenu(e, item.dataset.domain, item.dataset.category);
+    });
+  });
+}
+
+// 摘要卡片：今日 vs 昨日
+function renderSummaryCard(classifiedData) {
+  const card = document.getElementById('summaryCard');
+  if (!card) return;
+  const today = todayString();
+  const yesterday = new Date(Date.now() - 86400000);
+  const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+  const todayData = classifiedData.filter(r => r.date === today);
+  const yesterdayData = classifiedData.filter(r => r.date === yesterdayStr);
+  const todayDur = todayData.reduce((s, r) => s + (r.duration || 0), 0);
+  const yesterdayDur = yesterdayData.reduce((s, r) => s + (r.duration || 0), 0);
+  const todayFocus = todayData.filter(r => r.category === 'learning' || r.category === 'coding').reduce((s, r) => s + (r.duration || 0), 0);
+  const focusPct = todayDur > 0 ? Math.round(todayFocus / todayDur * 100) : 0;
+  const diff = todayDur - yesterdayDur;
+  const pct = yesterdayDur > 0 ? Math.round(Math.abs(diff) / yesterdayDur * 100) : 0;
+  const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
+  const arrowColor = diff > 0 ? 'var(--yellow)' : diff < 0 ? 'var(--green)' : 'var(--muted)';
+  card.style.display = 'flex';
+  card.innerHTML = `<span style="color:var(--accent);font-weight:700;">学习 ${focusPct}%</span><span style="color:${arrowColor};">${arrow} ${pct}%</span><span>vs 昨日</span><button id="addNoteBtn" style="margin-left:auto;min-height:28px;padding:4px 10px;font-size:11px;" class="ghost">备注</button>`;
+  document.getElementById('addNoteBtn')?.addEventListener('click', showNoteInput);
+}
+
+// 域名右键菜单
+let _contextMenuEl = null;
+function showDomainContextMenu(event, domain, currentCategory) {
+  hideContextMenu();
+  const categories = ['learning', 'coding', 'entertainment', 'social', 'tools', 'other'];
+  const catNames = { learning: '学习', coding: '编程', entertainment: '娱乐', social: '社交', tools: '工具', other: '其他' };
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.style.cssText = `position:fixed;left:${Math.min(event.clientX, window.innerWidth - 180)}px;top:${Math.min(event.clientY, window.innerHeight - 220)}px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:0 4px 16px oklch(0% 0 0 / 0.12);z-index:9999;min-width:160px;padding:4px;font-size:12px;`;
+  const addItem = (label, onClick, color) => {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.style.cssText = `display:block;width:100%;text-align:left;padding:8px 12px;border:0;background:transparent;cursor:pointer;font:inherit;font-size:12px;color:${color || 'var(--text)'};border-radius:4px;min-height:auto;`;
+    btn.addEventListener('click', () => { hideContextMenu(); onClick(); });
+    btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-2)');
+    btn.addEventListener('mouseleave', () => btn.style.background = 'transparent');
+    menu.appendChild(btn);
+  };
+  addItem(`修改分类 (${catNames[currentCategory] || currentCategory})`, () => showCategoryPickerPopup(domain, currentCategory));
+  const sep = document.createElement('div');
+  sep.style.cssText = 'height:1px;background:var(--line);margin:4px 0;';
+  menu.appendChild(sep);
+  addItem('加入黑名单', () => addToBlocklist(domain), 'var(--red)');
+  addItem('加入白名单', () => addToAllowlist(domain), 'var(--green)');
+  document.body.appendChild(menu);
+  _contextMenuEl = menu;
+  const closeHandler = (e) => { if (!menu.contains(e.target)) { hideContextMenu(); document.removeEventListener('click', closeHandler); } };
+  setTimeout(() => document.addEventListener('click', closeHandler), 0);
+}
+function hideContextMenu() { if (_contextMenuEl) { _contextMenuEl.remove(); _contextMenuEl = null; } }
+
+function showCategoryPickerPopup(domain, currentCategory) {
+  const categories = ['learning', 'coding', 'entertainment', 'social', 'tools', 'other'];
+  const catNames = { learning: '学习', coding: '编程', entertainment: '娱乐', social: '社交', tools: '工具', other: '其他' };
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:oklch(0% 0 0/0.32);';
+  modal.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius-md);padding:20px;max-width:280px;width:100%;"><h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">修改 ${escapeHtml(domain)} 的分类</h3><div style="display:flex;flex-wrap:wrap;gap:6px;">${categories.map(c => `<button class="ghost${c === currentCategory ? ' primary' : ''}" data-cat="${c}" style="min-height:34px;padding:6px 12px;font-size:12px;">${catNames[c]}</button>`).join('')}</div></div>`;
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+    const btn = e.target.closest('[data-cat]');
+    if (btn) {
+      applyCategoryOverride(domain, btn.dataset.cat);
+      modal.remove();
+    }
+  });
+  document.body.appendChild(modal);
+}
+
+async function applyCategoryOverride(domain, category) {
+  const storage = await chrome.storage.local.get(['classificationOverrides']);
+  const overrides = storage.classificationOverrides || {};
+  overrides[domain] = category;
+  await chrome.storage.local.set({ classificationOverrides: overrides });
+  loadData();
+}
+
+async function addToBlocklist(domain) {
+  const storage = await chrome.storage.local.get(['blocklist']);
+  const list = storage.blocklist || [];
+  if (!list.includes(domain)) { list.push(domain); await chrome.storage.local.set({ blocklist: list }); }
+  notifyPopup('success', `已将 ${domain} 加入黑名单`);
+}
+
+async function addToAllowlist(domain) {
+  const storage = await chrome.storage.local.get(['allowlist']);
+  const list = storage.allowlist || [];
+  if (!list.includes(domain)) { list.push(domain); await chrome.storage.local.set({ allowlist: list }); }
+  notifyPopup('success', `已将 ${domain} 加入白名单`);
+}
+
+function showNoteInput() {
+  const card = document.getElementById('summaryCard');
+  if (!card || card.querySelector('#noteInputArea')) return;
+  const area = document.createElement('div');
+  area.id = 'noteInputArea';
+  area.style.cssText = 'display:flex;gap:var(--space-2);width:100%;margin-top:var(--space-2);';
+  area.innerHTML = `<input id="noteInput" type="text" placeholder="记录一下此刻的想法..." style="flex:1;padding:6px 10px;font-size:12px;"><button id="noteSaveBtn" style="min-height:30px;padding:4px 12px;font-size:11px;">保存</button>`;
+  card.style.flexWrap = 'wrap';
+  card.appendChild(area);
+  const input = document.getElementById('noteInput');
+  input.focus();
+  document.getElementById('noteSaveBtn')?.addEventListener('click', () => addQuickNote(input.value));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') addQuickNote(input.value); });
+}
+
+async function addQuickNote(text) {
+  text = (text || '').trim();
+  if (!text) return;
+  const storage = await chrome.storage.local.get('browsingData');
+  const data = storage.browsingData || [];
+  data.push({ url: 'note://quick-note', title: text, domain: 'note', category: 'note', visitTime: Date.now(), duration: 0, date: todayString(), isNote: true });
+  await chrome.storage.local.set({ browsingData: data });
+  const area = document.getElementById('noteInputArea');
+  if (area) area.remove();
+  notifyPopup('success', '备注已保存');
 }
 
 // 更新分类统计

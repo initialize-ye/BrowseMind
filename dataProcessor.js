@@ -729,7 +729,89 @@ class LocalAdvancedAnalyzer {
   }
 }
 
+// ==================== 习惯评分 ====================
+class HabitScorer {
+  constructor(browsingData, focusSessions = []) {
+    this.data = browsingData;
+    this.focusSessions = focusSessions;
+    this._blackholeDetector = new LocalAdvancedAnalyzer(30);
+  }
+
+  computeDailyScore(date) {
+    const dayData = this.data.filter(r => r.date === date);
+    if (!dayData.length) return null;
+    const totalDuration = dayData.reduce((s, r) => s + (r.duration || 0), 0);
+    if (totalDuration < 300) return null;
+
+    const focusCats = new Set(['learning', 'coding']);
+    const learningDuration = dayData
+      .filter(r => focusCats.has(r.category))
+      .reduce((s, r) => s + (r.duration || 0), 0);
+
+    // 学习比例 (0-40)
+    const learningRatio = learningDuration / totalDuration;
+    const learningScore = Math.min(40, Math.round(learningRatio * 50));
+
+    // 专注完成率 (0-25)
+    const daySessions = this.focusSessions.filter(s => {
+      const d = new Date(s.startTime);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === date;
+    });
+    const completionRate = daySessions.length > 0
+      ? daySessions.filter(s => s.completed).length / daySessions.length
+      : 0;
+    const focusScore = Math.round(completionRate * 25);
+
+    // 时间黑洞惩罚 (0-20)
+    const blackholes = this._blackholeDetector.detectBlackholes(dayData);
+    const blackholePenalty = Math.min(20, (blackholes.blackholes?.length || 0) * 5);
+    const blackholeScore = 20 - blackholePenalty;
+
+    // 浏览分散度 (0-15)
+    const activeHours = new Set(dayData.map(r => new Date(r.visitTime).getHours()));
+    const consistencyScore = Math.min(15, Math.round(activeHours.size * 1.5));
+
+    return Math.min(100, Math.max(0, learningScore + focusScore + blackholeScore + consistencyScore));
+  }
+
+  computeProductivityIndex(days = 7) {
+    const today = new Date();
+    let totalFocus = 0, totalTime = 0;
+    for (let i = 0; i < days; i++) {
+      const d = new Date(today - i * 86400000);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayData = this.data.filter(r => r.date === dateStr);
+      const t = dayData.reduce((s, r) => s + (r.duration || 0), 0);
+      const f = dayData.filter(r => r.category === 'learning' || r.category === 'coding')
+        .reduce((s, r) => s + (r.duration || 0), 0);
+      totalTime += t;
+      totalFocus += f;
+    }
+    return totalTime > 0 ? totalFocus / totalTime : 0;
+  }
+
+  computeScoreHistory(days = 14) {
+    const today = new Date();
+    const history = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today - i * 86400000);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const score = this.computeDailyScore(dateStr);
+      if (score !== null) history.push({ date: dateStr, score });
+    }
+    return history;
+  }
+
+  getRecommendation(score) {
+    if (score === null || score === undefined) return '数据不足，继续浏览后即可获得评分';
+    if (score >= 80) return '保持当前节奏，浏览习惯很健康！';
+    if (score >= 60) return '尝试增加专注会话，减少娱乐时间占比';
+    if (score >= 40) return '学习时间偏低，建议设定每日学习目标';
+    return '浏览习惯需要改善，建议开启专注模式和干预提醒';
+  }
+}
+
 // 导出模块
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DataProcessor, WebsiteClassifier, StatisticsAnalyzer, LocalAdvancedAnalyzer };
+  module.exports = { DataProcessor, WebsiteClassifier, StatisticsAnalyzer, LocalAdvancedAnalyzer, HabitScorer };
 }

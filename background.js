@@ -191,6 +191,18 @@ async function checkTabIntervention(tab, ctx) {
     const classifier = new WebsiteClassifier(overrides, feedback);
     const domain = WebsiteClassifier.normalizeDomain(new URL(tab.url).hostname);
     const category = classifier.classify(domain, tab.title || '', tab.url);
+
+    // 自适应阈值：用户切换到非娱乐站点 = 回应了之前的干预
+    if (category !== 'entertainment' && category !== 'social') {
+      const { interventionResponseLog = [] } = await chrome.storage.local.get('interventionResponseLog');
+      const unanswered = interventionResponseLog.filter(r => r.responded === null);
+      if (unanswered.length > 0) {
+        const fiveMinAgo = Date.now() - 5 * 60 * 1000;
+        unanswered.forEach(r => { if (r.time < fiveMinAgo) r.responded = true; });
+        await chrome.storage.local.set({ interventionResponseLog });
+      }
+    }
+
     await checkInterventions(domain, category);
   } catch (e) {
     console.error('checkTabIntervention error:', e);
@@ -717,6 +729,79 @@ async function checkInterventions(domain, category) {
       }
     }
   }
+
+  // 连续娱乐检测
+  if (category === 'entertainment' || category === 'social') {
+    const thresholdMin = preferences.continuousEntertainmentMinutes || 20;
+    const contKey = `continuous:${thresholdMin}`;
+    if (!interventionCooldowns[contKey] || now - interventionCooldowns[contKey] > cooldownMs) {
+      const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+      const cutoff = now - thresholdMin * 60 * 1000;
+      const recent = browsingData.filter(r => r.visitTime > cutoff).sort((a, b) => a.visitTime - b.visitTime);
+      if (recent.length >= 2) {
+        const allDistracting = recent.every(r => r.category === 'entertainment' || r.category === 'social');
+        const totalDur = recent.reduce((s, r) => s + (r.duration || 0), 0);
+        if (allDistracting && totalDur >= thresholdMin * 60) {
+          interventionCooldowns[contKey] = now;
+          await showNotification('intervention', `你已连续浏览娱乐/社交内容 ${Math.round(totalDur / 60)} 分钟，休息一下吧！`);
+        }
+      }
+    }
+  }
+
+  // 学习效率下降检测
+  if (preferences.learningDropAlertEnabled && (category === 'learning' || category === 'coding')) {
+    const today = new Date().toISOString().split('T')[0];
+    const dropKey = `learningDrop:${today}`;
+    if (!interventionCooldowns[dropKey]) {
+      const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+      const now2 = new Date();
+      const currentHour = now2.getHours();
+      const yesterday = new Date(now2 - 86400000).toISOString().split('T')[0];
+      const focusCats = new Set(['learning', 'coding']);
+      const todayFocus = browsingData.filter(r => r.date === today && focusCats.has(r.category) && new Date(r.visitTime).getHours() <= currentHour).reduce((s, r) => s + (r.duration || 0), 0);
+      const yesterdayFocus = browsingData.filter(r => r.date === yesterday && focusCats.has(r.category) && new Date(r.visitTime).getHours() <= currentHour).reduce((s, r) => s + (r.duration || 0), 0);
+      if (yesterdayFocus > 1800 && todayFocus < yesterdayFocus * 0.4) {
+        interventionCooldowns[dropKey] = now;
+        await showNotification('info', `学习时间较昨日同时段下降超过 60%，保持专注！`);
+      }
+    }
+  }
+
+  // 自适应阈值：记录干预响应，连续 7 次未响应则建议提高阈值
+  trackInterventionResponse(category);
+  checkAdaptiveThreshold(preferences);
+}
+
+// 自适应阈值 — 记录每次干预触发后用户是否切换回非娱乐站点
+async function trackInterventionResponse(category) {
+  if (category !== 'entertainment' && category !== 'social') return;
+  const { interventionResponseLog = [] } = await chrome.storage.local.get('interventionResponseLog');
+  // 只保留最近 30 条
+  if (interventionResponseLog.length > 30) interventionResponseLog.splice(0, interventionResponseLog.length - 30);
+  interventionResponseLog.push({ time: Date.now(), category, responded: null });
+  await chrome.storage.local.set({ interventionResponseLog });
+}
+
+// 检查连续未响应次数，达到阈值则发送建议
+async function checkAdaptiveThreshold(preferences) {
+  if (!preferences.adaptiveThresholdEnabled) return;
+  const { interventionResponseLog = [] } = await chrome.storage.local.get('interventionResponseLog');
+  if (interventionResponseLog.length < 7) return;
+
+  // 检查最近 7 条未响应的干预
+  const recent = interventionResponseLog.slice(-7);
+  const allUnanswered = recent.every(r => r.responded === false);
+  if (!allUnanswered) return;
+
+  const key = 'adaptive:threshold';
+  const now = Date.now();
+  if (interventionCooldowns[key] && now - interventionCooldowns[key] < 24 * 60 * 60 * 1000) return;
+  interventionCooldowns[key] = now;
+
+  await showNotification('info', '你已连续 7 次忽略了提醒，是否需要提高提醒阈值或调整提醒方式？');
+  // 清空日志避免重复触发
+  await chrome.storage.local.set({ interventionResponseLog: [] });
 }
 
 // 监听浏览记录变化，实时检查目标与自动同步

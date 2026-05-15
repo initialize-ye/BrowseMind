@@ -21,7 +21,10 @@ const DEFAULT_PREFERENCES = {
   quietHoursEnd: '',
   focusDurations: '25,45,60',
   dailySummaryEnabled: false,
-  dailySummaryHour: 21
+  dailySummaryHour: 21,
+  continuousEntertainmentMinutes: 20,
+  learningDropAlertEnabled: false,
+  adaptiveThresholdEnabled: false
 };
 
 // 模块级缓存：避免每次调用都重新计算 Object.keys
@@ -51,7 +54,10 @@ async function getPreferences() {
     quietHoursEnd: stored.quietHoursEnd != null ? stored.quietHoursEnd : defaults.quietHoursEnd,
     focusDurations: stored.focusDurations != null ? stored.focusDurations : defaults.focusDurations,
     dailySummaryEnabled: stored.dailySummaryEnabled === true || stored.dailySummaryEnabled === 'true',
-    dailySummaryHour: stored.dailySummaryHour != null ? Number(stored.dailySummaryHour) : defaults.dailySummaryHour
+    dailySummaryHour: stored.dailySummaryHour != null ? Number(stored.dailySummaryHour) : defaults.dailySummaryHour,
+    continuousEntertainmentMinutes: stored.continuousEntertainmentMinutes != null ? Number(stored.continuousEntertainmentMinutes) : defaults.continuousEntertainmentMinutes,
+    learningDropAlertEnabled: stored.learningDropAlertEnabled === true || stored.learningDropAlertEnabled === 'true',
+    adaptiveThresholdEnabled: stored.adaptiveThresholdEnabled === true || stored.adaptiveThresholdEnabled === 'true'
   };
 }
 
