@@ -284,17 +284,17 @@ class DataSync {
       // 初始化分类器（带用户覆盖规则）
       const classifier = new WebsiteClassifier(classificationOverrides);
 
-      // 转换数据格式并分类
+      // 转换数据格式并分类（截断超长字段避免后端 422）
       const records = browsingData.map(record => {
         const domain = this.extractDomain(record.url);
         const title = record.title || '';
         const category = record.category || classifier.classify(domain || '', title, record.url || '');
 
         return {
-          url: record.url,
-          title: title,
-          domain: domain,
-          category: category,
+          url: (record.url || '').slice(0, 2048),
+          title: title.slice(0, 2000),
+          domain: domain ? domain.slice(0, 253) : domain,
+          category: (category || '').slice(0, 50),
           visit_time: Math.floor(record.visitTime), // 转换为整数
           duration: Math.floor(record.duration || 0), // 转换为整数
           date: record.date
