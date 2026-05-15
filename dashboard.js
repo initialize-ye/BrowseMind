@@ -19,6 +19,7 @@ let hourlyChart = null;
 let activeSidebarTab = 'dashboard';
 let isSidebarCollapsed = false;
 let attentionChart = null;
+let habitTrendChart = null;
 let currentClassifiedData = [];
 let domainFilterTimer = null;
 const SIDEBAR_TABS = ['dashboard', 'insights', 'actions', 'goals', 'settings'];
@@ -485,11 +486,126 @@ function renderHabitCard(classifiedData) {
     const prodPct = Math.round(productivity * 100);
     content.innerHTML = `<div style="text-align:center;min-width:80px;"><div style="font-size:42px;font-weight:800;letter-spacing:-0.04em;color:${scoreColor};line-height:1;">${score ?? '--'}</div><div style="font-size:11px;color:var(--muted);margin-top:4px;">今日评分</div></div><div style="flex:1;min-width:0;"><div style="display:flex;gap:var(--space-4);margin-bottom:var(--space-2);"><div><span style="font-size:11px;color:var(--muted);">生产力指数</span><div style="font-size:18px;font-weight:700;color:var(--accent);">${prodPct}%</div></div></div><p style="font-size:13px;color:var(--muted);line-height:1.5;">${escapeHtml(recommendation)}</p></div>`;
     card.style.display = '';
+
+    // 渲染 14 天趋势图
+    const history = scorer.computeScoreHistory(14);
+    renderHabitTrendChart(history);
   } catch (e) {
     console.warn('习惯评分渲染失败:', e);
     card.style.display = 'none';
   }
 }
+function renderHabitTrendChart(history) {
+  const canvas = document.getElementById('habitTrendChart');
+  if (!canvas || !history || history.length < 2) { if (canvas) canvas.style.display = 'none'; return; }
+  canvas.style.display = '';
+  if (habitTrendChart) { habitTrendChart.destroy(); habitTrendChart = null; }
+  const ctx = canvas.getContext('2d');
+  const labels = history.map(h => h.date.slice(5));
+  const data = history.map(h => h.score);
+  const palette = getChartPalette();
+  habitTrendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: '评分',
+        data,
+        borderColor: palette[0],
+        backgroundColor: palette[0] + '18',
+        tension: 0.35,
+        fill: true,
+        pointRadius: 3,
+        pointHoverRadius: 5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: chartAnimation,
+      plugins: {
+        legend: { display: false },
+        annotation: undefined
+      },
+      scales: {
+        y: { min: 0, max: 100, grid: { color: getGridColor() }, ticks: { stepSize: 25 } },
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } }
+      }
+    },
+    plugins: [{
+      id: 'refLines',
+      afterDraw(chart) {
+        const { ctx: c, chartArea, scales } = chart;
+        const y70 = scales.y.getPixelForValue(70);
+        const y40 = scales.y.getPixelForValue(40);
+        c.save();
+        c.setLineDash([4, 4]);
+        c.lineWidth = 1;
+        c.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--green').trim() || '#22c55e';
+        c.beginPath(); c.moveTo(chartArea.left, y70); c.lineTo(chartArea.right, y70); c.stroke();
+        c.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim() || '#eab308';
+        c.beginPath(); c.moveTo(chartArea.left, y40); c.lineTo(chartArea.right, y40); c.stroke();
+        c.restore();
+      }
+    }]
+  });
+}
+let domainTrendChart = null;
+
+function showDomainDetail(domain) {
+  const modal = document.getElementById('domainDetailModal');
+  const title = document.getElementById('domainDetailTitle');
+  const stats = document.getElementById('domainDetailStats');
+  const recordsDiv = document.getElementById('domainDetailRecords');
+  if (!modal || !currentClassifiedData.length) return;
+
+  const records = currentClassifiedData.filter(r => r.domain === domain).sort((a, b) => (a.visitTime || 0) - (b.visitTime || 0));
+  if (!records.length) return;
+
+  const totalDuration = records.reduce((s, r) => s + (r.duration || 0), 0);
+  const totalVisits = records.length;
+  const firstVisit = records[0].date || '';
+  const lastVisit = records[records.length - 1].date || '';
+  const catName = CATEGORY_MAP[records[0].category] || '其他';
+
+  title.textContent = domain;
+  stats.innerHTML = `<div style="flex:1;min-width:60px;text-align:center;"><div style="font-size:22px;font-weight:700;color:var(--accent);">${formatDuration(totalDuration)}</div><div style="font-size:11px;color:var(--muted);">总时长</div></div><div style="flex:1;min-width:60px;text-align:center;"><div style="font-size:22px;font-weight:700;">${totalVisits}</div><div style="font-size:11px;color:var(--muted);">访问次数</div></div><div style="flex:1;min-width:60px;text-align:center;"><div style="font-size:14px;font-weight:600;">${escapeHtml(catName)}</div><div style="font-size:11px;color:var(--muted);">分类</div></div><div style="flex:1;min-width:60px;text-align:center;"><div style="font-size:13px;">${firstVisit} ~ ${lastVisit}</div><div style="font-size:11px;color:var(--muted);">时间范围</div></div>`;
+
+  // 每日趋势
+  const dayMap = {};
+  records.forEach(r => { const d = r.date || ''; if (d) dayMap[d] = (dayMap[d] || 0) + (r.duration || 0); });
+  const history = Object.entries(dayMap).sort(([a], [b]) => a.localeCompare(b)).map(([date, dur]) => ({ date, duration: Math.round(dur / 60) }));
+  renderDomainTrendChart(history);
+
+  // 最近记录
+  recordsDiv.innerHTML = records.slice(-20).reverse().map(r => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">${escapeHtml(r.title || r.url || '')}</span><span style="color:var(--muted);white-space:nowrap;margin-left:8px;">${formatDuration(r.duration || 0)}</span></div>`).join('');
+
+  modal.style.display = 'flex';
+}
+
+function renderDomainTrendChart(history) {
+  const canvas = document.getElementById('domainTrendChart');
+  if (!canvas || !history || history.length < 2) { if (canvas) canvas.style.display = 'none'; return; }
+  canvas.style.display = '';
+  if (domainTrendChart) { domainTrendChart.destroy(); domainTrendChart = null; }
+  const ctx = canvas.getContext('2d');
+  const palette = getChartPalette();
+  domainTrendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: history.map(h => h.date.slice(5)),
+      datasets: [{ label: '分钟', data: history.map(h => h.duration), borderColor: palette[0], backgroundColor: palette[0] + '18', tension: 0.35, fill: true, pointRadius: 3, pointHoverRadius: 5 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: chartAnimation,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, grid: { color: getGridColor() } }, x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } } }
+    }
+  });
+}
+
 function renderCategoryList(categoryStats, classifier) {
   const container = document.getElementById('categoryList');
   if (!categoryStats.length) {
@@ -522,7 +638,7 @@ function _renderDomainPage() {
   const page = _allDomains.slice(0, _domainPage * DOMAIN_PAGE_SIZE);
   container.innerHTML = page.map(domain => {
     const encDomain = (domain.domain || '').replace(/"/g, '&quot;');
-    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta"><span>${formatDuration(domain.duration)}</span> <button class="ghost" data-correct-domain="${encDomain}" data-correct-cat="${domain.category || 'other'}" style="min-height:28px;padding:2px 8px;font-size:11px;">修改分类</button></div></div>`;
+    return `<div class="domain-row"><div><div class="domain-name" data-detail-domain="${encDomain}" style="cursor:pointer;" title="点击查看站点详情">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta"><span>${formatDuration(domain.duration)}</span> <button class="ghost" data-correct-domain="${encDomain}" data-correct-cat="${domain.category || 'other'}" style="min-height:28px;padding:2px 8px;font-size:11px;">修改分类</button></div></div>`;
   }).join('');
   if (page.length < _allDomains.length) {
     container.innerHTML += `<div style="text-align:center;padding:10px;"><button class="ghost" id="loadMoreDomains" style="font-size:12px;min-height:32px;">加载更多 (${_allDomains.length - page.length} 条)</button></div>`;
@@ -852,6 +968,8 @@ function renderHeatmap(browsingData) {
 // ==================== 浏览历史时间线 ====================
 let _timelineData = [];
 let _timelineTimer = null;
+let _timelineView = 'list';
+let timelineChart = null;
 
 function renderTimeline(browsingData) {
   _timelineData = browsingData.slice().sort((a, b) => (b.visitTime || 0) - (a.visitTime || 0));
@@ -902,6 +1020,7 @@ function _applyTimelineFilter() {
 
   if (!display.length) {
     list.innerHTML = `<div class="timeline-empty">${filtered.length === 0 && _timelineData.length > 0 ? '没有匹配的记录' : '暂无浏览数据'}</div>`;
+    document.getElementById('timelineChartWrap').style.display = 'none';
     return;
   }
 
@@ -913,11 +1032,102 @@ function _applyTimelineFilter() {
     const dur = r.duration ? formatDuration(r.duration) : '';
     return `<div class="timeline-item" role="listitem" tabindex="0" aria-label="${escapeHtml(r.domain || '')} ${r.date || ''} ${time}${dur ? ' ' + dur : ''}"><div><div class="timeline-item-domain">${escapeHtml(r.domain || '')}</div><div class="timeline-item-title">${escapeHtml(r.title || '')}</div></div><div class="timeline-item-meta"><span class="timeline-cat-dot" style="background:${color}"></span>${r.date || ''} ${time}${dur ? ' · ' + dur : ''}</div></div>`;
   }).join('');
+
+  // 切换列表/甘特图视图
+  const listWrap = document.getElementById('timelineList');
+  const chartWrap = document.getElementById('timelineChartWrap');
+  if (_timelineView === 'chart') {
+    listWrap.style.display = 'none';
+    chartWrap.style.display = '';
+    renderTimelineChart(display, catColors);
+  } else {
+    listWrap.style.display = '';
+    chartWrap.style.display = 'none';
+  }
 }
 
 function _debounceTimeline() {
   clearTimeout(_timelineTimer);
   _timelineTimer = setTimeout(_applyTimelineFilter, 250);
+}
+
+function renderTimelineChart(records, catColors) {
+  const canvas = document.getElementById('timelineChart');
+  if (!canvas || !records.length) return;
+  if (timelineChart) { timelineChart.destroy(); timelineChart = null; }
+
+  // 按时间排序，取前 80 条避免图表过密
+  const sorted = records.slice().sort((a, b) => (a.visitTime || 0) - (b.visitTime || 0)).slice(0, 80);
+
+  const datasets = [];
+  const labels = sorted.map((r, i) => {
+    const d = r.domain || '';
+    return d.length > 18 ? d.slice(0, 16) + '…' : d;
+  });
+
+  // 每条记录是一个 floating bar: [startMinuteOfDay, endMinuteOfDay]
+  const data = sorted.map(r => {
+    const d = new Date(r.visitTime || 0);
+    const startMin = d.getHours() * 60 + d.getMinutes();
+    const durMin = Math.max(1, Math.round((r.duration || 0) / 60));
+    return [startMin, startMin + durMin];
+  });
+
+  const bgColors = sorted.map(r => catColors[r.category || 'other'] || catColors.other);
+
+  const ctx = canvas.getContext('2d');
+  canvas.height = Math.max(160, sorted.length * 18 + 40);
+
+  timelineChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: bgColors.map(c => c + 'cc'),
+        borderColor: bgColors,
+        borderWidth: 1,
+        borderSkipped: false,
+        barPercentage: 0.7,
+        categoryPercentage: 0.9
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: chartAnimation,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const r = sorted[ctx.dataIndex];
+              const [s, e] = ctx.raw;
+              const sh = Math.floor(s / 60), sm = s % 60;
+              const eh = Math.floor(e / 60), em = e % 60;
+              return `${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')} - ${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')} (${formatDuration(r.duration || 0)})`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          min: 0,
+          max: 1440,
+          grid: { color: getGridColor() },
+          ticks: {
+            stepSize: 120,
+            callback(v) { return `${String(Math.floor(v / 60)).padStart(2, '0')}:00`; }
+          }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 10 }, autoSkip: true, maxTicksLimit: 30 }
+        }
+      }
+    }
+  });
 }
 
 function renderBlackholes(blackholes) {
@@ -1909,8 +2119,23 @@ document.getElementById('timelineSearch')?.addEventListener('input', _debounceTi
 document.getElementById('timelineCategory')?.addEventListener('change', _applyTimelineFilter);
 document.getElementById('timelineDateFrom')?.addEventListener('change', _applyTimelineFilter);
 document.getElementById('timelineDateTo')?.addEventListener('change', _applyTimelineFilter);
+// 时间线视图切换
+document.getElementById('timelineViewTabs')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-timeline-view]');
+  if (!btn) return;
+  _timelineView = btn.dataset.timelineView;
+  document.querySelectorAll('#timelineViewTabs .chart-tab').forEach(t => t.classList.toggle('active', t.dataset.timelineView === _timelineView));
+  _applyTimelineFilter();
+});
 document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('shareCardBtn').addEventListener('click', generateShareCard); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('compareBtn').addEventListener('click', runComparison); document.getElementById('focusStartBtn').addEventListener('click', showFocusDurationPicker); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar); document.getElementById('reportTypeFilter').addEventListener('change', () => loadReports()); document.getElementById('leaderboardJoinBtn').addEventListener('click', joinLeaderboard); document.getElementById('leaderboardRefreshBtn').addEventListener('click', loadLeaderboard); document.getElementById('leaderboardSort').addEventListener('change', loadLeaderboard);
 document.getElementById('themeToggleBtn').addEventListener('click', cycleTheme);
+// 站点详情：事件委托
+document.getElementById('domainList')?.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-detail-domain]');
+  if (el) showDomainDetail(el.dataset.detailDomain);
+});
+document.getElementById('closeDomainDetail')?.addEventListener('click', () => { document.getElementById('domainDetailModal').style.display = 'none'; });
+document.getElementById('domainDetailModal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.style.display = 'none'; });
 document.querySelectorAll('[data-pref]').forEach(el => {
   const evt = el.type === 'checkbox' ? 'change' : (el.tagName === 'SELECT' ? 'change' : 'input');
   el.addEventListener(evt, autoSaveSettings);
@@ -1946,6 +2171,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     stopDashLoadingRotation();
   }
 });
+
+// 快捷键
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+  const tabMap = { '1': 'dashboard', '2': 'insights', '3': 'actions', '4': 'goals', '5': 'settings' };
+  if (tabMap[e.key]) { e.preventDefault(); switchSidebarTab(tabMap[e.key]); }
+  else if (e.key === '/') { e.preventDefault(); document.getElementById('timelineSearch')?.focus(); }
+  else if (e.key === 'Escape') { document.activeElement?.blur(); }
+});
 // Debounced resize handler to avoid excessive chart.resize() calls during window drag
 let _resizeTimer = null;
 window.addEventListener('resize', () => {
@@ -1962,6 +2196,9 @@ window.addEventListener('beforeunload', () => {
   if (trendChart) { trendChart.destroy(); trendChart = null; }
   if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
   if (attentionChart) { attentionChart.destroy(); attentionChart = null; }
+  if (habitTrendChart) { habitTrendChart.destroy(); habitTrendChart = null; }
+  if (domainTrendChart) { domainTrendChart.destroy(); domainTrendChart = null; }
+  if (timelineChart) { timelineChart.destroy(); timelineChart = null; }
   clearTimeout(_focusTimer);
   clearTimeout(_autoSaveTimer);
   clearTimeout(_timelineTimer);

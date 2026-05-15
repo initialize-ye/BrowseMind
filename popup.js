@@ -55,6 +55,12 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 's' || e.key === 'S') { e.preventDefault(); syncToCloud(); }
   else if (e.key === 'd' || e.key === 'D') { e.preventDefault(); openDashboard(); }
   else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); showFocusPicker(); }
+  else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); showAIAnalysis(); }
+  else if (e.key === 'Escape') {
+    document.getElementById('aiAnalysisModal').style.display === 'none' ? null : closeModal();
+    document.getElementById('goalModal').style.display === 'none' ? null : closeGoalModal();
+    hideContextMenu();
+  }
 });
 
 let _popupFocusTimer = null;

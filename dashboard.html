@@ -301,6 +301,7 @@
           <div class="panel" id="habitCard" style="margin-bottom:var(--space-4);display:none;">
             <div class="section-title"><h2>习惯评分</h2><p>基于学习比例、专注完成率和时间黑洞</p></div>
             <div id="habitCardContent" style="display:flex;align-items:center;gap:var(--space-5);padding:var(--space-3) 0;"></div>
+            <div style="margin-top:var(--space-3);"><canvas id="habitTrendChart" height="80"></canvas></div>
           </div>
 
           <div class="heatmap-wrap">
@@ -336,7 +337,8 @@
           </section>
 
           <div class="panel timeline-panel" style="margin-top:var(--space-4)">
-            <div class="section-title"><h2>浏览历史</h2><p>按时间排序的浏览记录</p></div>
+            <div class="section-title" style="justify-content:space-between;"><div><h2>浏览历史</h2><p>按时间排序的浏览记录</p></div><div class="chart-tabs" id="timelineViewTabs"><button class="chart-tab active" data-timeline-view="list">列表</button><button class="chart-tab" data-timeline-view="chart">甘特图</button></div></div>
+            <div id="timelineChartWrap" style="display:none;margin-bottom:var(--space-3);"><canvas id="timelineChart" height="200"></canvas></div>
             <div class="timeline-controls">
               <input id="timelineSearch" type="search" placeholder="搜索域名或标题..." aria-label="搜索浏览记录" maxlength="200">
               <select id="timelineCategory" aria-label="筛选分类">
@@ -402,6 +404,16 @@
       </section>
     </div>
   </main>
+
+  <div id="domainDetailModal" class="modal" role="dialog" aria-modal="true" aria-label="站点详情" style="display:none;">
+    <div class="modal-content" style="width:min(100%,520px);">
+      <button class="modal-close" id="closeDomainDetail" aria-label="关闭">&times;</button>
+      <h2 id="domainDetailTitle">站点详情</h2>
+      <div id="domainDetailStats" style="display:flex;gap:var(--space-4);margin-bottom:var(--space-4);flex-wrap:wrap;"></div>
+      <div style="margin-bottom:var(--space-3);"><canvas id="domainTrendChart" height="120"></canvas></div>
+      <div id="domainDetailRecords" style="max-height:200px;overflow-y:auto;"></div>
+    </div>
+  </div>
 
   <link rel="preload" href="chart.min.js" as="script">
   <link rel="preload" href="dataProcessor.js" as="script">
