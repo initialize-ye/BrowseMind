@@ -1,22 +1,7 @@
 // getPreferences(), DEFAULT_API_BASE_URL, DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
+// getChartPalette, invalidateChartPalette, prefersReducedMotion, chartAnimation, CATEGORY_MAP, GOAL_TYPE_NAMES, todayString, getGridColor are in shared.js
 
-// Cached chart palette — invalidated on theme change
-let _chartPaletteCache = null;
-let _chartPaletteTheme = null;
-function getChartPalette() {
-  const theme = document.documentElement.dataset.theme || 'light';
-  if (_chartPaletteCache && _chartPaletteTheme === theme) return _chartPaletteCache;
-  const cs = getComputedStyle(document.documentElement);
-  _chartPaletteCache = [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
-  _chartPaletteTheme = theme;
-  return _chartPaletteCache;
-}
-function invalidateChartPalette() { _chartPaletteCache = null; }
 let palette = getChartPalette();
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const chartAnimation = prefersReducedMotion ? false : undefined;
-const categoryMap = { daily_learning: 'learning', daily_entertainment: 'entertainment', daily_coding: 'coding', daily_social: 'social' };
-const goalTypeNames = { daily_learning: '每日学习时长', daily_entertainment: '每日娱乐时长限制', daily_coding: '每日编程时长', daily_social: '每日社交时长限制' };
 let dataSync = null;
 let _connectionCache = { result: null, time: 0 };
 const CONNECTION_CACHE_TTL = 30000; // 30s
@@ -38,7 +23,6 @@ let currentClassifiedData = [];
 let domainFilterTimer = null;
 const SIDEBAR_TABS = ['dashboard', 'insights', 'actions', 'goals', 'settings'];
 
-function todayString() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 // formatDuration() is defined in dataSync.js (shared with popup)
 function log(message) {
   const box = document.getElementById('logBox');
@@ -545,9 +529,6 @@ function renderFilteredDomains() {
     return { ...domain, category: cat, categoryName: categories[cat]?.name || '其他' };
   });
   renderDomainList(domains);
-}
-function getGridColor() {
-  return getComputedStyle(document.documentElement).getPropertyValue('--chart-grid').trim() || 'rgba(0,0,0,0.06)';
 }
 function renderTrendChart(dailyTrend) {
   const labels = dailyTrend.map(item => { const date = new Date(item.date); return `${date.getMonth() + 1}/${date.getDate()}`; });
@@ -1381,11 +1362,11 @@ async function runAIAnalysis() {
 async function createGoal() {
   const button = document.getElementById('createGoalBtn');
   setButtonBusy(button, true, '添加中...');
-  try { await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const goalType = document.getElementById('goalTypeSelect').value; const durationMinutes = parseInt(document.getElementById('goalDurationInput').value, 10); if (!durationMinutes || durationMinutes <= 0 || durationMinutes > 1440) throw new Error('请输入有效的目标时长（1-1440 分钟）'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal_type: goalType, category: categoryMap[goalType], target_duration: durationMinutes * 60, date: todayString() }) }); if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || '创建目标失败'); } setNote('目标已添加', 'success'); log(`已添加目标：${goalTypeNames[goalType]} ${durationMinutes} 分钟`); await loadGoals(); } catch (error) { setNote(`创建目标失败：${error.message}`, 'danger'); log(`创建目标失败：${error.message}`); } finally { setButtonBusy(button, false); }
+  try { await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const goalType = document.getElementById('goalTypeSelect').value; const durationMinutes = parseInt(document.getElementById('goalDurationInput').value, 10); if (!durationMinutes || durationMinutes <= 0 || durationMinutes > 1440) throw new Error('请输入有效的目标时长（1-1440 分钟）'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal_type: goalType, category: CATEGORY_MAP[goalType], target_duration: durationMinutes * 60, date: todayString() }) }); if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || '创建目标失败'); } setNote('目标已添加', 'success'); log(`已添加目标：${GOAL_TYPE_NAMES[goalType]} ${durationMinutes} 分钟`); await loadGoals(); } catch (error) { setNote(`创建目标失败：${error.message}`, 'danger'); log(`创建目标失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
 async function loadGoals() {
   const list = document.getElementById('goalList');
-  try { await initDataSync(); if (!(await cachedCheckConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>还没有目标</strong><p class="muted">设一个今日目标，看看自己能走多远。</p></div></div>'; return; } list.innerHTML = goals.map(goal => { const pct = Number(goal.progress_percentage || 0); const achieved = pct >= 100; const warning = pct >= 80 && !achieved; const barClass = achieved ? 'achieved' : (warning ? 'warning' : ''); return `<div class="goal-card ${achieved ? 'achieved' : ''}"><div><strong>${goalTypeNames[goal.goal_type] || goal.goal_type}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${pct.toFixed(1)}%${achieved ? ' <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;"><path d="M9 12l2 2 4-4"/></svg>' : ''}</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${goal.id}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${goal.id}">停用</button><button class="danger" data-goal-id="${goal.id}">删除</button></div><div class="bar-track"><div class="bar-fill ${barClass}" style="width: ${Math.min(pct, 100)}%"></div></div></div>`; }).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
+  try { await initDataSync(); if (!(await cachedCheckConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>还没有目标</strong><p class="muted">设一个今日目标，看看自己能走多远。</p></div></div>'; return; } list.innerHTML = goals.map(goal => { const pct = Number(goal.progress_percentage || 0); const achieved = pct >= 100; const warning = pct >= 80 && !achieved; const barClass = achieved ? 'achieved' : (warning ? 'warning' : ''); return `<div class="goal-card ${achieved ? 'achieved' : ''}"><div><strong>${GOAL_TYPE_NAMES[goal.goal_type] || goal.goal_type}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${pct.toFixed(1)}%${achieved ? ' <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;"><path d="M9 12l2 2 4-4"/></svg>' : ''}</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${goal.id}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${goal.id}">停用</button><button class="danger" data-goal-id="${goal.id}">删除</button></div><div class="bar-track"><div class="bar-fill ${barClass}" style="width: ${Math.min(pct, 100)}%"></div></div></div>`; }).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
 }
 async function refreshGoalProgress() {
   const button = document.getElementById('refreshGoalsBtn');

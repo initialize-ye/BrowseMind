@@ -4,22 +4,7 @@ let currentChart = null;
 let chartData = null;
 let attentionChart = null;
 let dataSync = null;
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const chartAnimation = prefersReducedMotion ? false : undefined;
-function todayString() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
-
-// Cached chart palette — invalidated on theme change
-let _chartPaletteCache = null;
-let _chartPaletteTheme = null;
-function getChartPalette() {
-  const theme = document.documentElement.dataset.theme || 'light';
-  if (_chartPaletteCache && _chartPaletteTheme === theme) return _chartPaletteCache;
-  const cs = getComputedStyle(document.documentElement);
-  _chartPaletteCache = [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
-  _chartPaletteTheme = theme;
-  return _chartPaletteCache;
-}
-function invalidateChartPalette() { _chartPaletteCache = null; }
+// prefersReducedMotion, chartAnimation, todayString, getChartPalette, invalidateChartPalette, CATEGORY_MAP, GOAL_TYPE_NAMES are defined in shared.js
 // getPreferences(), DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
 
 async function initDataSync(preferences) {
@@ -200,7 +185,6 @@ async function updateConnectionStatus() {
 }
 
 const loadingMessages = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
-const goalTypeNames = { daily_learning: '学习时长', daily_entertainment: '娱乐限制', daily_coding: '编程时长', daily_social: '社交限制' };
 let _loadingMsgTimer = null;
 function startLoadingRotation() {
   const el = document.getElementById('loadingMsg');
@@ -1203,7 +1187,7 @@ function displayGoals(goals) {
     return `
       <div class="goal-item ${isAchieved ? 'achieved' : ''}">
         <div class="goal-header">
-          <span class="goal-type">${escapeHtml(goalTypeNames[goal.goal_type] || goal.goal_type)}</span>
+          <span class="goal-type">${escapeHtml(GOAL_TYPE_NAMES[goal.goal_type] || goal.goal_type)}</span>
           <div>
             <span class="goal-status ${statusClass}">${statusText}</span>
             <button class="goal-delete" data-goal-id="${goal.id}" aria-label="删除目标">×</button>
@@ -1264,14 +1248,6 @@ async function saveGoal() {
       return;
     }
 
-    // 映射目标类型到分类
-    const categoryMap = {
-      'daily_learning': 'learning',
-      'daily_entertainment': 'entertainment',
-      'daily_coding': 'coding',
-      'daily_social': 'social'
-    };
-
     const today = todayString();
 
     const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${userId}`, {
@@ -1279,7 +1255,7 @@ async function saveGoal() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         goal_type: goalType,
-        category: categoryMap[goalType],
+        category: CATEGORY_MAP[goalType],
         target_duration: durationMinutes * 60,
         date: today
       })
