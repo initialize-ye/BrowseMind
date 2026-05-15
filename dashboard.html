@@ -165,7 +165,7 @@
     .heatmap-panel { padding: var(--space-4) var(--space-5); }
     .heatmap-scroll { display: flex; overflow-x: auto; padding-bottom: var(--space-1); }
     .heatmap { display: inline-grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px; }
-    .heatmap-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--surface-3); transition: background 0.15s; }
+    .heatmap-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--surface-3); }
     .heatmap-cell[data-level="1"] { background: oklch(72% 0.08 150); }
     .heatmap-cell[data-level="2"] { background: oklch(60% 0.12 150); }
     .heatmap-cell[data-level="3"] { background: oklch(48% 0.14 150); }
@@ -214,7 +214,7 @@
     .insight-card strong { display: block; margin-top: 6px; font-size: 32px; line-height: 1; font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; color: var(--accent); }
     .insight-card small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
     .bar-track { height: 7px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
-    .bar-fill { height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.4s var(--ease-out); }
+    .bar-fill { height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.4s var(--ease-out); will-change: width; }
     .domain-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
     .domain-row > div:first-child,
     .goal-card > div:first-child,

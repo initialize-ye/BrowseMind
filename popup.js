@@ -7,10 +7,19 @@ let dataSync = null;
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const chartAnimation = prefersReducedMotion ? false : undefined;
 function todayString() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+// Cached chart palette — invalidated on theme change
+let _chartPaletteCache = null;
+let _chartPaletteTheme = null;
 function getChartPalette() {
+  const theme = document.documentElement.dataset.theme || 'light';
+  if (_chartPaletteCache && _chartPaletteTheme === theme) return _chartPaletteCache;
   const cs = getComputedStyle(document.documentElement);
-  return [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
+  _chartPaletteCache = [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
+  _chartPaletteTheme = theme;
+  return _chartPaletteCache;
 }
+function invalidateChartPalette() { _chartPaletteCache = null; }
 // getPreferences(), DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
 
 async function initDataSync(preferences) {
@@ -223,6 +232,7 @@ async function loadData() {
     } else {
       html.removeAttribute('data-theme');
     }
+    invalidateChartPalette(); // Clear cache after theme set
     updateCurrentSite();
     clearInterval(_siteTrackerTimer);
     _siteTrackerTimer = setInterval(updateCurrentSite, 5000);
@@ -279,10 +289,10 @@ async function loadData() {
 
     stopLoadingRotation(); loading.style.display = 'none';
     content.style.display = 'block';
-    content.querySelectorAll('.stat-bar, .chart-card, .section').forEach((el, i) => {
-      el.style.animationDelay = `${i * 0.06}s`;
-      el.classList.add('fade-in');
-    });
+    // Batch animation delay writes to avoid forced reflow per element
+    const animEls = content.querySelectorAll('.stat-bar, .chart-card, .section');
+    animEls.forEach((el, i) => { el.style.animationDelay = `${i * 0.06}s`; });
+    requestAnimationFrame(() => { animEls.forEach(el => el.classList.add('fade-in')); });
   } catch (error) {
     console.error('加载数据失败:', error);
     stopLoadingRotation(); loading.style.display = 'none';

@@ -1,8 +1,17 @@
 // getPreferences(), DEFAULT_API_BASE_URL, DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
+
+// Cached chart palette — invalidated on theme change
+let _chartPaletteCache = null;
+let _chartPaletteTheme = null;
 function getChartPalette() {
+  const theme = document.documentElement.dataset.theme || 'light';
+  if (_chartPaletteCache && _chartPaletteTheme === theme) return _chartPaletteCache;
   const cs = getComputedStyle(document.documentElement);
-  return [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
+  _chartPaletteCache = [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
+  _chartPaletteTheme = theme;
+  return _chartPaletteCache;
 }
+function invalidateChartPalette() { _chartPaletteCache = null; }
 let palette = getChartPalette();
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const chartAnimation = prefersReducedMotion ? false : undefined;
@@ -46,6 +55,7 @@ function applyTheme(themeMode) {
   } else {
     html.removeAttribute('data-theme');
   }
+  invalidateChartPalette(); // Clear cache before re-reading
   const btn = document.getElementById('themeToggleBtn');
   if (btn) {
     const labels = { light: '亮色', dark: '深色', system: '跟随系统' };
@@ -167,14 +177,10 @@ async function toggleSidebar() {
   isSidebarCollapsed = !isSidebarCollapsed;
   applySidebarState();
   await chrome.storage.local.set({ dashboardSidebarCollapsed: isSidebarCollapsed });
-  // Force layout recalculation after CSS transition
+  // Force layout recalculation after CSS transition (only once, post-transition)
   const layout = document.querySelector('.layout');
-  if (layout) {
-    // Trigger reflow to ensure grid recalculates
-    layout.offsetHeight;
-  }
   setTimeout(() => {
-    if (layout) layout.offsetHeight;
+    if (layout) layout.offsetHeight; // Trigger reflow after transition completes
     if (trendChart) trendChart.resize();
     if (hourlyChart) hourlyChart.resize();
     if (attentionChart) attentionChart.resize();
@@ -612,9 +618,11 @@ function renderHeatmap(browsingData) {
   const startDate = new Date(today);
   startDate.setDate(startDate.getDate() - daysBack + 1); // start on Monday
 
-  // Find max duration for scaling
-  const allDurations = Object.values(dailyDuration);
-  const maxDuration = Math.max(...allDurations, 60); // min 60s for scale
+  // Find max duration for scaling (loop instead of spread to avoid stack overflow on large datasets)
+  let maxDuration = 60; // min 60s for scale
+  for (const d of Object.values(dailyDuration)) {
+    if (d > maxDuration) maxDuration = d;
+  }
 
   const cells = [];
   const dayLabels = ['', '一', '', '三', '', '五', ''];
@@ -702,13 +710,14 @@ function _applyTimelineFilter() {
     filtered = filtered.filter(r => (r.date || '') <= dateTo);
   }
 
+  const p = getChartPalette(); // Cached — avoids 6 getComputedStyle calls per filter
   const catColors = {
-    learning: getComputedStyle(document.documentElement).getPropertyValue('--chart-1').trim() || '#6366f1',
-    coding: getComputedStyle(document.documentElement).getPropertyValue('--chart-2').trim() || '#34d399',
-    entertainment: getComputedStyle(document.documentElement).getPropertyValue('--chart-3').trim() || '#fbbf24',
-    social: getComputedStyle(document.documentElement).getPropertyValue('--chart-4').trim() || '#f87171',
-    tools: getComputedStyle(document.documentElement).getPropertyValue('--chart-5').trim() || '#a1a1aa',
-    other: getComputedStyle(document.documentElement).getPropertyValue('--chart-6').trim() || '#818cf8'
+    learning: p[0] || '#6366f1',
+    coding: p[1] || '#34d399',
+    entertainment: p[2] || '#fbbf24',
+    social: p[3] || '#f87171',
+    tools: p[4] || '#a1a1aa',
+    other: p[5] || '#818cf8'
   };
 
   const MAX_DISPLAY = 200;
@@ -1759,12 +1768,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     stopDashLoadingRotation();
   }
 });
+// Debounced resize handler to avoid excessive chart.resize() calls during window drag
+let _resizeTimer = null;
 window.addEventListener('resize', () => {
-  if (activeSidebarTab === 'dashboard') {
-    if (trendChart) trendChart.resize();
-    if (hourlyChart) hourlyChart.resize();
-  }
-  if (attentionChart) attentionChart.resize();
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    if (activeSidebarTab === 'dashboard') {
+      if (trendChart) trendChart.resize();
+      if (hourlyChart) hourlyChart.resize();
+    }
+    if (attentionChart) attentionChart.resize();
+  }, 150);
 });
 window.addEventListener('beforeunload', () => {
   if (trendChart) { trendChart.destroy(); trendChart = null; }
