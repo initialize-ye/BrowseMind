@@ -394,7 +394,7 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
 function updateCategoryStats(categoryStats, classifier) {
   const container = document.getElementById('categoryStats');
   if (!categoryStats || categoryStats.length === 0) {
-    container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:12px;">暂无分类数据</div>';
+    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:12px;">暂无分类数据</div>';
     return;
   }
   const categories = classifier.getAllCategories();
@@ -403,7 +403,7 @@ function updateCategoryStats(categoryStats, classifier) {
   container.innerHTML = categoryStats.map(stat => {
     const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
     const percentage = parseFloat(stat.percentage);
-    const color = catColors[stat.category] || '#90919e';
+    const color = catColors[stat.category] || 'var(--muted)';
 
     return `
       <div class="category-item">
@@ -435,7 +435,7 @@ function updateTodayCategoryStats(todayStats, classifier) {
   container.innerHTML = todayStats.slice(0, 5).map(stat => {
     const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
     const percentage = parseFloat(stat.percentage);
-    const color = catColorsToday[stat.category] || '#90919e';
+    const color = catColorsToday[stat.category] || 'var(--muted)';
 
     return `
       <div class="category-item-compact">

@@ -78,8 +78,9 @@ function applyTheme(themeMode) {
     }
     if (hourlyChart) {
       const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#6366f1';
+      const inactiveColor = getComputedStyle(document.documentElement).getPropertyValue('--surface-3').trim() || '#e5e5e5';
       const active = hourlyChart._activeHours || hourlyChart.data.datasets[0].data.map(v => v > 0);
-      hourlyChart.data.datasets[0].backgroundColor = active.map(on => on ? accentColor : 'rgba(128,128,128,0.15)');
+      hourlyChart.data.datasets[0].backgroundColor = active.map(on => on ? accentColor : inactiveColor);
       hourlyChart.options.scales.y.grid.color = gridColor;
       hourlyChart.update();
     }
@@ -581,7 +582,8 @@ function renderHourlyChart(hourlyDist) {
   const data = allHours.map(item => Math.round(item.duration / 60));
   const activeHours = allHours.map(item => item.duration > 0);
   const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#6366f1';
-  const bgColors = activeHours.map(active => active ? accentColor : 'rgba(128,128,128,0.15)');
+  const inactiveColor = getComputedStyle(document.documentElement).getPropertyValue('--surface-3').trim() || '#e5e5e5';
+  const bgColors = activeHours.map(active => active ? accentColor : inactiveColor);
   if (hourlyChart) {
     hourlyChart.data.labels = labels;
     hourlyChart.data.datasets[0].data = data;
