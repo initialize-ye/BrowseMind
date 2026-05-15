@@ -21,7 +21,7 @@ class BrowsingRecordCreate(BaseModel):
 class BrowsingRecordBatch(BaseModel):
     """批量上传浏览记录"""
     user_id: str = Field(..., description="用户唯一标识")
-    records: List[BrowsingRecordCreate]
+    records: List[BrowsingRecordCreate] = Field(..., max_length=10000)
 
 
 class BrowsingRecordResponse(BaseModel):

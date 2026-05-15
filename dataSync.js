@@ -33,16 +33,16 @@ async function getPreferences() {
   const defaults = DEFAULT_PREFERENCES;
   return {
     apiBaseUrl: (stored.apiBaseUrl != null && stored.apiBaseUrl !== '') ? stored.apiBaseUrl : defaults.apiBaseUrl,
-    autoSyncEnabled: stored.autoSyncEnabled != null ? stored.autoSyncEnabled : defaults.autoSyncEnabled,
+    autoSyncEnabled: stored.autoSyncEnabled === true || stored.autoSyncEnabled === 'true',
     autoSyncDebounceMs: stored.autoSyncDebounceMs != null ? Number(stored.autoSyncDebounceMs) : defaults.autoSyncDebounceMs,
     autoSyncMinIntervalMs: stored.autoSyncMinIntervalMs != null ? Number(stored.autoSyncMinIntervalMs) : defaults.autoSyncMinIntervalMs,
     dataRetentionDays: stored.dataRetentionDays != null ? Number(stored.dataRetentionDays) : defaults.dataRetentionDays,
     minVisitDurationSeconds: stored.minVisitDurationSeconds != null ? Number(stored.minVisitDurationSeconds) : defaults.minVisitDurationSeconds,
-    notificationsEnabled: stored.notificationsEnabled != null ? stored.notificationsEnabled : defaults.notificationsEnabled,
+    notificationsEnabled: stored.notificationsEnabled === true || stored.notificationsEnabled === 'true',
     blackholeThresholdMinutes: stored.blackholeThresholdMinutes != null ? Number(stored.blackholeThresholdMinutes) : defaults.blackholeThresholdMinutes,
     analysisDays: stored.analysisDays != null ? Number(stored.analysisDays) : defaults.analysisDays,
-    interventionsEnabled: stored.interventionsEnabled != null ? stored.interventionsEnabled : defaults.interventionsEnabled,
-    focusModeEnabled: stored.focusModeEnabled != null ? stored.focusModeEnabled : defaults.focusModeEnabled,
+    interventionsEnabled: stored.interventionsEnabled === true || stored.interventionsEnabled === 'true',
+    focusModeEnabled: stored.focusModeEnabled === true || stored.focusModeEnabled === 'true',
     domainAllowlist: stored.domainAllowlist != null ? stored.domainAllowlist : defaults.domainAllowlist,
     domainBlocklist: stored.domainBlocklist != null ? stored.domainBlocklist : defaults.domainBlocklist,
     categoryTimeLimits: stored.categoryTimeLimits != null ? stored.categoryTimeLimits : defaults.categoryTimeLimits,
@@ -50,7 +50,7 @@ async function getPreferences() {
     quietHoursStart: stored.quietHoursStart != null ? stored.quietHoursStart : defaults.quietHoursStart,
     quietHoursEnd: stored.quietHoursEnd != null ? stored.quietHoursEnd : defaults.quietHoursEnd,
     focusDurations: stored.focusDurations != null ? stored.focusDurations : defaults.focusDurations,
-    dailySummaryEnabled: stored.dailySummaryEnabled != null ? stored.dailySummaryEnabled : defaults.dailySummaryEnabled,
+    dailySummaryEnabled: stored.dailySummaryEnabled === true || stored.dailySummaryEnabled === 'true',
     dailySummaryHour: stored.dailySummaryHour != null ? Number(stored.dailySummaryHour) : defaults.dailySummaryHour
   };
 }
@@ -106,7 +106,7 @@ async function fetchWithRetry(url, options = {}, maxRetries = 2) {
 }
 
 function formatDuration(seconds) {
-  const total = Math.floor(seconds || 0);
+  const total = Math.max(0, Math.floor(seconds || 0));
   if (total < 60) return `${total}秒`;
   const minutes = Math.floor(total / 60);
   if (minutes < 60) return `${minutes}分钟`;
@@ -416,7 +416,8 @@ class DataSync {
   // 从云端拉取设置
   async pullSettings() {
     await this.initUserId();
-    const response = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`);
+    const authHeaders = await this._getAuthHeaders();
+    const response = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, { headers: authHeaders });
     if (!response.ok) throw new Error(`拉取设置失败: ${response.status}`);
     return response.json();
   }
@@ -429,7 +430,7 @@ class DataSync {
     // 拉取云端设置
     let cloudData;
     try {
-      const resp = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`);
+      const resp = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, { headers: authHeaders });
       if (!resp.ok) throw new Error('拉取失败');
       cloudData = await resp.json();
     } catch {
@@ -445,11 +446,12 @@ class DataSync {
 
     if (!cloudUpdatedAt) {
       // 云端无设置，推送本地设置
-      await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, {
+      const resp = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(localPrefs)
       });
+      if (!resp.ok) return { action: 'skip', message: `推送设置失败: ${resp.status}` };
       await chrome.storage.local.set({ settingsSyncTime: Date.now() });
       return { action: 'push', message: '首次同步：已推送本地设置到云端' };
     }
@@ -462,11 +464,12 @@ class DataSync {
     }
 
     // 本地更新或相同，推送本地设置
-    await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, {
+    const resp = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify(localPrefs)
     });
+    if (!resp.ok) return { action: 'skip', message: `推送设置失败: ${resp.status}` };
     await chrome.storage.local.set({ settingsSyncTime: Date.now() });
     return { action: 'push', message: '已推送本地设置到云端' };
   }
@@ -478,7 +481,7 @@ class DataSync {
 
     let cloudData;
     try {
-      const resp = await fetch(`${this.apiBaseUrl}/api/classification-rules/${this.userId}`);
+      const resp = await fetch(`${this.apiBaseUrl}/api/classification-rules/${this.userId}`, { headers: authHeaders });
       if (!resp.ok) throw new Error('拉取失败');
       cloudData = await resp.json();
     } catch {
@@ -491,11 +494,12 @@ class DataSync {
 
     if (!cloudUpdatedAt) {
       // 云端无规则，推送本地
-      await fetch(`${this.apiBaseUrl}/api/classification-rules/${this.userId}`, {
+      const resp = await fetch(`${this.apiBaseUrl}/api/classification-rules/${this.userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(classificationOverrides)
       });
+      if (!resp.ok) return { action: 'skip', message: `推送分类规则失败: ${resp.status}` };
       await chrome.storage.local.set({ rulesSyncTime: Date.now() });
       return { action: 'push', message: '首次同步：已推送本地分类规则到云端' };
     }
@@ -508,11 +512,12 @@ class DataSync {
     }
 
     // 本地更新或相同，推送
-    await fetch(`${this.apiBaseUrl}/api/classification-rules/${this.userId}`, {
+    const resp = await fetch(`${this.apiBaseUrl}/api/classification-rules/${this.userId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify(classificationOverrides)
     });
+    if (!resp.ok) return { action: 'skip', message: `推送分类规则失败: ${resp.status}` };
     await chrome.storage.local.set({ rulesSyncTime: Date.now() });
     return { action: 'push', message: '已推送本地分类规则到云端' };
   }

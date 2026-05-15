@@ -121,11 +121,16 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 // 一次性读取偏好与分类覆盖（供 saveTabDuration + checkTabIntervention 共用）
 async function getSharedContext() {
-  const [preferences, { classificationOverrides = {}, classificationFeedback = {} }] = await Promise.all([
-    getPreferences(),
-    chrome.storage.local.get(['classificationOverrides', 'classificationFeedback'])
-  ]);
-  return { preferences, classificationOverrides, classificationFeedback };
+  try {
+    const [preferences, { classificationOverrides = {}, classificationFeedback = {} }] = await Promise.all([
+      getPreferences(),
+      chrome.storage.local.get(['classificationOverrides', 'classificationFeedback'])
+    ]);
+    return { preferences, classificationOverrides, classificationFeedback };
+  } catch (e) {
+    console.warn('getSharedContext 失败，使用默认值:', e);
+    return { preferences: { ...DEFAULT_PREFERENCES }, classificationOverrides: {}, classificationFeedback: {} };
+  }
 }
 
 // 监听标签页激活（用户切换标签）
@@ -150,7 +155,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // 监听窗口焦点变化
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    await saveTabDuration();
+    const ctx = await getSharedContext();
+    await saveTabDuration(ctx);
     activeTab = { tabId: null, url: null, title: null, startTime: null };
   } else {
     const [tab] = await chrome.tabs.query({ active: true, windowId });
@@ -243,7 +249,7 @@ let _pendingRecords = [];
 let _flushTimer = null;
 
 async function addBrowsingRecord(record) {
-  ensureRecordCache(null);
+  await ensureRecordCache(null);
   const key = recordKey(record);
   if (_recentRecordKeys.has(key)) return;
 
@@ -336,6 +342,9 @@ chrome.alarms.create('cleanOldData', { periodInMinutes: 60 });
 // ==================== 专注会话 ====================
 
 function startFocusSession(durationMinutes) {
+  if (focusSession.active) {
+    endFocusSession(false).catch(e => console.warn('结束旧专注会话失败:', e));
+  }
   const now = Date.now();
   focusSession = {
     active: true,
@@ -421,7 +430,8 @@ async function checkDailySummary() {
   if (isInQuietHours(preferences)) return;
 
   const now = new Date();
-  if (now.getHours() !== preferences.dailySummaryHour) return;
+  // 使用 >= 而非精确匹配，防止 alarm 偏移导致跳过目标小时
+  if (now.getHours() < preferences.dailySummaryHour) return;
 
   const today = now.toISOString().split('T')[0];
   const { lastDailySummary = '' } = await chrome.storage.local.get('lastDailySummary');
@@ -472,6 +482,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       showNotification('info', '专注会话完成！你做到了。').catch(e => console.error('showNotification failed:', e));
     } else if (alarm.name === 'dailySummary') {
       checkDailySummary().catch(e => console.error('dailySummary failed:', e));
+    } else if (alarm.name === 'clearBadge') {
+      chrome.action.setBadgeText({ text: '' });
     }
   } catch (e) {
     console.error('alarm handler error:', e);
@@ -519,11 +531,12 @@ async function updateGoalsProgress() {
 function isInQuietHours(preferences) {
   const start = preferences.quietHoursStart;
   const end = preferences.quietHoursEnd;
-  if (!start || !end) return false;
+  if (!start || !end || !start.includes(':') || !end.includes(':')) return false;
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const [startH, startM] = start.split(':').map(Number);
   const [endH, endM] = end.split(':').map(Number);
+  if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return false;
   const startMinutes = startH * 60 + startM;
   const endMinutes = endH * 60 + endM;
   if (startMinutes <= endMinutes) {
@@ -545,7 +558,7 @@ async function showNotification(type, message) {
       if (type === 'warning' || type === 'intervention') {
         chrome.action.setBadgeText({ text: '!' });
         chrome.action.setBadgeBackgroundColor({ color: '#f87171' });
-        setTimeout(() => chrome.action.setBadgeText({ text: '' }), 5000);
+        chrome.alarms.create('clearBadge', { delayInMinutes: 5 / 60 });
       }
       return;
     }
@@ -570,7 +583,7 @@ async function showNotification(type, message) {
     try {
       chrome.action.setBadgeText({ text: '!' });
       chrome.action.setBadgeBackgroundColor({ color: '#f87171' });
-      setTimeout(() => chrome.action.setBadgeText({ text: '' }), 5000);
+      chrome.alarms.create('clearBadge', { delayInMinutes: 5 / 60 });
     } catch {}
   }
 }

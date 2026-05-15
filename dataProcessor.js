@@ -290,7 +290,7 @@ class WebsiteClassifier {
   }
 
   static normalizeDomain(domain = '') {
-    return domain
+    return (domain || '')
       .toLowerCase()
       .trim()
       .replace(/^https?:\/\//, '')
@@ -301,7 +301,7 @@ class WebsiteClassifier {
   }
 
   matchesDomain(hostname, ruleDomain) {
-    return hostname === ruleDomain || hostname.endsWith(`.${ruleDomain}`);
+    return hostname === ruleDomain || (hostname.endsWith('.' + ruleDomain));
   }
 
   includesAny(text, keywords = []) {

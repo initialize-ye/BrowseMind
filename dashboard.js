@@ -121,14 +121,15 @@ function setNote(message, type = 'info') {
   // Update the inline note in Actions view
   const note = document.getElementById('operationNote');
   note.style.display = 'block';
-  note.className = `note ${type === 'success' ? 'success' : type === 'danger' ? 'danger' : ''}`;
+  const classMap = { success: 'success', danger: 'danger', warning: 'warning' };
+  note.className = `note ${classMap[type] || ''}`;
   note.textContent = message;
 
   // Also show a toast visible from any tab
   const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
-  const bgMap = { success: 'var(--green-soft)', danger: 'var(--red-soft)', info: 'var(--accent-soft)' };
-  const colorMap = { success: 'var(--green)', danger: 'var(--red)', info: 'var(--accent)' };
+  const bgMap = { success: 'var(--green-soft)', danger: 'var(--red-soft)', warning: 'var(--yellow-soft)', info: 'var(--accent-soft)' };
+  const colorMap = { success: 'var(--green)', danger: 'var(--red)', warning: 'var(--yellow)', info: 'var(--accent)' };
   toast.style.cssText = `pointer-events:auto;margin-bottom:8px;padding:12px 16px;border-radius:var(--radius-sm);background:${bgMap[type] || bgMap.info};color:${colorMap[type] || colorMap.info};font-size:13px;line-height:1.5;box-shadow:var(--shadow);opacity:0;transition:opacity .2s ease;`;
   toast.textContent = message;
   container.appendChild(toast);
@@ -247,6 +248,7 @@ async function switchSidebarTab(tab, options = {}) {
     loadAdvancedInsights().catch(() => {});
     loadReports().catch(() => {});
     loadFocusStats().catch(() => {});
+    loadLeaderboard().catch(() => {});
   }
 }
 function applyPreferencesToForm(preferences) {
@@ -587,6 +589,152 @@ function renderHourlyChart(hourlyDist) {
   hourlyChart = new Chart(ctx, { type: 'bar', data: { labels, datasets: [{ label: '分钟', data, backgroundColor: bgColors, borderRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: chartAnimation, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: getGridColor() } }, x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } } } } });
   hourlyChart._activeHours = activeHours;
 }
+
+// ==================== 活跃热力图 ====================
+function renderHeatmap(browsingData) {
+  const grid = document.getElementById('heatmapGrid');
+  const labelsEl = document.getElementById('heatmapLabels');
+  const tip = document.getElementById('heatmapTip');
+  if (!grid) return;
+
+  // Aggregate duration by date
+  const dailyDuration = {};
+  for (const r of browsingData) {
+    const d = r.date || (r.visitTime ? new Date(r.visitTime).toISOString().split('T')[0] : null);
+    if (d) dailyDuration[d] = (dailyDuration[d] || 0) + (r.duration || 0);
+  }
+
+  // Build 26 weeks of cells starting from the Monday ~26 weeks ago
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon...
+  const daysBack = 26 * 7 + (dayOfWeek === 0 ? 6 : dayOfWeek - 1); // align to Monday
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - daysBack + 1); // start on Monday
+
+  // Find max duration for scaling
+  const allDurations = Object.values(dailyDuration);
+  const maxDuration = Math.max(...allDurations, 60); // min 60s for scale
+
+  const cells = [];
+  const dayLabels = ['', '一', '', '三', '', '五', ''];
+  labelsEl.innerHTML = dayLabels.map(l => `<span>${l}</span>`).join('');
+
+  let currentDate = new Date(startDate);
+  while (currentDate <= today) {
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const duration = dailyDuration[dateStr] || 0;
+    let level = 0;
+    if (duration > 0) {
+      const ratio = duration / maxDuration;
+      level = ratio > 0.75 ? 4 : ratio > 0.5 ? 3 : ratio > 0.25 ? 2 : 1;
+    }
+    const cell = document.createElement('div');
+    cell.className = 'heatmap-cell';
+    cell.dataset.level = level;
+    cell.dataset.date = dateStr;
+    cell.dataset.duration = duration;
+    cells.push(cell);
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  grid.innerHTML = '';
+  grid.append(...cells);
+
+  // Screen reader summary
+  const summaryEl = document.getElementById('heatmapSummary');
+  if (summaryEl) {
+    const activeDays = allDurations.filter(d => d > 0).length;
+    const maxDay = Object.entries(dailyDuration).sort((a, b) => b[1] - a[1])[0];
+    const avgDuration = activeDays > 0 ? Math.round(allDurations.reduce((s, d) => s + d, 0) / activeDays) : 0;
+    summaryEl.textContent = `过去 26 周共 ${activeDays} 天有浏览活动，平均每日 ${formatDuration(avgDuration)}${maxDay ? '，最活跃日 ' + maxDay[0] + ' ' + formatDuration(maxDay[1]) : ''}`;
+  }
+
+  // Tooltip
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  grid.onmousemove = (e) => {
+    const cell = e.target.closest('.heatmap-cell');
+    if (!cell) { tip.classList.remove('visible'); return; }
+    const d = new Date(cell.dataset.date + 'T00:00:00');
+    const dur = Number(cell.dataset.duration);
+    tip.textContent = `${cell.dataset.date} ${weekdays[d.getDay()]} · ${dur > 0 ? formatDuration(dur) : '无数据'}`;
+    tip.style.left = e.clientX + 12 + 'px';
+    tip.style.top = e.clientY - 30 + 'px';
+    tip.classList.add('visible');
+  };
+  grid.onmouseleave = () => tip.classList.remove('visible');
+}
+
+// ==================== 浏览历史时间线 ====================
+let _timelineData = [];
+let _timelineTimer = null;
+
+function renderTimeline(browsingData) {
+  _timelineData = browsingData.slice().sort((a, b) => (b.visitTime || 0) - (a.visitTime || 0));
+  _applyTimelineFilter();
+}
+
+function _applyTimelineFilter() {
+  const list = document.getElementById('timelineList');
+  const countEl = document.getElementById('timelineCount');
+  if (!list) return;
+
+  const search = (document.getElementById('timelineSearch')?.value || '').toLowerCase().trim();
+  const category = document.getElementById('timelineCategory')?.value || 'all';
+  const dateFrom = document.getElementById('timelineDateFrom')?.value || '';
+  const dateTo = document.getElementById('timelineDateTo')?.value || '';
+
+  let filtered = _timelineData;
+
+  if (search) {
+    filtered = filtered.filter(r =>
+      (r.domain || '').toLowerCase().includes(search) ||
+      (r.title || '').toLowerCase().includes(search)
+    );
+  }
+  if (category !== 'all') {
+    filtered = filtered.filter(r => (r.category || 'other') === category);
+  }
+  if (dateFrom) {
+    filtered = filtered.filter(r => (r.date || '') >= dateFrom);
+  }
+  if (dateTo) {
+    filtered = filtered.filter(r => (r.date || '') <= dateTo);
+  }
+
+  const catColors = {
+    learning: getComputedStyle(document.documentElement).getPropertyValue('--chart-1').trim() || '#6366f1',
+    coding: getComputedStyle(document.documentElement).getPropertyValue('--chart-2').trim() || '#34d399',
+    entertainment: getComputedStyle(document.documentElement).getPropertyValue('--chart-3').trim() || '#fbbf24',
+    social: getComputedStyle(document.documentElement).getPropertyValue('--chart-4').trim() || '#f87171',
+    tools: getComputedStyle(document.documentElement).getPropertyValue('--chart-5').trim() || '#a1a1aa',
+    other: getComputedStyle(document.documentElement).getPropertyValue('--chart-6').trim() || '#818cf8'
+  };
+
+  const MAX_DISPLAY = 200;
+  const display = filtered.slice(0, MAX_DISPLAY);
+  countEl.textContent = filtered.length > 0 ? `显示 ${display.length} / ${filtered.length} 条记录` : '';
+
+  if (!display.length) {
+    list.innerHTML = `<div class="timeline-empty">${filtered.length === 0 && _timelineData.length > 0 ? '没有匹配的记录' : '暂无浏览数据'}</div>`;
+    return;
+  }
+
+  const timeFmt = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  list.innerHTML = display.map(r => {
+    const cat = r.category || 'other';
+    const color = catColors[cat] || catColors.other;
+    const time = r.visitTime ? timeFmt.format(new Date(r.visitTime)) : '';
+    const dur = r.duration ? formatDuration(r.duration) : '';
+    return `<div class="timeline-item" role="listitem" tabindex="0" aria-label="${escapeHtml(r.domain || '')} ${r.date || ''} ${time}${dur ? ' ' + dur : ''}"><div><div class="timeline-item-domain">${escapeHtml(r.domain || '')}</div><div class="timeline-item-title">${escapeHtml(r.title || '')}</div></div><div class="timeline-item-meta"><span class="timeline-cat-dot" style="background:${color}"></span>${r.date || ''} ${time}${dur ? ' · ' + dur : ''}</div></div>`;
+  }).join('');
+}
+
+function _debounceTimeline() {
+  clearTimeout(_timelineTimer);
+  _timelineTimer = setTimeout(_applyTimelineFilter, 250);
+}
+
 function renderBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
   if (!blackholes || !blackholes.top_blackholes || !blackholes.top_blackholes.length) {
@@ -807,7 +955,7 @@ function renderComparison(data, p1Days, p2Days) {
   if (p2Dur < 60) {
     pctText = '—';
   } else {
-    const pct = data.duration_change_pct;
+    const pct = data.duration_change_pct ?? 0;
     const capped = Math.max(-999, Math.min(999, pct));
     pctText = `${capped > 0 ? '+' : ''}${Math.round(capped)}%`;
     pctColor = capped > 5 ? 'var(--red)' : capped < -5 ? 'var(--green)' : 'var(--muted)';
@@ -981,7 +1129,7 @@ async function stopFocusSession() {
   log('专注会话已手动停止');
 }
 
-async function loadReports() {
+async function loadReports(reportType) {
   try {
     await initDataSync();
     if (!(await cachedCheckConnection())) {
@@ -989,7 +1137,9 @@ async function loadReports() {
       return;
     }
     await dataSync.initUserId();
-    const response = await authFetch(`${dataSync.apiBaseUrl}/api/reports/${dataSync.userId}?limit=5`);
+    const filter = reportType || document.getElementById('reportTypeFilter')?.value || '';
+    const typeParam = filter ? `&report_type=${encodeURIComponent(filter)}` : '';
+    const response = await authFetch(`${dataSync.apiBaseUrl}/api/reports/${dataSync.userId}?limit=10${typeParam}`);
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
       console.error('历史报告加载失败:', response.status, errorText);
@@ -1038,11 +1188,85 @@ async function refreshInsights() {
     await loadReports();
     await loadLatestAIAnalysis();
     await loadFocusStats();
+    await loadLeaderboard();
     setNote('洞察已刷新', 'success');
     log('洞察页已刷新');
   } catch (error) {
     setNote(`洞察刷新失败：${error.message}`, 'danger');
     log(`洞察刷新失败：${error.message}`);
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+// ==================== 排行榜 ====================
+async function loadLeaderboard() {
+  const container = document.getElementById('leaderboardContent');
+  try {
+    await initDataSync();
+    if (!(await cachedCheckConnection())) {
+      container.innerHTML = '<div class="empty">后端未连接，无法加载排行榜。</div>';
+      return;
+    }
+    await dataSync.initUserId();
+    const sortBy = document.getElementById('leaderboardSort')?.value || 'learning_duration';
+    const response = await authFetch(`${dataSync.apiBaseUrl}/api/leaderboard?sort_by=${sortBy}&limit=20&user_id=${encodeURIComponent(dataSync.userId)}`);
+    if (!response.ok) {
+      container.innerHTML = '<div class="empty">加载排行榜失败。</div>';
+      return;
+    }
+    const data = await response.json();
+    renderLeaderboard(data.entries || [], sortBy);
+  } catch (error) {
+    console.error('排行榜加载失败:', error);
+    container.innerHTML = '<div class="empty">加载排行榜失败。</div>';
+  }
+}
+
+function renderLeaderboard(entries, sortBy) {
+  const container = document.getElementById('leaderboardContent');
+  if (!entries.length) {
+    container.innerHTML = '<div class="empty">暂无排行数据，点击"加入排行"成为第一位参与者。</div>';
+    return;
+  }
+  const labels = { learning_duration: '学习时长', focus_duration: '专注时长', total_duration: '总浏览时长' };
+  const valueLabel = labels[sortBy] || '时长';
+
+  let html = `<table class="leaderboard-table"><thead><tr><th class="lb-rank">#</th><th>用户</th><th style="text-align:right">${escapeHtml(valueLabel)}</th></tr></thead><tbody>`;
+  for (const entry of entries) {
+    const rankClass = entry.rank <= 3 ? ` top-${entry.rank}` : '';
+    const youClass = entry._isYou ? ' lb-you' : '';
+    const value = formatDuration(entry[sortBy] || 0);
+    html += `<tr class="${youClass}"><td class="lb-rank${rankClass}">${entry.rank}</td><td class="lb-name">${escapeHtml(entry.display_name)}${entry._isYou ? ' (你)' : ''}</td><td class="lb-value">${value}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function joinLeaderboard() {
+  const button = document.getElementById('leaderboardJoinBtn');
+  setButtonBusy(button, true, '加入中...');
+  try {
+    await initDataSync();
+    if (!(await cachedCheckConnection())) {
+      setNote('后端未连接，无法加入排行榜', 'warning');
+      return;
+    }
+    await dataSync.initUserId();
+    const response = await authFetch(`${dataSync.apiBaseUrl}/api/leaderboard/${dataSync.userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: '匿名用户' })
+    });
+    if (!response.ok) {
+      setNote('加入排行榜失败', 'danger');
+      return;
+    }
+    setNote('已加入排行榜', 'success');
+    log('已加入学习排行榜');
+    await loadLeaderboard();
+  } catch (error) {
+    setNote(`加入排行榜失败：${error.message}`, 'danger');
   } finally {
     setButtonBusy(button, false);
   }
@@ -1082,6 +1306,8 @@ async function loadAnalytics() {
   renderFilteredDomains();
   renderTrendChart(dailyTrend);
   renderHourlyChart(hourlyDist);
+  renderHeatmap(classifiedData);
+  renderTimeline(classifiedData);
   const topCategoryText = categoryStats[0] ? `${classifier.getCategoryInfo(categoryStats[0].category).name}占比最高，约 ${Number(categoryStats[0].percentage).toFixed(1)}%。` : '分类数据正在积累。';
   return { count: classifiedData.length, topCategoryText };
 }
@@ -1090,7 +1316,21 @@ async function refreshDashboard() {
   const preferences = await loadPreferences();
   await initDataSync();
   const { userId, lastSyncTime } = await chrome.storage.local.get(['userId', 'lastSyncTime']);
-  const analytics = await loadAnalytics();
+  let analytics;
+  try {
+    analytics = await loadAnalytics();
+  } catch (e) {
+    console.warn('loadAnalytics 失败:', e);
+    analytics = { count: 0, topCategoryText: '数据加载失败。' };
+    // Still render heatmap/timeline with raw storage data
+    try {
+      const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+      if (browsingData.length) {
+        renderHeatmap(browsingData);
+        renderTimeline(browsingData);
+      }
+    } catch (_) {}
+  }
   const connected = await cachedCheckConnection();
   const syncText = lastSyncTime ? `上次同步：${new Date(lastSyncTime).toLocaleString('zh-CN')}` : '尚未同步。';
   const days = preferences.analysisDays;
@@ -1105,7 +1345,7 @@ async function refreshDashboard() {
   // 并行加载独立模块
   const tasks = [loadGoals()];
   if (activeSidebarTab === 'insights') {
-    tasks.push(loadAdvancedInsights(), loadReports(), loadFocusStats());
+    tasks.push(loadAdvancedInsights(), loadReports(), loadLatestAIAnalysis(), loadFocusStats(), loadLeaderboard());
   }
   await Promise.allSettled(tasks);
 
@@ -1139,19 +1379,78 @@ async function refreshGoalProgress() {
   try { await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}/update-progress?date=${encodeURIComponent(todayString())}`, { method: 'POST' }); if (!response.ok) throw new Error('刷新目标进度失败'); setNote('目标进度已刷新', 'success'); log('目标进度已刷新'); await loadGoals(); } catch (error) { setNote(`目标刷新失败：${error.message}`, 'danger'); log(`目标刷新失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
 async function editGoalDuration(goalId, currentMinutes) {
-  const value = prompt('新的目标时长（分钟）', currentMinutes);
-  if (value === null) return;
-  const minutes = Number(value);
-  if (!minutes || minutes <= 0) { setNote('请输入有效的目标时长', 'danger'); return; }
-  try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_duration: Math.round(minutes * 60) }) }); if (!response.ok) throw new Error('编辑失败'); setNote('目标已更新', 'success'); log(`已更新目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标编辑失败：${error.message}`, 'danger'); log(`目标编辑失败：${error.message}`); }
+  const editBtn = document.querySelector(`[data-goal-edit-id="${goalId}"]`);
+  if (!editBtn) return;
+  const row = editBtn.closest('.button-row');
+  if (!row) return;
+  row.innerHTML = `<input type="number" min="1" max="1440" value="${currentMinutes}" style="width:70px;min-height:32px;padding:4px 8px;font-size:12px;" aria-label="新的目标时长（分钟）"><button class="secondary" style="font-size:12px;min-height:32px;padding:4px 10px;" data-goal-save-id="${goalId}">保存</button><button class="ghost" style="font-size:12px;min-height:32px;padding:4px 10px;" data-goal-cancel>取消</button>`;
+  const input = row.querySelector('input');
+  input.focus();
+  input.select();
+  row.querySelector('[data-goal-save-id]').addEventListener('click', async () => {
+    const minutes = Number(input.value);
+    if (!minutes || minutes <= 0) { setNote('请输入有效的目标时长', 'danger'); return; }
+    try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_duration: Math.round(minutes * 60) }) }); if (!response.ok) throw new Error('编辑失败'); setNote('目标已更新', 'success'); log(`已更新目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标编辑失败：${error.message}`, 'danger'); log(`目标编辑失败：${error.message}`); }
+  });
+  row.querySelector('[data-goal-cancel]').addEventListener('click', () => loadGoals());
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') row.querySelector('[data-goal-save-id]').click();
+    if (e.key === 'Escape') loadGoals();
+  });
 }
 async function deactivateGoal(goalId) {
-  if (!confirm('确定停用这个目标吗？停用后不会继续统计今日进度。')) return;
-  try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: 0 }) }); if (!response.ok) throw new Error('停用失败'); setNote('目标已停用', 'success'); log(`已停用目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标停用失败：${error.message}`, 'danger'); log(`目标停用失败：${error.message}`); }
+  showGoalConfirm('确定停用这个目标吗？停用后不会继续统计今日进度。', async () => {
+    try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: 0 }) }); if (!response.ok) throw new Error('停用失败'); setNote('目标已停用', 'success'); log(`已停用目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标停用失败：${error.message}`, 'danger'); log(`目标停用失败：${error.message}`); }
+  });
 }
 async function deleteGoal(goalId) {
-  if (!confirm('确定删除这个目标吗？')) return;
-  try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'DELETE' }); if (!response.ok) throw new Error('删除失败'); setNote('目标已删除', 'success'); log(`已删除目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`删除目标失败：${error.message}`, 'danger'); log(`删除目标失败：${error.message}`); }
+  showGoalConfirm('确定删除这个目标吗？', async () => {
+    try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'DELETE' }); if (!response.ok) throw new Error('删除失败'); setNote('目标已删除', 'success'); log(`已删除目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`删除目标失败：${error.message}`, 'danger'); log(`删除目标失败：${error.message}`); }
+  });
+}
+function showGoalConfirm(message, onConfirm) {
+  let backdrop = document.getElementById('goalConfirmBackdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.id = 'goalConfirmBackdrop';
+    backdrop.style.cssText = 'display:none;position:fixed;inset:0;z-index:9997;background:oklch(0% 0 0 / 0.32);';
+    document.body.appendChild(backdrop);
+  }
+  let dialog = document.getElementById('goalConfirmDialog');
+  if (!dialog) {
+    dialog = document.createElement('div');
+    dialog.id = 'goalConfirmDialog';
+    dialog.setAttribute('role', 'alertdialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9998;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:0 12px 40px rgba(0,0,0,.18);padding:20px;min-width:260px;max-width:340px;';
+    document.body.appendChild(dialog);
+  }
+  dialog.innerHTML = `<p style="font-size:14px;line-height:1.6;margin-bottom:16px;color:var(--text);">${escapeHtml(message)}</p><div class="button-row compact" style="justify-content:flex-end;"><button class="ghost" id="goalConfirmCancel" style="font-size:12px;min-height:32px;padding:4px 14px;">取消</button><button class="danger" id="goalConfirmOk" style="font-size:12px;min-height:32px;padding:4px 14px;">确定</button></div>`;
+  backdrop.style.display = 'block';
+  dialog.style.display = 'block';
+  const trigger = document.activeElement;
+  function close() {
+    backdrop.style.display = 'none';
+    dialog.style.display = 'none';
+    document.removeEventListener('keydown', onKey);
+    backdrop.removeEventListener('click', close);
+    if (trigger && typeof trigger.focus === 'function') trigger.focus();
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') { close(); return; }
+    if (e.key === 'Tab') {
+      const focusable = dialog.querySelectorAll('button:not([disabled])');
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+  document.getElementById('goalConfirmCancel').addEventListener('click', close);
+  document.getElementById('goalConfirmOk').addEventListener('click', () => { close(); onConfirm(); });
+  backdrop.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  dialog.querySelector('#goalConfirmOk').focus();
 }
 let _autoSaveTimer = null;
 let _settingsStatusTimer = null;
@@ -1207,7 +1506,7 @@ async function generateShareCard() {
 
   // 背景
   const cs = getComputedStyle(document.documentElement);
-  const bg = cs.getPropertyValue('--surface-1').trim() || '#1a1a2e';
+  const bg = cs.getPropertyValue('--surface').trim() || '#1a1a2e';
   const text = cs.getPropertyValue('--text').trim() || '#e8e8e8';
   const muted = cs.getPropertyValue('--muted').trim() || '#888';
   ctx.fillStyle = bg;
@@ -1282,6 +1581,7 @@ async function generateShareCard() {
 
   // 导出
   canvas.toBlob(blob => {
+    if (!blob) { setNote('分享卡片生成失败', 'danger'); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1415,7 +1715,13 @@ function moveSidebarTabFocus(currentTab, direction) {
 function bindEvents() { document.getElementById('refreshBtnActions').addEventListener('click', refreshDashboard); document.getElementById('refreshInsightsBtn').addEventListener('click', refreshInsights); document.getElementById('categoryFilterInput').addEventListener('change', renderFilteredDomains); document.getElementById('domainFilterInput').addEventListener('input', () => {
   clearTimeout(domainFilterTimer);
   domainFilterTimer = setTimeout(renderFilteredDomains, 250);
-}); document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('shareCardBtn').addEventListener('click', generateShareCard); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('compareBtn').addEventListener('click', runComparison); document.getElementById('focusStartBtn').addEventListener('click', showFocusDurationPicker); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar);
+});
+// Timeline filters
+document.getElementById('timelineSearch')?.addEventListener('input', _debounceTimeline);
+document.getElementById('timelineCategory')?.addEventListener('change', _applyTimelineFilter);
+document.getElementById('timelineDateFrom')?.addEventListener('change', _applyTimelineFilter);
+document.getElementById('timelineDateTo')?.addEventListener('change', _applyTimelineFilter);
+document.getElementById('syncBtn').addEventListener('click', syncNow); document.getElementById('aiBtn').addEventListener('click', runAIAnalysis); document.getElementById('createGoalBtn').addEventListener('click', createGoal); document.getElementById('refreshGoalsBtn').addEventListener('click', refreshGoalProgress); document.getElementById('resetApiBtn').addEventListener('click', resetApiBaseUrl); document.getElementById('testApiBtn').addEventListener('click', testApiConnection); document.getElementById('exportJsonBtn').addEventListener('click', exportJson); document.getElementById('exportCloudBtn').addEventListener('click', exportCloudData); document.getElementById('shareCardBtn').addEventListener('click', generateShareCard); document.getElementById('clearLocalBtn').addEventListener('click', clearLocalData); initImport(); document.getElementById('compareBtn').addEventListener('click', runComparison); document.getElementById('focusStartBtn').addEventListener('click', showFocusDurationPicker); document.getElementById('sidebarToggleBtn').addEventListener('click', toggleSidebar); document.getElementById('reportTypeFilter').addEventListener('change', () => loadReports()); document.getElementById('leaderboardJoinBtn').addEventListener('click', joinLeaderboard); document.getElementById('leaderboardRefreshBtn').addEventListener('click', loadLeaderboard); document.getElementById('leaderboardSort').addEventListener('change', loadLeaderboard);
 document.getElementById('themeToggleBtn').addEventListener('click', cycleTheme);
 document.querySelectorAll('[data-pref]').forEach(el => {
   const evt = el.type === 'checkbox' ? 'change' : (el.tagName === 'SELECT' ? 'change' : 'input');
@@ -1462,7 +1768,7 @@ window.addEventListener('beforeunload', () => {
   if (trendChart) { trendChart.destroy(); trendChart = null; }
   if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
   if (attentionChart) { attentionChart.destroy(); attentionChart = null; }
-  clearInterval(_focusTimer);
+  clearTimeout(_focusTimer);
   clearTimeout(_autoSaveTimer);
 });
 

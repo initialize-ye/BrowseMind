@@ -224,7 +224,7 @@ async function loadData() {
     updateCurrentSite();
     clearInterval(_siteTrackerTimer);
     _siteTrackerTimer = setInterval(updateCurrentSite, 5000);
-    const browsingData = storage.browsingData || [];
+    const browsingData = validateBrowsingData(storage.browsingData);
 
     if (browsingData.length === 0) {
       stopLoadingRotation(); loading.style.display = 'none';
@@ -382,14 +382,16 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
 function updateCategoryStats(categoryStats, classifier) {
   const container = document.getElementById('categoryStats');
   const categories = classifier.getAllCategories();
+  const catColors = { learning: getChartPalette()[0], coding: getChartPalette()[1], entertainment: getChartPalette()[3], social: getChartPalette()[2], tools: getChartPalette()[5], other: getChartPalette()[4] };
 
   container.innerHTML = categoryStats.map(stat => {
-    const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other, color: '#90919e' };
+    const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
     const percentage = parseFloat(stat.percentage);
+    const color = catColors[stat.category] || '#90919e';
 
     return `
       <div class="category-item">
-        <span class="category-dot" style="background:${categoryInfo.color || '#90919e'}"></span>
+        <span class="category-dot" style="background:${color}"></span>
         <span class="category-name">${categoryInfo.name}</span>
         <span class="category-meta">${percentage}%</span>
         <div style="flex:0 0 auto;text-align:right;">
@@ -413,13 +415,15 @@ function updateTodayCategoryStats(todayStats, classifier) {
     return;
   }
 
+  const catColorsToday = { learning: getChartPalette()[0], coding: getChartPalette()[1], entertainment: getChartPalette()[3], social: getChartPalette()[2], tools: getChartPalette()[5], other: getChartPalette()[4] };
   container.innerHTML = todayStats.slice(0, 5).map(stat => {
-    const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other, color: '#90919e' };
+    const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
     const percentage = parseFloat(stat.percentage);
+    const color = catColorsToday[stat.category] || '#90919e';
 
     return `
       <div class="category-item-compact">
-        <span class="category-dot" style="background:${categoryInfo.color || '#90919e'};width:6px;height:6px;border-radius:50%;flex-shrink:0;"></span>
+        <span class="category-dot" style="background:${color};width:6px;height:6px;border-radius:50%;flex-shrink:0;"></span>
         <span class="category-name">${categoryInfo.name}</span>
         <span class="category-value">${percentage}%</span>
       </div>
@@ -738,6 +742,7 @@ async function showAIAnalysis() {
   const content = document.getElementById('aiAnalysisContent');
 
   modal.style.display = 'flex';
+  setupModalFocusTrap('aiAnalysisModal', closeModal);
   content.innerHTML = '<div class="ai-loading"><div class="spinner"></div><p>检查连接中...</p></div>';
 
   try {
@@ -868,15 +873,39 @@ function displayAIAnalysis(analysis) {
 
 // 关闭模态框
 function closeModal() {
-  document.getElementById('aiAnalysisModal').style.display = 'none';
+  const modal = document.getElementById('aiAnalysisModal');
+  modal.style.display = 'none';
+  document.removeEventListener('keydown', _modalKeyHandler);
+  if (modal._returnFocus && typeof modal._returnFocus.focus === 'function') modal._returnFocus.focus();
 }
 
 // 点击模态框外部关闭
 document.getElementById('aiAnalysisModal').addEventListener('click', function(e) {
-  if (e.target === this) {
-    closeModal();
-  }
+  if (e.target === this) closeModal();
 });
+document.getElementById('goalModal').addEventListener('click', function(e) {
+  if (e.target === this) closeGoalModal();
+});
+
+let _modalKeyHandler = null;
+function setupModalFocusTrap(modalId, closeFn) {
+  const modal = document.getElementById(modalId);
+  modal._returnFocus = document.activeElement;
+  function onKey(e) {
+    if (e.key === 'Escape') { closeFn(); return; }
+    if (e.key === 'Tab') {
+      const focusable = modal.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+  _modalKeyHandler = onKey;
+  document.addEventListener('keydown', onKey);
+  const firstBtn = modal.querySelector('button, input, select, [tabindex]');
+  if (firstBtn) setTimeout(() => firstBtn.focus(), 50);
+}
 
 function displayAdvancedAnalysisEmptyState(message = '同步云端数据后将显示高级分析结果') {
   const blackholeContainer = document.getElementById('blackholeStats');
@@ -1177,11 +1206,17 @@ function displayGoals(goals) {
 }
 
 function openGoalModal() {
-  document.getElementById('goalModal').style.display = 'flex';
+  const modal = document.getElementById('goalModal');
+  modal.style.display = 'flex';
+  _modalKeyHandler = null;
+  setupModalFocusTrap('goalModal', closeGoalModal);
 }
 
 function closeGoalModal() {
-  document.getElementById('goalModal').style.display = 'none';
+  const modal = document.getElementById('goalModal');
+  modal.style.display = 'none';
+  document.removeEventListener('keydown', _modalKeyHandler);
+  if (modal._returnFocus && typeof modal._returnFocus.focus === 'function') modal._returnFocus.focus();
 }
 
 async function saveGoal() {

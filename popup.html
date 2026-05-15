@@ -48,6 +48,12 @@
       --red-soft: oklch(24% 0.05 25);
       --yellow: oklch(75% 0.13 85);
       --yellow-soft: oklch(22% 0.04 85);
+      --chart-1: #818cf8;
+      --chart-2: #6ee7b7;
+      --chart-3: #fcd34d;
+      --chart-4: #fca5a5;
+      --chart-5: #d4d4d8;
+      --chart-6: #a5b4fc;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -582,7 +588,7 @@
       <p class="subtitle">浏览行为分析 <span id="connStatus" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);vertical-align:middle;margin-left:4px;" title="检查连接中..."></span></p>
     </header>
 
-    <div id="currentSiteBar" style="display:none;padding:8px 12px;margin-bottom:8px;background:var(--surface-2);border-radius:8px;font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+    <div id="currentSiteBar" style="display:none;padding:8px 12px;margin-bottom:8px;background:var(--surface-2);border-radius:8px;font-size:12px;justify-content:space-between;align-items:center;">
       <span id="currentSiteName" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;"></span>
       <span id="currentSiteTime" style="color:var(--muted);font-variant-numeric:tabular-nums;"></span>
     </div>
@@ -700,7 +706,7 @@
       </div>
     </div>
 
-    <div id="aiAnalysisModal" class="modal" style="display: none;">
+    <div id="aiAnalysisModal" class="modal" role="dialog" aria-modal="true" aria-label="AI 分析结果" style="display: none;">
       <div class="modal-content">
         <button class="modal-close" id="closeModal" aria-label="关闭">&times;</button>
         <h2>AI 分析结果</h2>
@@ -708,7 +714,7 @@
       </div>
     </div>
 
-    <div id="goalModal" class="modal" style="display: none;">
+    <div id="goalModal" class="modal" role="dialog" aria-modal="true" aria-label="设置目标" style="display: none;">
       <div class="modal-content">
         <button class="modal-close" id="closeGoalModal" aria-label="关闭">&times;</button>
         <h2>设置目标</h2>

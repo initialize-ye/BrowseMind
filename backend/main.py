@@ -17,7 +17,7 @@ import io
 import json
 import os
 
-from database import init_db, get_db, SessionLocal, BrowsingRecord, AnalysisReport, UserGoal, UserToken, UserSettings, UserClassificationRule
+from database import init_db, get_db, SessionLocal, BrowsingRecord, AnalysisReport, UserGoal, UserToken, UserSettings, UserClassificationRule, LeaderboardEntry
 from schemas import (
     BrowsingRecordBatch,
     BrowsingRecordResponse,
@@ -49,8 +49,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 写操作路径前缀（需要认证）
-WRITE_PATHS = ['/api/upload', '/api/goals', '/api/ai-analysis', '/api/export']
 # 不需要认证的路径
 AUTH_SKIP_PATHS = ['/', '/docs', '/openapi.json', '/redoc']
 
@@ -76,39 +74,82 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 media_type="application/json"
             )
 
-        # 首次使用时自动注册 token（绑定到 user_id）
-        # 从请求体或路径中提取 user_id
+        # 验证 token 是否已注册，或尝试自动注册
         db = SessionLocal()
+        token_valid = False
         try:
             existing = db.query(UserToken).filter(UserToken.token == token).first()
-            if not existing:
-                # 尝试从 URL 路径提取 user_id
+            if existing:
+                existing.last_used_at = datetime.utcnow()
+                db.commit()
+                token_valid = True
+            else:
+                # 首次使用：尝试自动注册 token（绑定到 user_id）
                 user_id = None
                 parts = path.strip('/').split('/')
+                # 端点中 user_id 直接在路径中的情况
+                user_id_path_keywords = ('upload', 'ai-analysis', 'export', 'leaderboard',
+                                         'records', 'settings', 'classification-rules')
                 for i, part in enumerate(parts):
-                    if part in ('upload', 'goals', 'ai-analysis', 'export') and i > 0:
-                        user_id = parts[i + 1] if i + 1 < len(parts) else None
+                    if part in user_id_path_keywords and i + 1 < len(parts):
+                        user_id = parts[i + 1]
                         break
+                    # /api/goals/{user_id} 的 POST/GET 有 user_id
+                    # /api/goals/{goal_id} 的 PUT/DELETE 是 goal_id
+                    if part == 'goals' and i + 1 < len(parts):
+                        # /api/goals/{user_id}/update-progress 有 user_id
+                        if i + 2 < len(parts) and parts[i + 2] == 'update-progress':
+                            user_id = parts[i + 1]
+                            break
+                        # POST /api/goals/{user_id} 有 user_id
+                        if request.method == 'POST':
+                            user_id = parts[i + 1]
+                            break
+                        # PUT/DELETE /api/goals/{goal_id} 需要查库获取 user_id
+                        if request.method in ('PUT', 'DELETE'):
+                            goal_id = parts[i + 1]
+                            try:
+                                goal = db.query(UserGoal).filter(UserGoal.id == int(goal_id)).first()
+                                if goal:
+                                    user_id = goal.user_id
+                            except (ValueError, Exception):
+                                pass
+                            break
                 if not user_id:
-                    # 从请求体提取（需要消费 body）
                     body = await request.body()
                     try:
                         data = json.loads(body)
                         user_id = data.get('user_id')
-                    except:
+                    except (json.JSONDecodeError, UnicodeDecodeError):
                         pass
-                    # 重建 request body（已被消费）
                     async def receive():
                         return {"type": "http.request", "body": body}
                     request._receive = receive
 
                 if user_id:
-                    new_token = UserToken(token=token, user_id=user_id)
-                    db.add(new_token)
-                    db.commit()
-                    print(f"注册新 token: {token[:8]}... -> {user_id}")
+                    try:
+                        new_token = UserToken(token=token, user_id=user_id)
+                        db.add(new_token)
+                        db.commit()
+                        token_valid = True
+                        print(f"注册新 token: {token[:8]}... -> {user_id}")
+                    except Exception:
+                        db.rollback()
+                        # 并发注册时可能因 unique 约束失败，再查一次
+                        existing = db.query(UserToken).filter(UserToken.token == token).first()
+                        if existing:
+                            existing.last_used_at = datetime.utcnow()
+                            db.commit()
+                            token_valid = True
         finally:
             db.close()
+
+        if not token_valid:
+            return StreamingResponse(
+                iter([json.dumps({"detail": "无效的认证 token"})]),
+                status_code=401,
+                media_type="application/json"
+            )
 
         return await call_next(request)
 
@@ -118,9 +159,10 @@ app.add_middleware(AuthMiddleware)
 
 @app.on_event("startup")
 async def startup_event():
-    """启动时初始化数据库并清理过期数据"""
+    """启动时初始化数据库、清理过期数据、启动定时报告调度器"""
     init_db()
     cleanup_expired_data()
+    start_report_scheduler()
     print("BrowseMind 后端服务已启动")
 
 
@@ -129,7 +171,7 @@ DATA_RETENTION_DAYS = int(os.environ.get('DATA_RETENTION_DAYS', '30'))
 
 
 def cleanup_expired_data():
-    """清理超过保留期的浏览记录和报告"""
+    """清理超过保留期的浏览记录、报告、排行榜条目和过期 token"""
     db = SessionLocal()
     try:
         cutoff = datetime.utcnow() - timedelta(days=DATA_RETENTION_DAYS)
@@ -150,9 +192,20 @@ def cleanup_expired_data():
             UserGoal.date < cutoff_str
         ).delete(synchronize_session=False)
 
+        # 清理旧排行榜条目
+        deleted_lb = db.query(LeaderboardEntry).filter(
+            LeaderboardEntry.week_start < cutoff_str
+        ).delete(synchronize_session=False)
+
+        # 清理长期未使用的 token（超过 2 倍保留期）
+        token_cutoff = datetime.utcnow() - timedelta(days=DATA_RETENTION_DAYS * 2)
+        deleted_tokens = db.query(UserToken).filter(
+            UserToken.last_used_at < token_cutoff
+        ).delete(synchronize_session=False)
+
         db.commit()
-        if deleted_records or deleted_reports or deleted_goals:
-            print(f"TTL 清理：记录 {deleted_records} 条，报告 {deleted_reports} 条，目标 {deleted_goals} 条")
+        if deleted_records or deleted_reports or deleted_goals or deleted_lb or deleted_tokens:
+            print(f"TTL 清理：记录 {deleted_records}，报告 {deleted_reports}，目标 {deleted_goals}，排行榜 {deleted_lb}，token {deleted_tokens}")
     except Exception as e:
         db.rollback()
         print(f"TTL 清理失败: {e}")
@@ -204,7 +257,6 @@ async def upload_browsing_data(
                     existing.title = record_data.title
                 if record_data.domain and not existing.domain:
                     existing.domain = record_data.domain
-                db.commit()
                 continue
 
             # 创建新记录
@@ -934,12 +986,16 @@ def get_settings(user_id: str, db: Session = Depends(get_db)):
 @app.put("/api/settings/{user_id}")
 def update_settings(user_id: str, body: dict, db: Session = Depends(get_db)):
     """更新用户设置（全量覆盖）"""
+    # 限制 body 大小（64KB）
+    body_str = json.dumps(body, ensure_ascii=False)
+    if len(body_str) > 65536:
+        raise HTTPException(status_code=413, detail="设置数据过大（最大 64KB）")
     settings = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
     if settings:
-        settings.settings_json = json.dumps(body, ensure_ascii=False)
+        settings.settings_json = body_str
         settings.updated_at = datetime.utcnow()
     else:
-        settings = UserSettings(user_id=user_id, settings_json=json.dumps(body, ensure_ascii=False))
+        settings = UserSettings(user_id=user_id, settings_json=body_str)
         db.add(settings)
     db.commit()
     return {"success": True, "updated_at": settings.updated_at.isoformat()}
@@ -960,12 +1016,15 @@ def get_classification_rules(user_id: str, db: Session = Depends(get_db)):
 @app.put("/api/classification-rules/{user_id}")
 def update_classification_rules(user_id: str, body: dict, db: Session = Depends(get_db)):
     """更新用户分类规则（全量覆盖）"""
+    body_str = json.dumps(body, ensure_ascii=False)
+    if len(body_str) > 65536:
+        raise HTTPException(status_code=413, detail="规则数据过大（最大 64KB）")
     rules = db.query(UserClassificationRule).filter(UserClassificationRule.user_id == user_id).first()
     if rules:
-        rules.rules_json = json.dumps(body, ensure_ascii=False)
+        rules.rules_json = body_str
         rules.updated_at = datetime.utcnow()
     else:
-        rules = UserClassificationRule(user_id=user_id, rules_json=json.dumps(body, ensure_ascii=False))
+        rules = UserClassificationRule(user_id=user_id, rules_json=body_str)
         db.add(rules)
     db.commit()
     return {"success": True, "updated_at": rules.updated_at.isoformat()}
@@ -976,14 +1035,14 @@ def update_classification_rules(user_id: str, body: dict, db: Session = Depends(
 @app.get("/api/export/{user_id}")
 def export_user_data(
     user_id: str,
-    format: str = Query("json", regex="^(json|csv)$"),
+    format: str = Query("json", pattern="^(json|csv)$"),
     days: int = Query(0, ge=0, description="导出天数，0=全部"),
     db: Session = Depends(get_db)
 ):
     """导出用户全部数据（JSON 或 CSV）"""
     query = db.query(BrowsingRecord).filter(BrowsingRecord.user_id == user_id)
     if days > 0:
-        cutoff = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
+        cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
         query = query.filter(BrowsingRecord.date >= cutoff)
     records = query.order_by(BrowsingRecord.visit_time.desc()).all()
 
@@ -1022,6 +1081,300 @@ def export_user_data(
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+
+# ==================== 自动定时报告 ====================
+
+def _get_active_user_ids(days=7):
+    """获取最近 N 天有数据的用户 ID 列表"""
+    db = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        rows = db.query(BrowsingRecord.user_id).filter(
+            BrowsingRecord.visit_time >= cutoff
+        ).distinct().all()
+        return [r[0] for r in rows]
+    finally:
+        db.close()
+
+
+def _generate_periodic_report(user_id, days, report_type):
+    """为指定用户生成周期性 AI 分析报告"""
+    db = SessionLocal()
+    try:
+        # 检查是否已有该周期的报告（避免重复生成）
+        today = datetime.utcnow().date().isoformat()
+        existing = db.query(AnalysisReport).filter(
+            AnalysisReport.user_id == user_id,
+            AnalysisReport.report_type == report_type,
+            AnalysisReport.report_date == today
+        ).first()
+        if existing:
+            return
+
+        api_key = os.getenv("AI_API_KEY")
+        if not api_key:
+            return
+
+        start_date = datetime.utcnow() - timedelta(days=days)
+        records = db.query(BrowsingRecord).filter(
+            BrowsingRecord.user_id == user_id,
+            BrowsingRecord.visit_time >= start_date
+        ).all()
+
+        if not records:
+            return
+
+        total_duration = sum(r.duration for r in records)
+        category_stats_dict = {}
+        for record in records:
+            category = record.category or 'other'
+            if category not in category_stats_dict:
+                category_stats_dict[category] = {'visits': 0, 'total_duration': 0, 'domains': set()}
+            category_stats_dict[category]['visits'] += 1
+            category_stats_dict[category]['total_duration'] += record.duration
+            if record.domain:
+                category_stats_dict[category]['domains'].add(record.domain)
+
+        category_stats = []
+        for category, stats in category_stats_dict.items():
+            pct = (stats['total_duration'] / total_duration * 100) if total_duration > 0 else 0
+            category_stats.append({
+                'category': category,
+                'visits': stats['visits'],
+                'total_duration': stats['total_duration'],
+                'percentage': round(pct, 1),
+                'unique_domains': len(stats['domains'])
+            })
+        category_stats.sort(key=lambda x: x['total_duration'], reverse=True)
+
+        domain_stats = {}
+        for record in records:
+            if record.domain:
+                if record.domain not in domain_stats:
+                    domain_stats[record.domain] = {'domain': record.domain, 'visits': 0, 'total_duration': 0}
+                domain_stats[record.domain]['visits'] += 1
+                domain_stats[record.domain]['total_duration'] += record.duration
+        top_domains = sorted(domain_stats.values(), key=lambda x: x['total_duration'], reverse=True)[:10]
+
+        provider = os.getenv("AI_PROVIDER", "deepseek")
+        analyzer = AIAnalyzer(api_key=api_key, provider=provider)
+        result = analyzer.analyze_browsing_behavior(
+            category_stats=category_stats,
+            total_duration=total_duration,
+            top_domains=top_domains,
+            date_range=f"{days}天"
+        )
+
+        report = AnalysisReport(
+            user_id=user_id,
+            report_date=today,
+            report_type=report_type,
+            total_visits=len(records),
+            total_duration=total_duration,
+            unique_domains=len(set(r.domain for r in records if r.domain)),
+            category_stats=json.dumps(category_stats, ensure_ascii=False),
+            ai_summary=result['summary'],
+            ai_issues=json.dumps(result['issues'], ensure_ascii=False),
+            ai_suggestions=json.dumps(result['suggestions'], ensure_ascii=False),
+            top_domains=json.dumps(top_domains, ensure_ascii=False)
+        )
+        db.add(report)
+        db.commit()
+        print(f"自动生成 {report_type} 报告: {user_id}")
+    except Exception as e:
+        db.rollback()
+        print(f"自动生成报告失败 ({user_id}, {report_type}): {e}")
+    finally:
+        db.close()
+
+
+def _weekly_report_job():
+    """每周一生成周报"""
+    user_ids = _get_active_user_ids(days=7)
+    for uid in user_ids:
+        _generate_periodic_report(uid, 7, 'ai_weekly')
+    print(f"周报生成完成: {len(user_ids)} 个用户")
+
+
+def _monthly_report_job():
+    """每月 1 日生成月报"""
+    user_ids = _get_active_user_ids(days=30)
+    for uid in user_ids:
+        _generate_periodic_report(uid, 30, 'ai_monthly')
+    print(f"月报生成完成: {len(user_ids)} 个用户")
+
+
+_report_scheduler = None
+
+
+def start_report_scheduler():
+    """启动 APScheduler 定时任务"""
+    global _report_scheduler
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.cron import CronTrigger
+
+        _report_scheduler = BackgroundScheduler()
+        # 每周一早上 9 点生成周报
+        _report_scheduler.add_job(_weekly_report_job, CronTrigger(day_of_week='mon', hour=9, minute=0))
+        # 每月 1 日早上 9 点生成月报
+        _report_scheduler.add_job(_monthly_report_job, CronTrigger(day=1, hour=9, minute=0))
+        _report_scheduler.start()
+        print("报告调度器已启动（周报: 周一 9:00, 月报: 每月 1 日 9:00）")
+    except Exception as e:
+        print(f"调度器启动失败（不影响主服务）: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """关闭时停止调度器"""
+    global _report_scheduler
+    if _report_scheduler:
+        _report_scheduler.shutdown(wait=False)
+        _report_scheduler = None
+
+
+# ==================== 排行榜 ====================
+
+@app.post("/api/leaderboard/{user_id}")
+def opt_in_leaderboard(
+    user_id: str,
+    body: dict = None,
+    db: Session = Depends(get_db)
+):
+    """加入排行榜（opt-in）并提交本周数据"""
+    display_name = str((body or {}).get('display_name') or '匿名用户')[:50]
+
+    # 计算本周一
+    today = datetime.utcnow().date()
+    monday = today - timedelta(days=today.weekday())
+    week_start = monday.isoformat()
+
+    # 获取本周数据
+    week_start_dt = datetime.combine(monday, datetime.min.time())
+    records = db.query(BrowsingRecord).filter(
+        BrowsingRecord.user_id == user_id,
+        BrowsingRecord.visit_time >= week_start_dt
+    ).all()
+
+    learning_duration = sum(r.duration for r in records if r.category in ('learning', 'education', 'work'))
+    total_duration = sum(r.duration for r in records)
+
+    # 优先使用前端传入的专注数据，否则从目标中推断（两者都不提供才 fallback）
+    focus_duration = (body or {}).get('focus_duration', 0) or 0
+    focus_sessions = (body or {}).get('focus_sessions', 0) or 0
+    if not focus_duration and not focus_sessions:
+        goals = db.query(UserGoal).filter(
+            UserGoal.user_id == user_id,
+            UserGoal.date >= monday.isoformat(),
+            UserGoal.category.in_(['learning', 'work', 'focus'])
+        ).all()
+        for g in goals:
+            focus_duration += g.current_progress
+            focus_sessions += 1
+
+    # 更新或创建
+    entry = db.query(LeaderboardEntry).filter(
+        LeaderboardEntry.user_id == user_id,
+        LeaderboardEntry.week_start == week_start
+    ).first()
+
+    if entry:
+        entry.display_name = display_name
+        entry.learning_duration = learning_duration
+        entry.focus_duration = focus_duration
+        entry.focus_sessions = focus_sessions
+        entry.total_duration = total_duration
+        entry.updated_at = datetime.utcnow()
+    else:
+        entry = LeaderboardEntry(
+            user_id=user_id,
+            display_name=display_name,
+            week_start=week_start,
+            learning_duration=learning_duration,
+            focus_duration=focus_duration,
+            focus_sessions=focus_sessions,
+            total_duration=total_duration
+        )
+        db.add(entry)
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        # 并发插入时可能因 unique 约束失败，改为更新
+        entry = db.query(LeaderboardEntry).filter(
+            LeaderboardEntry.user_id == user_id,
+            LeaderboardEntry.week_start == week_start
+        ).first()
+        if entry:
+            entry.display_name = display_name
+            entry.learning_duration = learning_duration
+            entry.focus_duration = focus_duration
+            entry.focus_sessions = focus_sessions
+            entry.total_duration = total_duration
+            entry.updated_at = datetime.utcnow()
+            db.commit()
+        else:
+            raise
+    return {"success": True, "message": "已加入排行榜", "entry": entry.to_dict()}
+
+
+@app.delete("/api/leaderboard/{user_id}")
+def opt_out_leaderboard(
+    user_id: str,
+    all_weeks: bool = Query(False, description="是否删除所有周的数据"),
+    db: Session = Depends(get_db)
+):
+    """退出排行榜（默认仅退出本周）"""
+    query = db.query(LeaderboardEntry).filter(LeaderboardEntry.user_id == user_id)
+    if not all_weeks:
+        today = datetime.utcnow().date()
+        monday = today - timedelta(days=today.weekday())
+        query = query.filter(LeaderboardEntry.week_start == monday.isoformat())
+    deleted = query.delete()
+    db.commit()
+    return {"success": True, "message": "已退出排行榜", "deleted": deleted}
+
+
+@app.get("/api/leaderboard")
+def get_leaderboard(
+    week: str = Query(None, description="周起始日期 YYYY-MM-DD，默认本周"),
+    sort_by: str = Query("learning_duration", pattern="^(learning_duration|focus_duration|total_duration)$"),
+    limit: int = Query(50, ge=1, le=100),
+    user_id: str = Query(None, description="当前用户 ID（用于标记自己的排名）"),
+    db: Session = Depends(get_db)
+):
+    """获取排行榜（匿名）"""
+    if week:
+        week_start = week
+    else:
+        today = datetime.utcnow().date()
+        monday = today - timedelta(days=today.weekday())
+        week_start = monday.isoformat()
+
+    entries = db.query(LeaderboardEntry).filter(
+        LeaderboardEntry.week_start == week_start
+    ).order_by(
+        LeaderboardEntry.__table__.c[sort_by].desc()
+    ).limit(limit).all()
+
+    # 返回时隐藏 user_id，只返回排名，标记当前用户
+    result = []
+    for i, e in enumerate(entries):
+        d = e.to_dict()
+        d['rank'] = i + 1
+        if user_id and e.user_id == user_id:
+            d['_isYou'] = True
+        result.append(d)
+
+    return {
+        "week_start": week_start,
+        "sort_by": sort_by,
+        "entries": result,
+        "total": len(result)
+    }
 
 
 if __name__ == "__main__":

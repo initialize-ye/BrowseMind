@@ -157,9 +157,40 @@ class UserClassificationRule(Base):
     __tablename__ = 'user_classification_rules'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(100), nullable=False, index=True)
+    user_id = Column(String(100), unique=True, nullable=False, index=True)
     rules_json = Column(Text, nullable=False, default='{}')
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LeaderboardEntry(Base):
+    """排行榜条目（匿名，opt-in）"""
+    __tablename__ = 'leaderboard_entries'
+    __table_args__ = (
+        Index('ix_leaderboard_user_week', 'user_id', 'week_start', unique=True),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    display_name = Column(String(50), default='匿名用户')
+    week_start = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD (Monday)
+    learning_duration = Column(Integer, default=0)  # 学习时长（秒）
+    focus_duration = Column(Integer, default=0)  # 专注时长（秒）
+    focus_sessions = Column(Integer, default=0)  # 专注次数
+    total_duration = Column(Integer, default=0)  # 总浏览时长（秒）
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'display_name': self.display_name,
+            'week_start': self.week_start,
+            'learning_duration': self.learning_duration,
+            'focus_duration': self.focus_duration,
+            'focus_sessions': self.focus_sessions,
+            'total_duration': self.total_duration,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
 
 
 # 数据库引擎和会话

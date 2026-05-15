@@ -60,6 +60,12 @@
       --yellow-soft: oklch(22% 0.04 85);
       --shadow: 0 1px 2px oklch(0% 0 0 / 0.24), 0 1px 3px oklch(0% 0 0 / 0.16);
       --chart-grid: oklch(100% 0 0 / 0.06);
+      --chart-1: #818cf8;
+      --chart-2: #6ee7b7;
+      --chart-3: #fcd34d;
+      --chart-4: #fca5a5;
+      --chart-5: #d4d4d8;
+      --chart-6: #a5b4fc;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -85,7 +91,7 @@
     .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
     .sidebar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .sidebar-brand-copy { min-width: 0; line-height: 1.2; }
-    .sidebar-title { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.02em; }
+    .sidebar-title { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.02em; margin: 0; line-height: 1.2; }
     .sidebar-subtitle { margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 450; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sidebar-toggle { width: 30px; height: 30px; padding: 0; border-radius: 6px; color: var(--muted); background: transparent; font-size: 14px; transition: color 0.18s var(--ease-out), background 0.18s var(--ease-out); }
     .sidebar-toggle:hover { color: var(--text); background: var(--surface-3); box-shadow: none; transform: none; }
@@ -154,9 +160,46 @@
     .metric span { color: var(--muted); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
     .metric strong { display: block; margin-top: 10px; font-size: clamp(28px, 3.5vw, 40px); line-height: 1; font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
     .dashboard-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: var(--space-4); align-items: start; }
+    /* Activity Heatmap */
+    .heatmap-wrap { margin-bottom: var(--space-4); }
+    .heatmap-panel { padding: var(--space-4) var(--space-5); }
+    .heatmap-scroll { display: flex; overflow-x: auto; padding-bottom: var(--space-1); }
+    .heatmap { display: inline-grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px; }
+    .heatmap-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--surface-3); transition: background 0.15s; }
+    .heatmap-cell[data-level="1"] { background: oklch(72% 0.08 150); }
+    .heatmap-cell[data-level="2"] { background: oklch(60% 0.12 150); }
+    .heatmap-cell[data-level="3"] { background: oklch(48% 0.14 150); }
+    .heatmap-cell[data-level="4"] { background: oklch(38% 0.14 150); }
+    html[data-theme="dark"] .heatmap-cell[data-level="1"] { background: oklch(35% 0.06 150); }
+    html[data-theme="dark"] .heatmap-cell[data-level="2"] { background: oklch(45% 0.1 150); }
+    html[data-theme="dark"] .heatmap-cell[data-level="3"] { background: oklch(55% 0.12 150); }
+    html[data-theme="dark"] .heatmap-cell[data-level="4"] { background: oklch(68% 0.14 150); }
+    .heatmap-cell:hover { outline: 1.5px solid var(--accent); outline-offset: -1px; }
+    .heatmap-labels { display: grid; grid-template-rows: repeat(7, 13px); gap: 3px; margin-right: 6px; flex-shrink: 0; }
+    .heatmap-labels span { font-size: 10px; color: var(--muted); line-height: 13px; text-align: right; }
+    .heatmap-legend { display: flex; align-items: center; gap: 4px; margin-top: var(--space-2); font-size: 11px; color: var(--muted); }
+    .heatmap-legend-cell { width: 11px; height: 11px; border-radius: 2px; }
+    .heatmap-months { display: flex; gap: 3px; margin-bottom: 4px; margin-left: 30px; }
+    .heatmap-months span { font-size: 10px; color: var(--muted); min-width: 13px; }
+    .heatmap-tip { position: fixed; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--text); box-shadow: var(--shadow); z-index: 999; opacity: 0; transition: opacity 0.12s; white-space: nowrap; }
+    .heatmap-tip.visible { opacity: 1; }
+    /* Browsing Timeline */
+    .timeline-panel { padding: var(--space-4) var(--space-5); }
+    .timeline-controls { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
+    .timeline-controls input, .timeline-controls select { font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
+    .timeline-controls input:focus, .timeline-controls select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-glow); }
+    .timeline-list { max-height: 480px; overflow-y: auto; display: grid; gap: 1px; }
+    .timeline-item { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); transition: background 0.12s; align-items: center; }
+    .timeline-item:hover { background: var(--surface-2); }
+    .timeline-item-domain { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .timeline-item-title { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+    .timeline-item-meta { font-size: 12px; color: var(--muted); white-space: nowrap; text-align: right; display: flex; align-items: center; gap: var(--space-2); }
+    .timeline-cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .timeline-empty { padding: var(--space-6); text-align: center; color: var(--muted); font-size: 13px; }
+    .timeline-count { font-size: 12px; color: var(--muted); margin-bottom: var(--space-2); }
     .section-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
     .section-title h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
-    .chart-box { position: relative; height: 320px; }
+    .chart-box { position: relative; height: 320px; content-visibility: visible; }
     .chart-box.small { height: 240px; }
     .sidebar .chart-box, .sidebar .chart-box.small { height: auto; }
     .category-row, .domain-row, .goal-card, .setting-row { display: grid; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13px; min-width: 0; }
@@ -262,6 +305,7 @@
     label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; font-weight: 500; }
     .note { display: none; margin-top: var(--space-3); padding: 12px 14px; border-radius: var(--radius-sm); color: var(--accent); background: var(--accent-soft); font-size: 13px; line-height: 1.6; }
     .note.success { color: var(--green); background: var(--green-soft); }
+    .note.warning { color: var(--yellow); background: var(--yellow-soft); }
     .note.danger { color: var(--red); background: var(--red-soft); }
     .picker-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
     .picker-header strong { font-size: 14px; }
@@ -269,9 +313,23 @@
     .picker-option:hover { background: var(--accent-soft); border-color: var(--accent); }
     .picker-option.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
     .log-box { max-height: 180px; overflow: auto; padding: 12px; border-radius: 6px; background: var(--surface-2); color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .leaderboard-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .leaderboard-table th { text-align: left; padding: 8px 10px; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid var(--line); }
+    .leaderboard-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+    .leaderboard-table tr:last-child td { border-bottom: 0; }
+    .leaderboard-table tr:hover td { background: var(--surface-2); }
+    .lb-rank { font-weight: 700; font-variant-numeric: tabular-nums; width: 40px; text-align: center; }
+    .lb-rank.top-1 { color: var(--yellow); }
+    .lb-rank.top-2 { color: var(--muted); }
+    .lb-rank.top-3 { color: oklch(60% 0.12 50); }
+    .lb-name { font-weight: 500; }
+    .lb-value { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+    .lb-you { background: var(--accent-soft); border-radius: 4px; }
+    .lb-you td { font-weight: 600; }
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     }
@@ -304,7 +362,7 @@
             <div class="sidebar-brand">
               <div class="brand-mark"><svg viewBox="0 0 26 26" fill="none"><rect x="1" y="1" width="24" height="24" rx="5" fill="var(--accent)"/><g transform="translate(4.5,4) scale(0.72)" stroke="oklch(100% 0 0)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M12 2a7 7 0 00-4.6 1.7A5.5 5.5 0 003 9a5.5 5.5 0 002.2 4.5A4.5 4.5 0 009.5 18h1a.5.5 0 00.5-.5V16a2 2 0 012-2h0a2 2 0 012 2v1.5a.5.5 0 00.5.5h1a4.5 4.5 0 004.3-4.5A5.5 5.5 0 0021 9a5.5 5.5 0 00-4.4-5.3A7 7 0 0012 2z"/><path d="M9 13v-1a3 3 0 016 0v1"/></g></svg></div>
               <div class="sidebar-brand-copy">
-                <div class="sidebar-title">BrowseMind</div>
+                <h1 class="sidebar-title">BrowseMind</h1>
                 <div class="sidebar-subtitle">工作台</div>
               </div>
             </div>
@@ -336,6 +394,27 @@
             <div class="metric"><span>独立网站</span><strong id="metricUniqueSites">0</strong></div>
           </section>
 
+          <div class="heatmap-wrap">
+            <div class="panel heatmap-panel">
+              <div class="section-title"><h2>活跃热力图</h2><p>过去 26 周的浏览强度</p></div>
+              <div class="heatmap-scroll">
+                <div class="heatmap-labels" id="heatmapLabels"></div>
+                <div class="heatmap" id="heatmapGrid" role="img" aria-label="浏览活跃热力图" aria-describedby="heatmapSummary"></div>
+                <div id="heatmapSummary" class="sr-only"></div>
+              </div>
+              <div class="heatmap-legend" id="heatmapLegend">
+                <span>少</span>
+                <div class="heatmap-legend-cell" style="background:var(--surface-3)"></div>
+                <div class="heatmap-legend-cell heatmap-cell" data-level="1"></div>
+                <div class="heatmap-legend-cell heatmap-cell" data-level="2"></div>
+                <div class="heatmap-legend-cell heatmap-cell" data-level="3"></div>
+                <div class="heatmap-legend-cell heatmap-cell" data-level="4"></div>
+                <span>多</span>
+              </div>
+            </div>
+            <div class="heatmap-tip" id="heatmapTip"></div>
+          </div>
+
           <section class="dashboard-grid">
             <div>
               <div class="panel"><div class="section-title"><h2 id="trendChartTitle">趋势</h2><p>时长与访问次数</p></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
@@ -346,6 +425,28 @@
               <div class="panel"><div class="section-title"><div><h2>高频站点</h2><p>按总停留时长排序</p></div><input id="domainFilterInput" type="search" placeholder="筛选域名" aria-label="筛选域名"></div><div id="domainList"></div></div>
             </div>
           </section>
+
+          <div class="panel timeline-panel" style="margin-top:var(--space-4)">
+            <div class="section-title"><h2>浏览历史</h2><p>按时间排序的浏览记录</p></div>
+            <div class="timeline-controls">
+              <input id="timelineSearch" type="search" placeholder="搜索域名或标题..." aria-label="搜索浏览记录">
+              <select id="timelineCategory" aria-label="筛选分类">
+                <option value="all">全部分类</option>
+                <option value="learning">学习</option>
+                <option value="coding">编程</option>
+                <option value="entertainment">娱乐</option>
+                <option value="social">社交</option>
+                <option value="tools">工具</option>
+                <option value="other">其他</option>
+              </select>
+              <input id="timelineDateFrom" type="date" aria-label="起始日期">
+              <input id="timelineDateTo" type="date" aria-label="结束日期">
+            </div>
+            <div class="timeline-count" id="timelineCount"></div>
+            <div class="timeline-list" id="timelineList" role="list" aria-label="浏览记录列表">
+              <div class="timeline-empty">加载中...</div>
+            </div>
+          </div>
         </section>
 
         <section class="main-view" id="mainViewInsights" data-main-view="insights" role="tabpanel" aria-labelledby="sidebarTabInsights" tabindex="0" hidden>
@@ -357,9 +458,10 @@
             </section>
             <section class="panel"><div class="section-title"><div><h2>专注会话</h2><p>番茄钟式专注计时</p></div><div class="button-row compact"><button id="focusStartBtn" class="secondary">开始专注</button></div></div><div id="focusPanel"><div class="insight-cards"><div class="insight-card"><span>今日专注</span><strong id="focusTodayTime">0</strong><small>分钟</small></div><div class="insight-card"><span>连续天数</span><strong id="focusStreak">0</strong><small>天</small></div></div><div id="focusSessionInfo" style="display:none;margin-top:10px;padding:10px;background:var(--accent-soft);border-radius:8px;font-size:12px;"></div><div id="focusHistory" style="margin-top:10px;"></div></div></section>
             <section class="panel"><div class="section-title"><div><h2>周期对比</h2><p>对比两个时间段的浏览变化</p></div></div><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><select id="comparePeriod1" aria-label="对比近期天数" style="padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-1);color:var(--text);font-size:12px;width:auto;min-height:32px;"><option value="7" selected>近 7 天</option><option value="14">近 14 天</option><option value="30">近 30 天</option></select><span style="color:var(--muted);font-size:12px;">vs</span><select id="comparePeriod2" aria-label="对比参照天数" style="padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-1);color:var(--text);font-size:12px;width:auto;min-height:32px;"><option value="7">7 天前</option><option value="14" selected>14 天前</option><option value="30">30 天前</option></select><button id="compareBtn" class="secondary" style="font-size:12px;min-height:32px;padding:6px 14px;">对比</button></div><div id="compareResult" aria-live="polite"><div class="empty">选择时间段后点击"对比"查看变化。</div></div></section>
+            <section class="panel"><div class="section-title"><div><h2>学习排行榜</h2><p>匿名排名，按学习时长对比</p></div><div class="button-row compact"><select id="leaderboardSort" aria-label="排行依据" style="padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:11px;"><option value="learning_duration" selected>学习时长</option><option value="focus_duration">专注时长</option><option value="total_duration">总浏览时长</option></select><button id="leaderboardJoinBtn" class="secondary" style="font-size:11px;min-height:28px;padding:4px 12px;">加入排行</button><button id="leaderboardRefreshBtn" class="ghost" style="font-size:11px;min-height:28px;padding:4px 10px;">刷新</button></div></div><div id="leaderboardContent" aria-live="polite"><div class="empty">点击"加入排行"参与匿名排名。</div></div></section>
             <section class="inline-grid">
               <div class="panel"><div class="section-title"><div><h2>AI 分析结果</h2><p>完整总结、问题和建议</p></div></div><div id="aiAnalysisResult" aria-live="polite"><div class="empty">点击"AI 分析"或刷新洞察后显示结果。</div></div></div>
-              <div class="panel"><div class="section-title"><div><h2>历史报告</h2><p>最近保存的 AI 分析</p></div></div><div id="reportList" aria-live="polite"><div class="empty">暂无历史报告。</div></div></div>
+              <div class="panel"><div class="section-title"><div><h2>历史报告</h2><p>最近保存的 AI 分析</p></div><div class="button-row compact"><select id="reportTypeFilter" aria-label="报告类型" style="padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:11px;"><option value="">全部</option><option value="ai_7d">按需 7 天</option><option value="ai_14d">按需 14 天</option><option value="ai_30d">按需 30 天</option><option value="ai_weekly">自动周报</option><option value="ai_monthly">自动月报</option></select></div></div><div id="reportList" aria-live="polite"><div class="empty">暂无历史报告。</div></div></div>
             </section>
           </div>
         </section>

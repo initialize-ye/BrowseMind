@@ -245,9 +245,10 @@ class AIAnalyzer:
                 "设置明确的目标"
             ]
 
+        top_cat = category_stats[0]['category'] if category_stats else '其他'
         return {
             "summary": f"您在过去7天的浏览时长为{total_duration // 3600}小时，"
-                      f"主要集中在{category_stats[0]['category']}类网站。",
+                      f"主要集中在{top_cat}类网站。",
             "issues": issues,
             "suggestions": suggestions
         }
