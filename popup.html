@@ -22,6 +22,15 @@
       --red-soft: oklch(90% 0.05 25);
       --yellow: oklch(70% 0.13 85);
       --yellow-soft: oklch(94% 0.04 85);
+      --shadow: 0 1px 3px oklch(18% 0.012 58 / 0.06);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
       --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
       /* Chart.js palette — hex required for Canvas API */
       --chart-1: #6366f1;
@@ -30,6 +39,7 @@
       --chart-4: #f87171;
       --chart-5: #a1a1aa;
       --chart-6: #818cf8;
+      --chart-grid: oklch(88% 0.01 58 / 0.5);
     }
     html[data-theme="dark"] {
       --bg: oklch(13% 0.008 58);
@@ -48,12 +58,14 @@
       --red-soft: oklch(24% 0.05 25);
       --yellow: oklch(75% 0.13 85);
       --yellow-soft: oklch(22% 0.04 85);
+      --shadow: 0 1px 3px oklch(0% 0 0 / 0.2);
       --chart-1: #818cf8;
       --chart-2: #6ee7b7;
       --chart-3: #fcd34d;
       --chart-4: #fca5a5;
       --chart-5: #d4d4d8;
       --chart-6: #a5b4fc;
+      --chart-grid: oklch(28% 0.012 58 / 0.5);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -108,7 +120,7 @@
       padding: 48px 20px;
       text-align: center;
       color: var(--muted);
-      border-radius: 14px;
+      border-radius: var(--radius-md);
       background: var(--accent-glow);
     }
     .spinner {
@@ -127,7 +139,7 @@
       display: flex;
       gap: 2px;
       margin-bottom: 18px;
-      border-radius: 14px;
+      border-radius: var(--radius-md);
       overflow: hidden;
     }
     .stat-block {
@@ -138,12 +150,12 @@
     }
     .stat-block:first-child {
       flex: 1.35;
-      border-radius: 14px 0 0 14px;
+      border-radius: var(--radius-md) 0 0 var(--radius-md);
     }
     .stat-block:last-child {
-      border-radius: 0 14px 14px 0;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
     }
-    .stat-block:only-child { border-radius: 14px; }
+    .stat-block:only-child { border-radius: var(--radius-md); }
     .stat-value {
       font-size: 26px;
       line-height: 1.05;
@@ -169,7 +181,7 @@
     .chart-card {
       margin-bottom: 18px;
       padding: 18px 18px 14px;
-      border-radius: 16px;
+      border-radius: var(--radius-md);
       background: var(--surface);
       border-top: 2.5px solid var(--accent);
     }
@@ -186,14 +198,14 @@
       display: flex;
       gap: 2px;
       padding: 4px;
-      border-radius: 10px;
+      border-radius: var(--radius-sm);
       background: var(--surface-2);
     }
     .chart-tab {
       all: unset;
       cursor: pointer;
       padding: 6px 10px;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       font-size: 11px;
       font-weight: 600;
       color: var(--muted);
@@ -240,7 +252,7 @@
       align-items: center;
       gap: 10px;
       padding: 8px 10px;
-      border-radius: 10px;
+      border-radius: var(--radius-sm);
       margin-bottom: 4px;
       background: var(--surface);
       transition: background 0.15s var(--ease-out);
@@ -272,7 +284,7 @@
     .record-list { max-height: 180px; overflow-y: auto; }
     .record-item {
       padding: 10px;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       margin-bottom: 2px;
       background: var(--surface);
       font-size: 12.5px;
@@ -283,7 +295,7 @@
     .blackhole-item {
       padding: 12px 14px;
       margin-bottom: 6px;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       background: var(--red-soft);
       font-size: 12.5px;
     }
@@ -295,7 +307,7 @@
     .goal-item {
       padding: 12px 14px;
       margin-bottom: 6px;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       background: var(--surface);
       font-size: 12.5px;
     }
@@ -320,7 +332,7 @@
     .attention-stat-item {
       flex: 1;
       padding: 12px;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       background: var(--accent-soft);
     }
     .attention-stat-value { color: var(--accent); font-size: 22px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -341,7 +353,7 @@
       min-height: 42px;
       padding: 10px;
       border: 0;
-      border-radius: 10px;
+      border-radius: var(--radius-sm);
       cursor: pointer;
       font-family: inherit;
       font-size: 13px;
@@ -350,7 +362,7 @@
       color: var(--text);
       transition: background 0.18s var(--ease-out), color 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out), transform 0.1s var(--ease-out);
     }
-    .action-btn:hover { background: var(--surface-2); }
+    .action-btn:hover { background: var(--surface-2); transform: translateY(-1px); }
     .action-btn:active { transform: scale(0.97); }
     .action-btn.primary {
       background: var(--accent);
@@ -380,7 +392,7 @@
       overflow-y: auto;
       position: relative;
       padding: 24px;
-      border-radius: 18px;
+      border-radius: var(--radius-md);
       color: var(--text);
       background: var(--surface);
       box-shadow: 0 12px 40px oklch(0% 0 0 / 0.18);
@@ -420,11 +432,11 @@
 
     /* AI Analysis — enhanced cards */
     .ai-summary-card {
-      padding: 20px 18px;
-      border-radius: 14px;
+      padding: 22px 20px;
+      border-radius: var(--radius-md);
       background: linear-gradient(135deg, oklch(48% 0.16 300), oklch(40% 0.12 330));
       color: oklch(98% 0 0);
-      font-size: 13.5px;
+      font-size: 14px;
       line-height: 1.65;
       margin-bottom: 16px;
     }
@@ -437,8 +449,8 @@
     }
     .ai-bar-chart {
       margin-bottom: 16px;
-      padding: 14px 16px;
-      border-radius: 12px;
+      padding: 16px 18px;
+      border-radius: var(--radius-md);
       background: var(--surface);
     }
     .ai-bar-chart-title {
@@ -486,7 +498,7 @@
     }
     .ai-table-wrap {
       margin-bottom: 16px;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       overflow: hidden;
       background: var(--surface);
     }
@@ -499,7 +511,7 @@
     .ai-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12.5px;
+      font-size: 13px;
     }
     .ai-table th {
       text-align: left;
@@ -535,21 +547,21 @@
     }
     .ai-issue-card {
       padding: 12px 14px;
-      border-radius: 10px;
+      border-radius: var(--radius-sm);
       background: var(--yellow-soft);
       border-left: 3px solid var(--yellow);
       margin-bottom: 6px;
-      font-size: 12.5px;
+      font-size: 13px;
       line-height: 1.5;
       color: var(--text);
     }
     .ai-suggestion-card {
       padding: 12px 14px;
-      border-radius: 10px;
+      border-radius: var(--radius-sm);
       background: var(--green-soft);
       border-left: 3px solid var(--green);
       margin-bottom: 6px;
-      font-size: 12.5px;
+      font-size: 13px;
       line-height: 1.5;
       color: var(--text);
     }
@@ -559,7 +571,7 @@
       width: 100%;
       padding: 10px 12px;
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: var(--radius-sm);
       background: var(--surface);
       color: var(--text);
       outline: none;
@@ -588,7 +600,7 @@
       <p class="subtitle">浏览行为分析 <span id="connStatus" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);vertical-align:middle;margin-left:4px;" title="检查连接中..."></span></p>
     </header>
 
-    <div id="currentSiteBar" style="display:none;padding:8px 12px;margin-bottom:8px;background:var(--surface-2);border-radius:8px;font-size:12px;justify-content:space-between;align-items:center;">
+    <div id="currentSiteBar" style="display:none;padding:8px 12px;margin-bottom:8px;background:var(--surface-2);border-radius:var(--radius-sm);font-size:12px;justify-content:space-between;align-items:center;">
       <span id="currentSiteName" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;"></span>
       <span id="currentSiteTime" style="color:var(--muted);font-variant-numeric:tabular-nums;"></span>
     </div>
@@ -693,7 +705,7 @@
         </div>
       </div>
 
-      <div id="focusStatusBar" style="display:none;margin-bottom:10px;padding:8px 12px;background:var(--accent-soft);border-radius:8px;font-size:12px;justify-content:space-between;align-items:center;">
+      <div id="focusStatusBar" style="display:none;margin-bottom:10px;padding:8px 12px;background:var(--accent-soft);border-radius:var(--radius-sm);font-size:12px;justify-content:space-between;align-items:center;">
         <span id="focusStatusText"></span>
         <button class="action-btn danger" id="focusStopBtn" style="font-size:11px;padding:3px 10px;min-height:28px;">停止</button>
       </div>
