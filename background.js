@@ -505,37 +505,51 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // ==================== 目标监控功能 ====================
 
 async function updateGoalsProgress() {
-  try {
-    const preferences = await getPreferences();
-    const { userId } = await chrome.storage.local.get(['userId']);
-    if (!userId) return;
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const preferences = await getPreferences();
+      const { userId } = await chrome.storage.local.get(['userId']);
+      if (!userId) return;
 
-    const baseUrl = preferences.apiBaseUrl;
-    const today = new Date().toISOString().split('T')[0];
+      const baseUrl = preferences.apiBaseUrl;
+      const today = new Date().toISOString().split('T')[0];
 
-    const { authToken } = await chrome.storage.local.get('authToken');
-    const headers = authToken ? { 'X-Auth-Token': authToken } : {};
-    const response = await fetch(baseUrl + '/api/goals/' + userId + '/update-progress?date=' + encodeURIComponent(today), {
-      method: 'POST',
-      headers
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('更新目标进度失败:', response.status, errorText);
-      return;
-    }
-
-    const result = await response.json();
-
-    // 处理通知
-    if (result.data && result.data.notifications) {
-      result.data.notifications.forEach(notif => {
-        showNotification(notif.type, notif.message);
+      const { authToken } = await chrome.storage.local.get('authToken');
+      const headers = authToken ? { 'X-Auth-Token': authToken } : {};
+      const response = await fetch(baseUrl + '/api/goals/' + userId + '/update-progress?date=' + encodeURIComponent(today), {
+        method: 'POST',
+        headers
       });
+
+      if (!response.ok) {
+        // 瞬时错误（502/503/504）重试
+        if ([502, 503, 504].includes(response.status) && attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          continue;
+        }
+        const errorText = await response.text();
+        console.error('更新目标进度失败:', response.status, errorText);
+        return;
+      }
+
+      const result = await response.json();
+
+      // 处理通知
+      if (result.data && result.data.notifications) {
+        result.data.notifications.forEach(notif => {
+          showNotification(notif.type, notif.message);
+        });
+      }
+      return;
+    } catch (error) {
+      // 网络错误重试
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+        continue;
+      }
+      console.error('更新目标进度失败:', error);
     }
-  } catch (error) {
-    console.error('更新目标进度失败:', error);
   }
 }
 
