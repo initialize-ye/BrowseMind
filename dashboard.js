@@ -654,6 +654,7 @@ function renderHeatmap(browsingData) {
   // Screen reader summary
   const summaryEl = document.getElementById('heatmapSummary');
   if (summaryEl) {
+    const allDurations = Object.values(dailyDuration);
     const activeDays = allDurations.filter(d => d > 0).length;
     const maxDay = Object.entries(dailyDuration).sort((a, b) => b[1] - a[1])[0];
     const avgDuration = activeDays > 0 ? Math.round(allDurations.reduce((s, d) => s + d, 0) / activeDays) : 0;
