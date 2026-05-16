@@ -140,7 +140,7 @@ async function authFetch(url, options = {}) {
 }
 
 class DataSync {
-  constructor(apiBaseUrl = 'http://119.29.55.112:8000') {
+  constructor(apiBaseUrl = DEFAULT_API_BASE_URL) {
     this.apiBaseUrl = apiBaseUrl;
     this.userId = null;
     this._initPromise = null; // mutex for concurrent initUserId() calls
@@ -408,28 +408,6 @@ class DataSync {
     } catch (error) {
       return false;
     }
-  }
-
-  // 上传设置到云端
-  async pushSettings(preferences) {
-    await this.initUserId();
-    const authHeaders = await this._getAuthHeaders();
-    const response = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
-      body: JSON.stringify(preferences)
-    });
-    if (!response.ok) throw new Error(`推送设置失败: ${response.status}`);
-    return response.json();
-  }
-
-  // 从云端拉取设置
-  async pullSettings() {
-    await this.initUserId();
-    const authHeaders = await this._getAuthHeaders();
-    const response = await fetch(`${this.apiBaseUrl}/api/settings/${this.userId}`, { headers: authHeaders });
-    if (!response.ok) throw new Error(`拉取设置失败: ${response.status}`);
-    return response.json();
   }
 
   // 双向同步设置（冲突解决：最后修改时间较新者优先）
