@@ -15,6 +15,15 @@ function toLocalDate(ts) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// ==================== URL 工具 ====================
+function extractDomain(url) {
+  try {
+    return WebsiteClassifier.normalizeDomain(new URL(url).hostname);
+  } catch {
+    return null;
+  }
+}
+
 // ==================== 图表调色板（带缓存） ====================
 let _chartPaletteCache = null;
 let _chartPaletteTheme = null;

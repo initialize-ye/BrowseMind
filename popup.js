@@ -384,7 +384,7 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
 
   const recordsContainer = document.getElementById('recentRecords');
   recordsContainer.innerHTML = recentRecords.map(record => {
-    const domain = extractDomain(record.url);
+    const domain = extractDomain(record.url) || record.url;
     const time = formatTime(record.visitTime);
     const duration = record.duration > 0 ? ` · ${formatDuration(record.duration)}` : '';
     const cat = record.category || 'other';
@@ -810,15 +810,7 @@ function destroyChart() {
   }
 }
 
-// 提取域名
-function extractDomain(url) {
-  try {
-    const urlObj = new URL(url);
-    return urlObj.hostname.replace('www.', '');
-  } catch {
-    return url;
-  }
-}
+// extractDomain 已移至 shared.js
 
 // formatDuration() is defined in dataSync.js (shared with dashboard)
 

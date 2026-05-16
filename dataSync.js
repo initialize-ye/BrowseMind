@@ -292,7 +292,7 @@ class DataSync {
 
       // 转换数据格式并分类（截断超长字段避免后端 422）
       const records = browsingData.map(record => {
-        const domain = this.extractDomain(record.url);
+        const domain = extractDomain(record.url);
         const title = record.title || '';
         const category = record.category || classifier.classify(domain || '', title, record.url || '');
 
@@ -336,15 +336,7 @@ class DataSync {
     }
   }
 
-  // 提取域名
-  extractDomain(url) {
-    try {
-      const urlObj = new URL(url);
-      return WebsiteClassifier.normalizeDomain(urlObj.hostname);
-    } catch {
-      return null;
-    }
-  }
+  // extractDomain 已移至 shared.js
 
   // 从服务器拉取浏览记录，合并到本地
   async pullFromServer() {
