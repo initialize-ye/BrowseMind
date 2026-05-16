@@ -916,6 +916,22 @@ function renderHeatmap(browsingData) {
   const startDate = new Date(today);
   startDate.setDate(startDate.getDate() - daysBack + 1); // start on Monday
 
+  // 计算自适应单元格尺寸：根据容器宽度决定 cell size
+  const scrollEl = document.getElementById('heatmapScroll');
+  const containerWidth = scrollEl ? scrollEl.clientWidth - 30 : 600; // 减去 label 宽度
+  const weeks = 26;
+  // 尝试不同尺寸：14→12→10→8px，gap 为 cellSize 的 ~14%
+  let hmSize = 14, hmGap = 2;
+  for (const size of [14, 12, 10, 8]) {
+    const gap = Math.max(1, Math.round(size * 0.14));
+    if (weeks * (size + gap) <= containerWidth) { hmSize = size; hmGap = gap; break; }
+    hmSize = size; hmGap = gap; // 最小尺寸兜底
+  }
+  grid.style.setProperty('--hm-size', hmSize + 'px');
+  grid.style.setProperty('--hm-gap', hmGap + 'px');
+  labelsEl.style.setProperty('--hm-size', hmSize + 'px');
+  labelsEl.style.setProperty('--hm-gap', hmGap + 'px');
+
   // Find max duration for scaling (loop instead of spread to avoid stack overflow on large datasets)
   let maxDuration = 60; // min 60s for scale
   for (const d of Object.values(dailyDuration)) {
@@ -926,7 +942,12 @@ function renderHeatmap(browsingData) {
   const dayLabels = ['', '一', '', '三', '', '五', ''];
   labelsEl.innerHTML = dayLabels.map(l => `<span>${l}</span>`).join('');
 
+  // 收集月份标签位置
+  const monthPositions = [];
+  let lastMonth = -1;
+
   let currentDate = new Date(startDate);
+  let weekIndex = 0;
   while (currentDate <= today) {
     const dateStr = toLocalDate(currentDate.getTime());
     const duration = dailyDuration[dateStr] || 0;
@@ -941,11 +962,39 @@ function renderHeatmap(browsingData) {
     cell.dataset.date = dateStr;
     cell.dataset.duration = duration;
     cells.push(cell);
+
+    // 记录月份变化位置（每周第一天）
+    const m = currentDate.getMonth();
+    if (m !== lastMonth && currentDate.getDay() === 1) {
+      const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+      monthPositions.push({ week: weekIndex, label: monthNames[m] });
+      lastMonth = m;
+    }
+    if (currentDate.getDay() === 0) weekIndex++; // 周日结束一周
+
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
   grid.innerHTML = '';
   grid.append(...cells);
+
+  // 渲染月份标签
+  const monthsEl = document.getElementById('heatmapMonths');
+  if (monthsEl) {
+    monthsEl.innerHTML = '';
+    monthsEl.style.marginLeft = '24px';
+    const cellStep = hmSize + hmGap;
+    monthPositions.forEach(({ week, label }) => {
+      const span = document.createElement('span');
+      span.textContent = label;
+      span.style.position = 'relative';
+      span.style.left = (week * cellStep) + 'px';
+      span.style.width = '0';
+      span.style.overflow = 'visible';
+      span.style.whiteSpace = 'nowrap';
+      monthsEl.appendChild(span);
+    });
+  }
 
   // Screen reader summary
   const summaryEl = document.getElementById('heatmapSummary');
