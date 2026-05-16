@@ -68,7 +68,13 @@ function escapeHtml(text) {
 // 数据验证：确保浏览记录数组有效
 function validateBrowsingData(data) {
   if (!Array.isArray(data)) return [];
-  return data.filter(r => r && typeof r === 'object' && r.url && r.visitTime);
+  return data.filter(r => r && typeof r === 'object' && r.url && r.visitTime).map(r => {
+    // 确保 date 字段存在且格式正确
+    if (!r.date || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) {
+      try { r.date = new Date(r.visitTime).toISOString().split('T')[0]; } catch { r.date = new Date().toISOString().split('T')[0]; }
+    }
+    return r;
+  });
 }
 
 // 压缩浏览记录：移除冗余字段，缩短键名
@@ -290,6 +296,12 @@ class DataSync {
         const title = record.title || '';
         const category = record.category || classifier.classify(domain || '', title, record.url || '');
 
+        // 确保 date 字段格式正确 (YYYY-MM-DD)
+        let date = record.date;
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          try { date = new Date(record.visitTime).toISOString().split('T')[0]; } catch { date = new Date().toISOString().split('T')[0]; }
+        }
+
         return {
           url: (record.url || '').slice(0, 2048),
           title: title.slice(0, 2000),
@@ -297,7 +309,7 @@ class DataSync {
           category: (category || '').slice(0, 50),
           visit_time: Math.floor(record.visitTime), // 转换为整数
           duration: Math.floor(record.duration || 0), // 转换为整数
-          date: record.date
+          date
         };
       });
 
