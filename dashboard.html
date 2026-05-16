@@ -101,29 +101,30 @@
     .metric span { color: var(--muted); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
     .metric strong { display: block; margin-top: 10px; font-size: clamp(28px, 3.5vw, 40px); line-height: 1; font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
     .dashboard-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: var(--space-4); align-items: start; }
-    /* Activity Heatmap */
+    /* Activity Heatmap — GitHub contribution graph style */
     .heatmap-wrap { margin-bottom: var(--space-4); }
     .heatmap-panel { padding: var(--space-4) var(--space-5); }
-    .heatmap-scroll { display: flex; flex-direction: column; gap: 2px; padding-bottom: var(--space-1); overflow-x: auto; }
-    .heatmap-row { display: flex; align-items: center; gap: 0; }
-    .heatmap-months { display: flex; gap: 0; margin-left: 24px; font-size: 10px; color: var(--muted); }
-    .heatmap-months span { flex-shrink: 0; }
-    .heatmap { display: grid; grid-template-rows: repeat(7, var(--hm-size, 14px)); grid-auto-flow: column; grid-auto-columns: var(--hm-size, 14px); gap: var(--hm-gap, 2px); }
-    .heatmap-cell { border-radius: 3px; background: var(--surface-3); cursor: default; }
-    .heatmap-cell[data-level="1"] { background: oklch(72% 0.08 150); }
-    .heatmap-cell[data-level="2"] { background: oklch(60% 0.12 150); }
-    .heatmap-cell[data-level="3"] { background: oklch(48% 0.14 150); }
-    .heatmap-cell[data-level="4"] { background: oklch(38% 0.14 150); }
-    html[data-theme="dark"] .heatmap-cell[data-level="1"] { background: oklch(35% 0.06 150); }
-    html[data-theme="dark"] .heatmap-cell[data-level="2"] { background: oklch(45% 0.1 150); }
-    html[data-theme="dark"] .heatmap-cell[data-level="3"] { background: oklch(55% 0.12 150); }
-    html[data-theme="dark"] .heatmap-cell[data-level="4"] { background: oklch(68% 0.14 150); }
-    .heatmap-cell:hover { outline: 1.5px solid var(--accent); outline-offset: -1px; }
-    .heatmap-labels { display: grid; grid-template-rows: repeat(7, var(--hm-size, 14px)); gap: var(--hm-gap, 2px); margin-right: 6px; flex-shrink: 0; }
-    .heatmap-labels span { font-size: 10px; color: var(--muted); line-height: var(--hm-size, 14px); text-align: right; width: 18px; }
-    .heatmap-legend { display: flex; align-items: center; gap: 4px; margin-top: var(--space-2); font-size: 11px; color: var(--muted); }
-    .heatmap-legend-cell { width: 11px; height: 11px; border-radius: 2px; }
-    .heatmap-tip { position: fixed; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--text); box-shadow: var(--shadow); z-index: 999; opacity: 0; transition: opacity 0.12s; white-space: nowrap; }
+    .heatmap-scroll { padding-bottom: var(--space-1); overflow-x: auto; }
+    .heatmap-inner { display: inline-flex; flex-direction: column; gap: 0; }
+    .heatmap-months { display: flex; margin-left: 28px; height: 14px; margin-bottom: 4px; }
+    .heatmap-months span { font-size: 10px; color: var(--muted); position: absolute; white-space: nowrap; }
+    .heatmap-body { display: flex; align-items: flex-start; }
+    .heatmap-labels { display: grid; grid-template-rows: repeat(7, var(--hm-size, 13px)); gap: var(--hm-gap, 3px); margin-right: 6px; flex-shrink: 0; }
+    .heatmap-labels span { font-size: 10px; color: var(--muted); line-height: var(--hm-size, 13px); text-align: right; width: 20px; }
+    .heatmap { display: grid; grid-template-rows: repeat(7, var(--hm-size, 13px)); grid-auto-flow: column; grid-auto-columns: var(--hm-size, 13px); gap: var(--hm-gap, 3px); }
+    .heatmap-cell { border-radius: 2px; outline: 1px solid oklch(90% 0 0 / 0.5); outline-offset: -1px; background: var(--heatmap-l0); transition: outline-color 0.1s; }
+    html[data-theme="dark"] .heatmap-cell { outline-color: oklch(25% 0 0 / 0.6); }
+    .heatmap-cell[data-level="1"] { background: var(--heatmap-l1); }
+    .heatmap-cell[data-level="2"] { background: var(--heatmap-l2); }
+    .heatmap-cell[data-level="3"] { background: var(--heatmap-l3); }
+    .heatmap-cell[data-level="4"] { background: var(--heatmap-l4); }
+    .heatmap-cell:hover { outline-color: var(--text); outline-width: 1.5px; }
+    .heatmap-legend { display: flex; align-items: center; justify-content: flex-end; gap: 3px; margin-top: var(--space-2); font-size: 10px; color: var(--muted); }
+    .heatmap-legend-cell { width: 10px; height: 10px; border-radius: 2px; outline: 1px solid oklch(90% 0 0 / 0.5); outline-offset: -1px; }
+    html[data-theme="dark"] .heatmap-legend-cell { outline-color: oklch(25% 0 0 / 0.6); }
+    .heatmap-tip { position: fixed; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 500; color: var(--text); box-shadow: var(--shadow); z-index: 999; opacity: 0; transition: opacity 0.1s; white-space: nowrap; }
+    .heatmap-tip .tip-count { font-weight: 700; }
+    .heatmap-tip .tip-date { color: var(--muted); font-weight: 400; }
     .heatmap-tip.visible { opacity: 1; }
     /* Browsing Timeline */
     .timeline-panel { padding: var(--space-4) var(--space-5); }
@@ -309,20 +310,22 @@
             <div class="panel heatmap-panel">
               <div class="section-title"><h2>活跃热力图</h2><p>过去 26 周的浏览强度</p></div>
               <div class="heatmap-scroll" id="heatmapScroll">
-                <div style="display:flex;">
-                  <div class="heatmap-labels" id="heatmapLabels"></div>
-                  <div class="heatmap" id="heatmapGrid" role="img" aria-label="浏览活跃热力图" aria-describedby="heatmapSummary"></div>
+                <div class="heatmap-inner">
+                  <div class="heatmap-months" id="heatmapMonths"></div>
+                  <div class="heatmap-body">
+                    <div class="heatmap-labels" id="heatmapLabels"></div>
+                    <div class="heatmap" id="heatmapGrid" role="img" aria-label="浏览活跃热力图" aria-describedby="heatmapSummary"></div>
+                  </div>
                 </div>
-                <div class="heatmap-months" id="heatmapMonths"></div>
                 <div id="heatmapSummary" class="sr-only"></div>
               </div>
               <div class="heatmap-legend" id="heatmapLegend">
                 <span>少</span>
-                <div class="heatmap-legend-cell" style="background:var(--surface-3)"></div>
-                <div class="heatmap-legend-cell heatmap-cell" data-level="1"></div>
-                <div class="heatmap-legend-cell heatmap-cell" data-level="2"></div>
-                <div class="heatmap-legend-cell heatmap-cell" data-level="3"></div>
-                <div class="heatmap-legend-cell heatmap-cell" data-level="4"></div>
+                <div class="heatmap-legend-cell" style="background:var(--heatmap-l0)"></div>
+                <div class="heatmap-legend-cell" style="background:var(--heatmap-l1)"></div>
+                <div class="heatmap-legend-cell" style="background:var(--heatmap-l2)"></div>
+                <div class="heatmap-legend-cell" style="background:var(--heatmap-l3)"></div>
+                <div class="heatmap-legend-cell" style="background:var(--heatmap-l4)"></div>
                 <span>多</span>
               </div>
             </div>

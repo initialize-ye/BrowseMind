@@ -36,6 +36,12 @@
   --chart-5: #a1a1aa;
   --chart-6: #818cf8;
   --chart-grid: oklch(88% 0.01 58 / 0.5);
+  /* Heatmap — GitHub-style green scale */
+  --heatmap-l0: oklch(92% 0.01 58);
+  --heatmap-l1: oklch(78% 0.08 150);
+  --heatmap-l2: oklch(62% 0.12 150);
+  --heatmap-l3: oklch(48% 0.13 150);
+  --heatmap-l4: oklch(36% 0.12 150);
 }
 
 html[data-theme="dark"] {
@@ -63,6 +69,12 @@ html[data-theme="dark"] {
   --chart-5: #d4d4d8;
   --chart-6: #a5b4fc;
   --chart-grid: oklch(28% 0.012 58 / 0.5);
+  /* Heatmap — dark theme */
+  --heatmap-l0: oklch(22% 0.01 58);
+  --heatmap-l1: oklch(30% 0.06 150);
+  --heatmap-l2: oklch(40% 0.1 150);
+  --heatmap-l3: oklch(52% 0.12 150);
+  --heatmap-l4: oklch(65% 0.14 150);
 }
 
 /* ==================== Reset ==================== */

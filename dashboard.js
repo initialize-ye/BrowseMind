@@ -894,7 +894,7 @@ function renderScatterChart() {
   });
 }
 
-// ==================== 活跃热力图 ====================
+// ==================== 活跃热力图（GitHub 贡献图风格） ====================
 function renderHeatmap(browsingData) {
   const grid = document.getElementById('heatmapGrid');
   const labelsEl = document.getElementById('heatmapLabels');
@@ -908,46 +908,46 @@ function renderHeatmap(browsingData) {
     if (d) dailyDuration[d] = (dailyDuration[d] || 0) + (r.duration || 0);
   }
 
-  // Build 26 weeks of cells starting from the Monday ~26 weeks ago
+  // Build 26 weeks — start from Monday ~26 weeks ago
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon...
-  const daysBack = 26 * 7 + (dayOfWeek === 0 ? 6 : dayOfWeek - 1); // align to Monday
+  const dayOfWeek = today.getDay();
+  const daysBack = 26 * 7 + (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
   const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - daysBack + 1); // start on Monday
+  startDate.setDate(startDate.getDate() - daysBack + 1);
 
-  // 计算自适应单元格尺寸：根据容器宽度决定 cell size
+  // 自适应单元格尺寸
   const scrollEl = document.getElementById('heatmapScroll');
-  const containerWidth = scrollEl ? scrollEl.clientWidth - 30 : 600; // 减去 label 宽度
+  const containerWidth = scrollEl ? scrollEl.clientWidth - 30 : 600;
   const weeks = 26;
-  // 尝试不同尺寸：14→12→10→8px，gap 为 cellSize 的 ~14%
-  let hmSize = 14, hmGap = 2;
-  for (const size of [14, 12, 10, 8]) {
-    const gap = Math.max(1, Math.round(size * 0.14));
+  let hmSize = 13, hmGap = 3;
+  for (const size of [13, 11, 9]) {
+    const gap = Math.max(2, Math.round(size * 0.23));
     if (weeks * (size + gap) <= containerWidth) { hmSize = size; hmGap = gap; break; }
-    hmSize = size; hmGap = gap; // 最小尺寸兜底
+    hmSize = size; hmGap = gap;
   }
   grid.style.setProperty('--hm-size', hmSize + 'px');
   grid.style.setProperty('--hm-gap', hmGap + 'px');
   labelsEl.style.setProperty('--hm-size', hmSize + 'px');
   labelsEl.style.setProperty('--hm-gap', hmGap + 'px');
 
-  // Find max duration for scaling (loop instead of spread to avoid stack overflow on large datasets)
-  let maxDuration = 60; // min 60s for scale
+  // Duration scale
+  let maxDuration = 60;
   for (const d of Object.values(dailyDuration)) {
     if (d > maxDuration) maxDuration = d;
   }
 
-  const cells = [];
+  // Day labels (Mon, Wed, Fri)
   const dayLabels = ['', '一', '', '三', '', '五', ''];
   labelsEl.innerHTML = dayLabels.map(l => `<span>${l}</span>`).join('');
 
-  // 收集月份标签位置
+  // Build cells + track month boundaries
+  const cells = [];
   const monthPositions = [];
   let lastMonth = -1;
-
   let currentDate = new Date(startDate);
-  let weekIndex = 0;
+  let colIndex = 0;
+
   while (currentDate <= today) {
     const dateStr = toLocalDate(currentDate.getTime());
     const duration = dailyDuration[dateStr] || 0;
@@ -963,35 +963,29 @@ function renderHeatmap(browsingData) {
     cell.dataset.duration = duration;
     cells.push(cell);
 
-    // 记录月份变化位置（每周第一天）
+    // Month label on first Monday of each new month
     const m = currentDate.getMonth();
     if (m !== lastMonth && currentDate.getDay() === 1) {
       const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-      monthPositions.push({ week: weekIndex, label: monthNames[m] });
+      monthPositions.push({ col: colIndex, label: monthNames[m] });
       lastMonth = m;
     }
-    if (currentDate.getDay() === 0) weekIndex++; // 周日结束一周
-
+    if (currentDate.getDay() === 0) colIndex++;
     currentDate.setDate(currentDate.getDate() + 1);
   }
 
   grid.innerHTML = '';
   grid.append(...cells);
 
-  // 渲染月份标签
+  // Render month labels (positioned absolutely over the grid)
   const monthsEl = document.getElementById('heatmapMonths');
   if (monthsEl) {
     monthsEl.innerHTML = '';
-    monthsEl.style.marginLeft = '24px';
     const cellStep = hmSize + hmGap;
-    monthPositions.forEach(({ week, label }) => {
+    monthPositions.forEach(({ col, label }) => {
       const span = document.createElement('span');
       span.textContent = label;
-      span.style.position = 'relative';
-      span.style.left = (week * cellStep) + 'px';
-      span.style.width = '0';
-      span.style.overflow = 'visible';
-      span.style.whiteSpace = 'nowrap';
+      span.style.left = (col * cellStep) + 'px';
       monthsEl.appendChild(span);
     });
   }
@@ -1006,16 +1000,20 @@ function renderHeatmap(browsingData) {
     summaryEl.textContent = `过去 26 周共 ${activeDays} 天有浏览活动，平均每日 ${formatDuration(avgDuration)}${maxDay ? '，最活跃日 ' + maxDay[0] + ' ' + formatDuration(maxDay[1]) : ''}`;
   }
 
-  // Tooltip
+  // GitHub-style tooltip
   const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  const monthFull = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
   grid.onmousemove = (e) => {
     const cell = e.target.closest('.heatmap-cell');
     if (!cell) { tip.classList.remove('visible'); return; }
-    const d = new Date(cell.dataset.date + 'T00:00:00');
+    const dateStr = cell.dataset.date;
+    const d = new Date(dateStr + 'T00:00:00');
     const dur = Number(cell.dataset.duration);
-    tip.textContent = `${cell.dataset.date} ${weekdays[d.getDay()]} · ${dur > 0 ? formatDuration(dur) : '无数据'}`;
+    const label = dur > 0 ? `<span class="tip-count">${formatDuration(dur)}</span> 浏览时间` : '无浏览数据';
+    const dateLabel = `${weekdays[d.getDay()]}，${monthFull[d.getMonth()]}${d.getDate()}日`;
+    tip.innerHTML = `${label}<br><span class="tip-date">${dateLabel}</span>`;
     tip.style.left = e.clientX + 12 + 'px';
-    tip.style.top = e.clientY - 30 + 'px';
+    tip.style.top = e.clientY - 40 + 'px';
     tip.classList.add('visible');
   };
   grid.onmouseleave = () => tip.classList.remove('visible');
