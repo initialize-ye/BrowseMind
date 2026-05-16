@@ -442,16 +442,7 @@ function showCategoryPicker(domain, currentCategory) {
   });
 }
 
-function calculateDailyTrend(data, days = 7) {
-  const dailyStats = {};
-  data.forEach(record => {
-    const date = record.date;
-    if (!dailyStats[date]) dailyStats[date] = { date, visits: 0, duration: 0 };
-    dailyStats[date].visits++;
-    dailyStats[date].duration += record.duration || 0;
-  });
-  return Object.values(dailyStats).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-days);
-}
+// calculateDailyTrend 已移至 shared.js
 function calculateTopDomains(data) {
   const domainMap = {};
   data.forEach(record => {

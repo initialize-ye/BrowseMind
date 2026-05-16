@@ -342,27 +342,7 @@ function calculateStats(data) {
 }
 
 // 计算每日趋势
-function calculateDailyTrend(data, days = 7) {
-  const dailyStats = {};
-
-  data.forEach(record => {
-    const date = record.date;
-    if (!dailyStats[date]) {
-      dailyStats[date] = {
-        date,
-        duration: 0,
-        visits: 0
-      };
-    }
-    dailyStats[date].duration += record.duration || 0;
-    dailyStats[date].visits++;
-  });
-
-  // 转换为数组并排序
-  return Object.values(dailyStats)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(-days);
-}
+// calculateDailyTrend 已移至 shared.js
 
 function updateUI(stats, data, categoryStats, todayStats, classifier) {
   // 更新统计数字

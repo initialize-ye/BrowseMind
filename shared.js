@@ -24,6 +24,18 @@ function extractDomain(url) {
   }
 }
 
+// ==================== 数据聚合 ====================
+function calculateDailyTrend(data, days = 7) {
+  const dailyStats = {};
+  data.forEach(record => {
+    const date = record.date;
+    if (!dailyStats[date]) dailyStats[date] = { date, visits: 0, duration: 0 };
+    dailyStats[date].visits++;
+    dailyStats[date].duration += record.duration || 0;
+  });
+  return Object.values(dailyStats).sort((a, b) => a.date.localeCompare(b.date)).slice(-days);
+}
+
 // ==================== 图表调色板（带缓存） ====================
 let _chartPaletteCache = null;
 let _chartPaletteTheme = null;
