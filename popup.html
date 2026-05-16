@@ -258,6 +258,7 @@
       position: sticky;
       bottom: 0;
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
       padding: 14px 0 4px;
       background: linear-gradient(transparent, var(--bg) 28%);
@@ -291,6 +292,7 @@
       color: var(--accent);
     }
     .action-btn.secondary:hover { background: color-mix(in oklch, var(--accent) 20%, var(--surface)); }
+    .action-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 
     .modal {
       position: fixed;

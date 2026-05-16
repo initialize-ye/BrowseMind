@@ -179,14 +179,20 @@ function updateCurrentSite() {
 // 连接状态指示器
 async function updateConnectionStatus() {
   const dot = document.getElementById('connStatus');
+  const aiBtn = document.getElementById('aiAnalysisBtn');
   if (!dot || !dataSync) return;
   try {
     const connected = await dataSync.checkConnection();
     dot.style.background = connected ? 'var(--green)' : 'var(--red)';
     dot.title = connected ? '已连接后端' : '后端未连接';
+    if (aiBtn) {
+      aiBtn.disabled = !connected;
+      aiBtn.title = connected ? '' : '后端未连接，无法使用 AI 分析';
+    }
   } catch {
     dot.style.background = 'var(--red)';
     dot.title = '后端未连接';
+    if (aiBtn) { aiBtn.disabled = true; aiBtn.title = '后端未连接，无法使用 AI 分析'; }
   }
 }
 
