@@ -916,21 +916,13 @@ function renderHeatmap(browsingData) {
   const startDate = new Date(today);
   startDate.setDate(startDate.getDate() - daysBack + 1);
 
-  // 自适应单元格尺寸：计算填满容器宽度的精确尺寸
+  // 自适应单元格尺寸：固定 2px gap，单元格填满剩余空间
   const scrollEl = document.getElementById('heatmapScroll');
-  const containerWidth = scrollEl ? scrollEl.clientWidth - 26 : 600; // 减去 day-label 宽度
+  const containerWidth = scrollEl ? scrollEl.clientWidth - 26 : 600;
   const weeks = 26;
-  // 目标：weeks * (size + gap) ≈ containerWidth，gap 约为 size 的 20%
-  // size + gap = size * 1.2 → size = containerWidth / (weeks * 1.2)
-  let hmSize = Math.round(containerWidth / (weeks * 1.2));
-  hmSize = Math.max(8, Math.min(16, hmSize)); // 限制在 8~16px
-  let hmGap = Math.max(1, Math.round(hmSize * 0.2));
-  // 微调：如果有多余空间，增大 gap 吸收剩余像素
-  const totalGrid = weeks * (hmSize + hmGap);
-  if (totalGrid < containerWidth) {
-    const extra = Math.floor((containerWidth - totalGrid) / weeks);
-    hmGap += extra;
-  }
+  const hmGap = 2;
+  let hmSize = Math.floor((containerWidth - (weeks - 1) * hmGap) / weeks);
+  hmSize = Math.max(8, Math.min(15, hmSize));
   grid.style.setProperty('--hm-size', hmSize + 'px');
   grid.style.setProperty('--hm-gap', hmGap + 'px');
   labelsEl.style.setProperty('--hm-size', hmSize + 'px');
