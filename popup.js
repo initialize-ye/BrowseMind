@@ -511,7 +511,7 @@ function updateCategoryStats(categoryStats, classifier) {
     return;
   }
   const categories = classifier.getAllCategories();
-  const catColors = { learning: getChartPalette()[0], coding: getChartPalette()[1], entertainment: getChartPalette()[3], social: getChartPalette()[2], tools: getChartPalette()[5], other: getChartPalette()[4] };
+  const catColors = getCategoryColors();
 
   container.innerHTML = categoryStats.map(stat => {
     const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
@@ -544,7 +544,7 @@ function updateTodayCategoryStats(todayStats, classifier) {
     return;
   }
 
-  const catColorsToday = { learning: getChartPalette()[0], coding: getChartPalette()[1], entertainment: getChartPalette()[3], social: getChartPalette()[2], tools: getChartPalette()[5], other: getChartPalette()[4] };
+  const catColorsToday = getCategoryColors();
   container.innerHTML = todayStats.slice(0, 5).map(stat => {
     const categoryInfo = categories[stat.category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
     const percentage = parseFloat(stat.percentage);
@@ -919,11 +919,7 @@ function displayAIAnalysis(analysis) {
   const content = document.getElementById('aiAnalysisContent');
 
   // 颜色映射
-  const pal = getChartPalette();
-  const categoryColors = {
-    learning: pal[0], coding: pal[1], entertainment: pal[3],
-    social: pal[2], tools: pal[5], other: pal[4]
-  };
+  const categoryColors = getCategoryColors();
   const categoryNames = {
     learning: '学习', coding: '编程', entertainment: '娱乐',
     social: '社交', tools: '工具', other: '其他'

@@ -865,7 +865,7 @@ function renderSunburstChart() {
 // 散点图：访问时间 vs 停留时长
 function renderScatterChart() {
   destroyDashboardChart();
-  const catColorMap = { learning: palette[0], coding: palette[1], entertainment: palette[2], social: palette[3], tools: palette[4], other: palette[5] };
+  const catColorMap = getCategoryColors();
   const datasets = [];
   const grouped = {};
   currentClassifiedData.forEach(r => {
@@ -1046,15 +1046,7 @@ function _applyTimelineFilter() {
     filtered = filtered.filter(r => (r.date || '') <= dateTo);
   }
 
-  const p = getChartPalette(); // Cached — avoids 6 getComputedStyle calls per filter
-  const catColors = {
-    learning: p[0] || '#6366f1',
-    coding: p[1] || '#34d399',
-    entertainment: p[2] || '#fbbf24',
-    social: p[3] || '#f87171',
-    tools: p[4] || '#a1a1aa',
-    other: p[5] || '#818cf8'
-  };
+  const catColors = getCategoryColors();
 
   const MAX_DISPLAY = 200;
   const display = filtered.slice(0, MAX_DISPLAY);
@@ -1218,10 +1210,7 @@ function renderAttentionCurve(attentionCurve) {
 function renderAIAnalysis(analysis) {
   const container = document.getElementById('aiAnalysisResult');
 
-  const categoryColors = {
-    learning: palette[0], coding: palette[1], entertainment: palette[3],
-    social: palette[2], tools: palette[5], other: palette[4]
-  };
+  const categoryColors = getCategoryColors();
   const categoryNames = {
     learning: '学习', coding: '编程', entertainment: '娱乐',
     social: '社交', tools: '工具', other: '其他'
