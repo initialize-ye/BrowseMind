@@ -1755,9 +1755,9 @@ async function loadAnalytics() {
   renderFilteredDomains();
   renderTrendChart(dailyTrend);
   renderHourlyChart(hourlyDist);
+  renderHabitCard(classifiedData);
   renderHeatmap(classifiedData);
   renderTimeline(classifiedData);
-  renderHabitCard(classifiedData);
   const topCategoryText = categoryStats[0] ? `${classifier.getCategoryInfo(categoryStats[0].category).name}占比最高，约 ${Number(categoryStats[0].percentage).toFixed(1)}%。` : '分类数据正在积累。';
   return { count: classifiedData.length, topCategoryText };
 }

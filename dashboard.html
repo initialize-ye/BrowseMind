@@ -102,8 +102,6 @@
     .metric strong { display: block; margin-top: 10px; font-size: clamp(28px, 3.5vw, 40px); line-height: 1; font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
     .dashboard-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: var(--space-4); align-items: start; }
     /* Activity Heatmap — GitHub contribution graph style */
-    .heatmap-wrap { margin-bottom: var(--space-4); }
-    .heatmap-panel { padding: var(--space-4) var(--space-5); }
     .heatmap-scroll { padding-bottom: var(--space-1); overflow-x: auto; }
     .heatmap-inner { display: flex; flex-direction: column; gap: 0; width: 100%; }
     .heatmap-months { position: relative; display: flex; margin-left: 28px; height: 14px; margin-bottom: 4px; }
@@ -301,32 +299,33 @@
           </div>
 
           <div class="panel" id="habitCard" style="margin-bottom:var(--space-4);display:none;">
-            <div class="section-title"><h2>习惯评分</h2><p>基于学习比例、专注完成率和时间黑洞</p></div>
-            <div id="habitCardContent" style="display:flex;align-items:center;gap:var(--space-5);padding:var(--space-3) 0;"></div>
-            <div style="margin-top:var(--space-3);"><canvas id="habitTrendChart" height="80"></canvas></div>
-          </div>
-
-          <div class="heatmap-wrap">
-            <div class="panel heatmap-panel">
-              <div class="section-title"><h2>活跃热力图</h2><p>过去 26 周的浏览强度</p></div>
-              <div class="heatmap-scroll" id="heatmapScroll">
-                <div class="heatmap-inner">
-                  <div class="heatmap-months" id="heatmapMonths"></div>
-                  <div class="heatmap-body">
-                    <div class="heatmap-labels" id="heatmapLabels"></div>
-                    <div class="heatmap" id="heatmapGrid" role="img" aria-label="浏览活跃热力图" aria-describedby="heatmapSummary"></div>
-                  </div>
-                </div>
-                <div id="heatmapSummary" class="sr-only"></div>
+            <div style="display:flex;gap:var(--space-5);align-items:flex-start;flex-wrap:wrap;">
+              <div style="flex:1;min-width:200px;">
+                <div class="section-title"><h2>习惯评分</h2><p>基于学习比例、专注完成率和时间黑洞</p></div>
+                <div id="habitCardContent" style="display:flex;align-items:center;gap:var(--space-5);padding:var(--space-3) 0;"></div>
+                <div style="margin-top:var(--space-3);"><canvas id="habitTrendChart" height="80"></canvas></div>
               </div>
-              <div class="heatmap-legend" id="heatmapLegend">
-                <span>少</span>
-                <div class="heatmap-legend-cell" style="background:var(--heatmap-l0)"></div>
-                <div class="heatmap-legend-cell" style="background:var(--heatmap-l1)"></div>
-                <div class="heatmap-legend-cell" style="background:var(--heatmap-l2)"></div>
-                <div class="heatmap-legend-cell" style="background:var(--heatmap-l3)"></div>
-                <div class="heatmap-legend-cell" style="background:var(--heatmap-l4)"></div>
-                <span>多</span>
+              <div style="flex:2.5;min-width:300px;">
+                <div class="section-title"><h2>活跃热力图</h2><p>过去 26 周的浏览强度</p></div>
+                <div class="heatmap-scroll" id="heatmapScroll">
+                  <div class="heatmap-inner">
+                    <div class="heatmap-months" id="heatmapMonths"></div>
+                    <div class="heatmap-body">
+                      <div class="heatmap-labels" id="heatmapLabels"></div>
+                      <div class="heatmap" id="heatmapGrid" role="img" aria-label="浏览活跃热力图" aria-describedby="heatmapSummary"></div>
+                    </div>
+                  </div>
+                  <div id="heatmapSummary" class="sr-only"></div>
+                </div>
+                <div class="heatmap-legend" id="heatmapLegend">
+                  <span>少</span>
+                  <div class="heatmap-legend-cell" style="background:var(--heatmap-l0)"></div>
+                  <div class="heatmap-legend-cell" style="background:var(--heatmap-l1)"></div>
+                  <div class="heatmap-legend-cell" style="background:var(--heatmap-l2)"></div>
+                  <div class="heatmap-legend-cell" style="background:var(--heatmap-l3)"></div>
+                  <div class="heatmap-legend-cell" style="background:var(--heatmap-l4)"></div>
+                  <span>多</span>
+                </div>
               </div>
             </div>
             <div class="heatmap-tip" id="heatmapTip"></div>
