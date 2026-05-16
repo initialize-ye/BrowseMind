@@ -195,7 +195,7 @@ async function checkTabIntervention(tab, ctx) {
     // 自适应阈值：用户切换到非娱乐站点 = 回应了之前的干预
     if (category !== 'entertainment' && category !== 'social') {
       const { interventionResponseLog = [] } = await chrome.storage.local.get('interventionResponseLog');
-      const unanswered = interventionResponseLog.filter(r => r.responded === null);
+      const unanswered = interventionResponseLog.filter(r => r.responded === false);
       if (unanswered.length > 0) {
         const fiveMinAgo = Date.now() - 5 * 60 * 1000;
         unanswered.forEach(r => { if (r.time < fiveMinAgo) r.responded = true; });
@@ -686,12 +686,14 @@ async function checkInterventions(domain, category) {
   const preferences = await getPreferences();
   if (!preferences.interventionsEnabled) return;
 
+  let interventionFired = false;
+
   // 专注会话期间访问娱乐/社交站点 — 记录打断并提醒
   if (focusSession.active && (category === 'entertainment' || category === 'social')) {
     recordFocusInterruption(domain);
     const catNames = { entertainment: '娱乐', social: '社交' };
     await showNotification('warning', `专注会话中！你正在访问${catNames[category]}类站点，已记录打断。`);
-    return;
+    interventionFired = true;
   }
 
   const normalizedDomain = (domain || '').toLowerCase();
@@ -709,8 +711,8 @@ async function checkInterventions(domain, category) {
     if (!interventionCooldowns[blockKey] || now - interventionCooldowns[blockKey] > cooldownMs) {
       interventionCooldowns[blockKey] = now;
       await showNotification('warning', `你正在访问黑名单站点：${domain}`);
+      interventionFired = true;
     }
-    return;
   }
 
   // 专注模式提醒（娱乐/社交类）
@@ -720,8 +722,8 @@ async function checkInterventions(domain, category) {
       interventionCooldowns[focusKey] = now;
       const catNames = { entertainment: '娱乐', social: '社交' };
       await showNotification('warning', `专注模式已开启，当前正在访问${catNames[category] || category}类站点。`);
+      interventionFired = true;
     }
-    return;
   }
 
   // 分类时长限制提醒
@@ -740,6 +742,7 @@ async function checkInterventions(domain, category) {
         const catNames = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具' };
         const limitMin = Math.round(timeLimits[category] / 60);
         await showNotification('warning', `${catNames[category] || category}类今日已使用 ${Math.round(todayCategoryDuration / 60)} 分钟，超过 ${limitMin} 分钟限制。`);
+        interventionFired = true;
       }
     }
   }
@@ -758,6 +761,7 @@ async function checkInterventions(domain, category) {
         if (allDistracting && totalDur >= thresholdMin * 60) {
           interventionCooldowns[contKey] = now;
           await showNotification('intervention', `你已连续浏览娱乐/社交内容 ${Math.round(totalDur / 60)} 分钟，休息一下吧！`);
+          interventionFired = true;
         }
       }
     }
@@ -778,13 +782,16 @@ async function checkInterventions(domain, category) {
       if (yesterdayFocus > 1800 && todayFocus < yesterdayFocus * 0.4) {
         interventionCooldowns[dropKey] = now;
         await showNotification('info', `学习时间较昨日同时段下降超过 60%，保持专注！`);
+        interventionFired = true;
       }
     }
   }
 
-  // 自适应阈值：记录干预响应，连续 7 次未响应则建议提高阈值
-  trackInterventionResponse(category);
-  checkAdaptiveThreshold(preferences);
+  // 自适应阈值：仅在干预实际触发时记录
+  if (interventionFired) {
+    trackInterventionResponse(category);
+    checkAdaptiveThreshold(preferences);
+  }
 }
 
 // 自适应阈值 — 记录每次干预触发后用户是否切换回非娱乐站点
@@ -793,7 +800,7 @@ async function trackInterventionResponse(category) {
   const { interventionResponseLog = [] } = await chrome.storage.local.get('interventionResponseLog');
   // 只保留最近 30 条
   if (interventionResponseLog.length > 30) interventionResponseLog.splice(0, interventionResponseLog.length - 30);
-  interventionResponseLog.push({ time: Date.now(), category, responded: null });
+  interventionResponseLog.push({ time: Date.now(), category, responded: false });
   await chrome.storage.local.set({ interventionResponseLog });
 }
 
