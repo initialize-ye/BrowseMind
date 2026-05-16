@@ -16,6 +16,7 @@ async function cachedCheckConnection() {
 }
 let trendChart = null;
 let hourlyChart = null;
+let _chartsRendering = false;
 let activeSidebarTab = 'dashboard';
 let isSidebarCollapsed = false;
 let attentionChart = null;
@@ -205,22 +206,27 @@ async function switchSidebarTab(tab, options = {}) {
   }
   if (tab === 'dashboard') {
     // 重新渲染图表（从其他标签切回时）
-    if (!trendChart || !hourlyChart) {
-      const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback', 'analysisDays']);
-      const browsingData = validateBrowsingData(storage.browsingData);
-      if (browsingData.length) {
-        const processor = new DataProcessor(browsingData);
-        const cleanedData = processor.clean().getData();
-        const classifier = new WebsiteClassifier(storage.classificationOverrides || {}, storage.classificationFeedback || {});
-        const classifiedData = classifier.classifyBatch(cleanedData);
-        const analyzer = new StatisticsAnalyzer(classifiedData);
-        const analysisDays = Number(storage.analysisDays || DEFAULT_PREFERENCES.analysisDays);
-        const dailyTrend = calculateDailyTrend(classifiedData, analysisDays);
-        const hourlyDist = analyzer.getHourlyDistribution();
-        renderTrendChart(dailyTrend);
-        renderHourlyChart(hourlyDist);
+    if ((!trendChart || !hourlyChart) && !_chartsRendering) {
+      _chartsRendering = true;
+      try {
+        const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback', 'analysisDays']);
+        const browsingData = validateBrowsingData(storage.browsingData);
+        if (browsingData.length) {
+          const processor = new DataProcessor(browsingData);
+          const cleanedData = processor.clean().getData();
+          const classifier = new WebsiteClassifier(storage.classificationOverrides || {}, storage.classificationFeedback || {});
+          const classifiedData = classifier.classifyBatch(cleanedData);
+          const analyzer = new StatisticsAnalyzer(classifiedData);
+          const analysisDays = Number(storage.analysisDays || DEFAULT_PREFERENCES.analysisDays);
+          const dailyTrend = calculateDailyTrend(classifiedData, analysisDays);
+          const hourlyDist = analyzer.getHourlyDistribution();
+          renderTrendChart(dailyTrend);
+          renderHourlyChart(hourlyDist);
+        }
+      } finally {
+        _chartsRendering = false;
       }
-    } else {
+    } else if (!_chartsRendering) {
       requestAnimationFrame(() => {
         if (trendChart) trendChart.resize();
         if (hourlyChart) hourlyChart.resize();
@@ -358,7 +364,7 @@ function renderOverrideRules() {
     const categories = classifier.getAllCategories();
     container.innerHTML = entries.map(([domain, category]) => {
       const info = categories[category] || { name: '其他', icon: WebsiteClassifier.SVG.other };
-      const encDomain = domain.replace(/"/g, '&quot;');
+      const encDomain = domain.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
       return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(domain)}</div><div class="domain-meta">${info.icon} ${escapeHtml(info.name)}</div></div><button class="danger" data-override-remove="${encDomain}">移除</button></div>`;
     }).join('');
     container.querySelectorAll('[data-override-remove]').forEach(btn => {
@@ -637,8 +643,9 @@ function _renderDomainPage() {
   }
   const page = _allDomains.slice(0, _domainPage * DOMAIN_PAGE_SIZE);
   container.innerHTML = page.map(domain => {
-    const encDomain = (domain.domain || '').replace(/"/g, '&quot;');
-    return `<div class="domain-row"><div><div class="domain-name" data-detail-domain="${encDomain}" style="cursor:pointer;" title="点击查看站点详情">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta"><span>${formatDuration(domain.duration)}</span> <button class="ghost" data-correct-domain="${encDomain}" data-correct-cat="${domain.category || 'other'}" style="min-height:28px;padding:2px 8px;font-size:11px;">修改分类</button></div></div>`;
+    const encDomain = (domain.domain || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const encCat = (domain.category || 'other').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    return `<div class="domain-row"><div><div class="domain-name" data-detail-domain="${encDomain}" style="cursor:pointer;" title="点击查看站点详情">${escapeHtml(domain.domain)}</div><div class="domain-meta">${domain.visits} 次访问 · ${escapeHtml(domain.categoryName || '全部分类')}</div></div><div class="domain-meta"><span>${formatDuration(domain.duration)}</span> <button class="ghost" data-correct-domain="${encDomain}" data-correct-cat="${encCat}" style="min-height:28px;padding:2px 8px;font-size:11px;">修改分类</button></div></div>`;
   }).join('');
   if (page.length < _allDomains.length) {
     container.innerHTML += `<div style="text-align:center;padding:10px;"><button class="ghost" id="loadMoreDomains" style="font-size:12px;min-height:32px;">加载更多 (${_allDomains.length - page.length} 条)</button></div>`;
@@ -921,7 +928,7 @@ function renderHeatmap(browsingData) {
 
   let currentDate = new Date(startDate);
   while (currentDate <= today) {
-    const dateStr = currentDate.toISOString().split('T')[0];
+    const dateStr = toLocalDate(currentDate.getTime());
     const duration = dailyDuration[dateStr] || 0;
     let level = 0;
     if (duration > 0) {
@@ -1339,8 +1346,9 @@ async function runComparison() {
 
 function renderComparison(data, p1Days, p2Days) {
   const container = document.getElementById('compareResult');
-  const p1Dur = data.period1.total_duration;
-  const p2Dur = data.period2.total_duration;
+  if (!data || !data.period1 || !data.period2) { container.innerHTML = '<div class="goal-card"><p class="muted">对比数据不可用。</p></div>'; return; }
+  const p1Dur = data.period1.total_duration || 0;
+  const p2Dur = data.period2.total_duration || 0;
   const absDiff = p1Dur - p2Dur;
   const absIcon = absDiff > 0 ? '+' : '';
 
@@ -1363,7 +1371,7 @@ function renderComparison(data, p1Days, p2Days) {
   </div>`;
 
   // 分类占比变化（仅显示有变化的）
-  const cats = Object.entries(data.category_changes)
+  const cats = Object.entries(data.category_changes || {})
     .filter(([, info]) => Math.abs(info.delta) >= 1)
     .sort((a, b) => Math.abs(b[1].delta) - Math.abs(a[1].delta));
   if (cats.length) {
@@ -1769,7 +1777,9 @@ async function createGoal() {
 }
 async function loadGoals() {
   const list = document.getElementById('goalList');
-  try { await initDataSync(); if (!(await cachedCheckConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>还没有目标</strong><p class="muted">设一个今日目标，看看自己能走多远。</p></div></div>'; return; } list.innerHTML = goals.map(goal => { const pct = Number(goal.progress_percentage || 0); const achieved = pct >= 100; const warning = pct >= 80 && !achieved; const barClass = achieved ? 'achieved' : (warning ? 'warning' : ''); return `<div class="goal-card ${achieved ? 'achieved' : ''}"><div><strong>${GOAL_TYPE_NAMES[goal.goal_type] || goal.goal_type}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${pct.toFixed(1)}%${achieved ? ' <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;"><path d="M9 12l2 2 4-4"/></svg>' : ''}</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${goal.id}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${goal.id}">停用</button><button class="danger" data-goal-id="${goal.id}">删除</button></div><div class="bar-track"><div class="bar-fill ${barClass}" style="width: ${Math.min(pct, 100)}%"></div></div></div>`; }).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
+  try { await initDataSync(); if (!(await cachedCheckConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>还没有目标</strong><p class="muted">设一个今日目标，看看自己能走多远。</p></div></div>'; return; } list.innerHTML = goals.map(goal => { const pct = Number(goal.progress_percentage || 0); const achieved = pct >= 100; const warning = pct >= 80 && !achieved; const barClass = achieved ? 'achieved' : (warning ? 'warning' : ''); const safeGoalType = escapeHtml(GOAL_TYPE_NAMES[goal.goal_type] || goal.goal_type);
+const safeGoalId = escapeHtml(String(goal.id));
+return `<div class="goal-card ${achieved ? 'achieved' : ''}"><div><strong>${safeGoalType}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${pct.toFixed(1)}%${achieved ? ' <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;"><path d="M9 12l2 2 4-4"/></svg>' : ''}</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${safeGoalId}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${safeGoalId}">停用</button><button class="danger" data-goal-id="${safeGoalId}">删除</button></div><div class="bar-track"><div class="bar-fill ${barClass}" style="width: ${Math.min(pct, 100)}%"></div></div></div>`; }).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
 }
 async function refreshGoalProgress() {
   const button = document.getElementById('refreshGoalsBtn');

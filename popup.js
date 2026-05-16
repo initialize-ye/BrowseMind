@@ -859,6 +859,7 @@ async function syncToCloud() {
   const originalText = syncBtn.textContent;
 
   try {
+    if (!dataSync) { await initDataSync(); }
     syncBtn.textContent = '检查连接...';
     syncBtn.disabled = true;
 
@@ -907,6 +908,7 @@ async function showAIAnalysis() {
 
     content.innerHTML = '<div class="ai-loading"><div class="spinner"></div><p>准备分析数据...</p></div>';
     await dataSync.initUserId();
+    if (!dataSync.userId) { notifyPopup('warning', '用户ID初始化失败'); return; }
     const preferences = await getPreferences();
 
     content.innerHTML = '<div class="ai-loading"><div class="spinner"></div><p>AI 正在分析中，请稍候...</p></div>';
@@ -1046,6 +1048,8 @@ let _modalKeyHandler = null;
 function setupModalFocusTrap(modalId, closeFn) {
   const modal = document.getElementById(modalId);
   modal._returnFocus = document.activeElement;
+  // 移除上一个模态框的键盘监听器
+  if (_modalKeyHandler) document.removeEventListener('keydown', _modalKeyHandler);
   function onKey(e) {
     if (e.key === 'Escape') { closeFn(); return; }
     if (e.key === 'Tab') {
@@ -1093,6 +1097,7 @@ async function loadAdvancedAnalysis() {
       }
 
       await dataSync.initUserId();
+      if (!dataSync.userId) return;
       const preferences = await getPreferences();
       const response = await authFetch(
         `${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=${preferences.analysisDays}&blackhole_threshold=${preferences.blackholeThresholdMinutes}`
@@ -1150,8 +1155,8 @@ function displayBlackholes(blackholes) {
   `;
 
   html += blackholes.top_blackholes.slice(0, 3).map(bh => {
-    const catName = WebsiteClassifier.CATEGORY_NAMES[bh.category] || '其他';
-    const typeLabel = WebsiteClassifier.BLACKHOLE_TYPE_LABELS_SHORT[bh.blackhole_type] || '';
+    const catName = escapeHtml(WebsiteClassifier.CATEGORY_NAMES[bh.category] || '其他');
+    const typeLabel = escapeHtml(WebsiteClassifier.BLACKHOLE_TYPE_LABELS_SHORT[bh.blackhole_type] || '');
     const meta = bh.blackhole_type === 'high_frequency'
       ? `${bh.visit_count} 次访问 · 累计 ${formatDuration(bh.total_duration)}`
       : `${bh.long_sessions_count} 次长时间访问 · 最长 ${formatDuration(bh.longest_session)}`;
@@ -1339,7 +1344,7 @@ function displayGoals(goals) {
           <span class="goal-type">${escapeHtml(GOAL_TYPE_NAMES[goal.goal_type] || goal.goal_type)}</span>
           <div>
             <span class="goal-status ${statusClass}">${statusText}</span>
-            <button class="goal-delete" data-goal-id="${goal.id}" aria-label="删除目标">×</button>
+            <button class="goal-delete" data-goal-id="${escapeHtml(String(goal.id))}" aria-label="删除目标">×</button>
           </div>
         </div>
         <div class="goal-progress-bar">
@@ -1436,6 +1441,7 @@ async function deleteGoal(goalId) {
   }
   _deletingGoal = true;
   try {
+    if (!dataSync) { await initDataSync(); }
     const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, {
       method: 'DELETE'
     });
