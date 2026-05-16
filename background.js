@@ -3,6 +3,28 @@
 importScripts('dataProcessor.js', 'dataSync.js');
 // getPreferences(), DEFAULT_API_BASE_URL, DEFAULT_PREFERENCES are defined in dataSync.js
 
+// getPreferences 缓存（5 秒 TTL），避免热路径重复读取 storage
+let _prefsCache = null;
+let _prefsCacheTime = 0;
+async function getCachedPreferences() {
+  const now = Date.now();
+  if (_prefsCache && now - _prefsCacheTime < 5000) return _prefsCache;
+  _prefsCache = await getPreferences();
+  _prefsCacheTime = now;
+  return _prefsCache;
+}
+
+// WebsiteClassifier 缓存（overrides/feedback 不变时复用实例）
+let _classifierCache = null;
+let _classifierKey = '';
+function getCachedClassifier(overrides = {}, feedback = {}) {
+  const key = JSON.stringify(overrides) + '|' + JSON.stringify(feedback);
+  if (_classifierCache && _classifierKey === key) return _classifierCache;
+  _classifierCache = new WebsiteClassifier(overrides, feedback);
+  _classifierKey = key;
+  return _classifierCache;
+}
+
 let autoSyncTimer = null;
 let isAutoSyncing = false;
 let _recentRecordKeys = null; // Set-based dedup cache for addBrowsingRecord
@@ -123,7 +145,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 async function getSharedContext() {
   try {
     const [preferences, { classificationOverrides = {}, classificationFeedback = {} }] = await Promise.all([
-      getPreferences(),
+      getCachedPreferences(),
       chrome.storage.local.get(['classificationOverrides', 'classificationFeedback'])
     ]);
     return { preferences, classificationOverrides, classificationFeedback };
@@ -188,7 +210,7 @@ async function checkTabIntervention(tab, ctx) {
     if (!preferences.interventionsEnabled) return;
     const overrides = ctx?.classificationOverrides ?? (await chrome.storage.local.get('classificationOverrides')).classificationOverrides ?? {};
     const feedback = ctx?.classificationFeedback ?? (await chrome.storage.local.get('classificationFeedback')).classificationFeedback ?? {};
-    const classifier = new WebsiteClassifier(overrides, feedback);
+    const classifier = getCachedClassifier(overrides, feedback);
     const domain = WebsiteClassifier.normalizeDomain(new URL(tab.url).hostname);
     const category = classifier.classify(domain, tab.title || '', tab.url);
 
@@ -219,7 +241,7 @@ async function saveTabDuration(ctx) {
 
   const overrides = ctx?.classificationOverrides ?? (await chrome.storage.local.get('classificationOverrides')).classificationOverrides ?? {};
   const feedback = ctx?.classificationFeedback ?? (await chrome.storage.local.get('classificationFeedback')).classificationFeedback ?? {};
-  const classifier = new WebsiteClassifier(overrides, feedback);
+  const classifier = getCachedClassifier(overrides, feedback);
   let domain = null;
   try { domain = WebsiteClassifier.normalizeDomain(new URL(activeTab.url).hostname); } catch {}
   const category = classifier.classify(domain || '', activeTab.title || '', activeTab.url);
@@ -312,7 +334,7 @@ async function collectHistoryData() {
 
   // 初始化分类器，为历史记录补充 domain 和 category
   const { classificationOverrides = {}, classificationFeedback = {} } = await chrome.storage.local.get(['classificationOverrides', 'classificationFeedback']);
-  const classifier = new WebsiteClassifier(classificationOverrides, classificationFeedback);
+  const classifier = getCachedClassifier(classificationOverrides, classificationFeedback);
 
   const records = historyItems
     .filter(item => item.url && !item.url.startsWith('chrome://'))
@@ -683,10 +705,14 @@ function parseCategoryTimeLimits(str) {
 }
 
 async function checkInterventions(domain, category) {
-  const preferences = await getPreferences();
+  const preferences = await getCachedPreferences();
   if (!preferences.interventionsEnabled) return;
 
   let interventionFired = false;
+
+  // 预读 browsingData，避免后续 3 次重复读取
+  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+  const today = new Date().toISOString().split('T')[0];
 
   // 专注会话期间访问娱乐/社交站点 — 记录打断并提醒
   if (focusSession.active && (category === 'entertainment' || category === 'social')) {
@@ -729,8 +755,6 @@ async function checkInterventions(domain, category) {
   // 分类时长限制提醒
   const timeLimits = parseCategoryTimeLimits(preferences.categoryTimeLimits);
   if (timeLimits[category]) {
-    const { browsingData = [] } = await chrome.storage.local.get('browsingData');
-    const today = new Date().toISOString().split('T')[0];
     const todayCategoryDuration = browsingData
       .filter(r => r.date === today && r.category === category)
       .reduce((sum, r) => sum + (r.duration || 0), 0);
@@ -752,7 +776,6 @@ async function checkInterventions(domain, category) {
     const thresholdMin = preferences.continuousEntertainmentMinutes || 20;
     const contKey = `continuous:${thresholdMin}`;
     if (!interventionCooldowns[contKey] || now - interventionCooldowns[contKey] > cooldownMs) {
-      const { browsingData = [] } = await chrome.storage.local.get('browsingData');
       const cutoff = now - thresholdMin * 60 * 1000;
       const recent = browsingData.filter(r => r.visitTime > cutoff).sort((a, b) => a.visitTime - b.visitTime);
       if (recent.length >= 2) {
@@ -772,7 +795,6 @@ async function checkInterventions(domain, category) {
     const today = new Date().toISOString().split('T')[0];
     const dropKey = `learningDrop:${today}`;
     if (!interventionCooldowns[dropKey]) {
-      const { browsingData = [] } = await chrome.storage.local.get('browsingData');
       const now2 = new Date();
       const currentHour = now2.getHours();
       const yesterday = new Date(now2 - 86400000).toISOString().split('T')[0];
