@@ -68,6 +68,12 @@ const dsExports = loadModule('dataSync.js', {
   crypto: { randomUUID: () => 'test-uuid' }
 }, '{ compressRecords, decompressRecords, formatDuration, validateBrowsingData, getPreferences }');
 
+// 本地日期工具（与 dataProcessor.js / dataSync.js 保持一致）
+function _toLocalDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // Load background.js utility functions
 const bgCode = fs.readFileSync('background.js', 'utf8');
 const bgSandbox = {
@@ -265,9 +271,9 @@ console.log('\n=== StatisticsAnalyzer ===');
 
 test('analyzeByCategory() calculates correct percentages', () => {
   const data = [
-    { category: 'coding', duration: 100, visitTime: Date.now(), date: new Date().toISOString().split('T')[0] },
-    { category: 'coding', duration: 100, visitTime: Date.now(), date: new Date().toISOString().split('T')[0] },
-    { category: 'entertainment', duration: 100, visitTime: Date.now(), date: new Date().toISOString().split('T')[0] }
+    { category: 'coding', duration: 100, visitTime: Date.now(), date: _toLocalDate(Date.now()) },
+    { category: 'coding', duration: 100, visitTime: Date.now(), date: _toLocalDate(Date.now()) },
+    { category: 'entertainment', duration: 100, visitTime: Date.now(), date: _toLocalDate(Date.now()) }
   ];
   const analyzer = new dpContext.StatisticsAnalyzer(data);
   const stats = analyzer.analyzeByCategory();
@@ -285,7 +291,7 @@ test('analyzeByCategory() handles empty data', () => {
 
 test('analyzeByCategory() handles zero duration', () => {
   const data = [
-    { category: 'coding', duration: 0, visitTime: Date.now(), date: new Date().toISOString().split('T')[0] }
+    { category: 'coding', duration: 0, visitTime: Date.now(), date: _toLocalDate(Date.now()) }
   ];
   const analyzer = new dpContext.StatisticsAnalyzer(data);
   const stats = analyzer.analyzeByCategory();
@@ -403,7 +409,7 @@ test('DataProcessor handles empty input', () => {
 });
 
 test('StatisticsAnalyzer handles single record', () => {
-  const data = [{ category: 'coding', duration: 60, visitTime: Date.now(), date: new Date().toISOString().split('T')[0] }];
+  const data = [{ category: 'coding', duration: 60, visitTime: Date.now(), date: _toLocalDate(Date.now()) }];
   const analyzer = new dpContext.StatisticsAnalyzer(data);
   const stats = analyzer.analyzeByCategory();
   assertEqual(stats.length, 1, 'Should have 1 category');
@@ -512,8 +518,8 @@ test('detectBlackholes() identifies long sessions', () => {
   const result = analyzer.detectBlackholes(records);
   assert(result.blackholes.length >= 1, 'Should detect at least 1 blackhole');
   assertEqual(result.blackholes[0].domain, 'youtube.com', 'YouTube should be blackhole');
-  assertEqual(result.blackholes[0].blackhole_type, 'long_session', 'Should be long_session type');
-  assert(result.waste_percentage > 0, 'Waste percentage should be positive');
+  assertEqual(result.blackholes[0].blackholeType, 'long_session', 'Should be long_session type');
+  assert(result.wastePercentage > 0, 'Waste percentage should be positive');
 });
 
 test('detectBlackholes() identifies high frequency patterns', () => {
@@ -524,7 +530,7 @@ test('detectBlackholes() identifies high frequency patterns', () => {
   }
   const result = analyzer.detectBlackholes(records);
   assert(result.blackholes.length >= 1, 'Should detect high frequency blackhole');
-  assertEqual(result.blackholes[0].blackhole_type, 'high_frequency', 'Should be high_frequency type');
+  assertEqual(result.blackholes[0].blackholeType, 'high_frequency', 'Should be high_frequency type');
 });
 
 test('detectBlackholes() weights entertainment/social higher', () => {
@@ -543,7 +549,7 @@ test('detectBlackholes() handles empty records', () => {
   const analyzer = new dpContext.LocalAdvancedAnalyzer(30);
   const result = analyzer.detectBlackholes([]);
   assertEqual(result.blackholes.length, 0, 'Empty records should return no blackholes');
-  assertEqual(result.waste_percentage, 0, 'Empty records should have 0 waste');
+  assertEqual(result.wastePercentage, 0, 'Empty records should have 0 waste');
 });
 
 test('detectBlackholes() handles zero total duration', () => {
@@ -552,7 +558,7 @@ test('detectBlackholes() handles zero total duration', () => {
     { domain: 'a.com', category: 'other', duration: 0, visitTime: Date.now(), date: '2026-01-01', url: 'https://a.com' }
   ];
   const result = analyzer.detectBlackholes(records);
-  assertEqual(result.waste_percentage, 0, 'Zero duration should have 0 waste percentage');
+  assertEqual(result.wastePercentage, 0, 'Zero duration should have 0 waste percentage');
 });
 
 test('analyzeAttention() computes hourly focus scores', () => {
@@ -563,11 +569,11 @@ test('analyzeAttention() computes hourly focus scores', () => {
     { visitTime: new Date('2026-01-01T14:00:00').getTime(), duration: 200, category: 'learning' }
   ];
   const result = analyzer.analyzeAttention(records);
-  assertEqual(result.hourly_focus.length, 24, 'Should have 24 hours');
-  assert(result.hourly_focus[10].total_duration > 0, 'Hour 10 should have activity');
-  assert(result.hourly_focus[14].total_duration > 0, 'Hour 14 should have activity');
-  assert(result.hourly_focus[0].total_duration === 0, 'Hour 0 should have no activity');
-  assert(typeof result.focus_score === 'number', 'focus_score should be a number');
+  assertEqual(result.hourlyFocus.length, 24, 'Should have 24 hours');
+  assert(result.hourlyFocus[10].totalDuration > 0, 'Hour 10 should have activity');
+  assert(result.hourlyFocus[14].totalDuration > 0, 'Hour 14 should have activity');
+  assert(result.hourlyFocus[0].totalDuration === 0, 'Hour 0 should have no activity');
+  assert(typeof result.focusScore === 'number', 'focusScore should be a number');
 });
 
 test('analyzeAttention() identifies peak and low hours', () => {
@@ -580,19 +586,19 @@ test('analyzeAttention() identifies peak and low hours', () => {
     records.push({ visitTime: new Date(`2026-01-01T22:${min}:00`).getTime(), duration: 100, category: 'entertainment' });
   }
   const result = analyzer.analyzeAttention(records);
-  assert(Array.isArray(result.peak_hours), 'peak_hours should be array');
-  assert(Array.isArray(result.low_hours), 'low_hours should be array');
-  assert(result.hourly_focus[9].total_duration > 0, 'Hour 9 should have activity');
-  assert(result.hourly_focus[22].total_duration > 0, 'Hour 22 should have activity');
+  assert(Array.isArray(result.peakHours), 'peakHours should be array');
+  assert(Array.isArray(result.lowHours), 'lowHours should be array');
+  assert(result.hourlyFocus[9].totalDuration > 0, 'Hour 9 should have activity');
+  assert(result.hourlyFocus[22].totalDuration > 0, 'Hour 22 should have activity');
 });
 
 test('analyzeAttention() handles empty records', () => {
   const analyzer = new dpContext.LocalAdvancedAnalyzer(30);
   const result = analyzer.analyzeAttention([]);
-  assertEqual(result.hourly_focus.length, 24, 'Should have 24 hours');
-  assertEqual(result.focus_score, 0, 'Empty records should have 0 focus score');
-  assertEqual(result.peak_hours.length, 0, 'No peak hours');
-  assertEqual(result.low_hours.length, 0, 'No low hours');
+  assertEqual(result.hourlyFocus.length, 24, 'Should have 24 hours');
+  assertEqual(result.focusScore, 0, 'Empty records should have 0 focus score');
+  assertEqual(result.peakHours.length, 0, 'No peak hours');
+  assertEqual(result.lowHours.length, 0, 'No low hours');
   assert(result.recommendations.length > 0, 'Should have at least one recommendation');
 });
 
@@ -602,7 +608,7 @@ test('analyzeAttention() handles string visitTime', () => {
     { visitTime: '2026-01-01T10:00:00', duration: 100, category: 'coding' }
   ];
   const result = analyzer.analyzeAttention(records);
-  assert(result.hourly_focus[10].total_duration > 0, 'Should parse string visitTime');
+  assert(result.hourlyFocus[10].totalDuration > 0, 'Should parse string visitTime');
 });
 
 test('analyzeAttention() skips invalid visitTime', () => {
@@ -613,7 +619,7 @@ test('analyzeAttention() skips invalid visitTime', () => {
     { visitTime: new Date('2026-01-01T10:00:00').getTime(), duration: 100, category: 'coding' }
   ];
   const result = analyzer.analyzeAttention(records);
-  assertEqual(result.hourly_focus[10].total_duration, 100, 'Should only count valid records');
+  assertEqual(result.hourlyFocus[10].totalDuration, 100, 'Should only count valid records');
 });
 
 test('_formatTimeRanges() formats consecutive hours', () => {
@@ -639,8 +645,8 @@ test('_generateRecommendations() includes morning check', () => {
   // Create low-scoring morning records (entertainment heavy)
   const hourlyFocus = Array(24).fill(null).map((_, hour) => ({
     hour, score: hour >= 6 && hour <= 11 ? 20 : 80,
-    total_duration: hour >= 6 && hour <= 11 ? 100 : 0,
-    focus_duration: 0, entertainment_duration: hour >= 6 && hour <= 11 ? 100 : 0
+    totalDuration: hour >= 6 && hour <= 11 ? 100 : 0,
+    focusDuration: 0, entertainmentDuration: hour >= 6 && hour <= 11 ? 100 : 0
   }));
   const recs = analyzer._generateRecommendations([], [], hourlyFocus);
   assert(recs.some(r => r.includes('早晨')), 'Should mention morning efficiency');
@@ -653,7 +659,7 @@ test('analyzeAll() combines blackhole and attention analysis', () => {
   ];
   const result = analyzer.analyzeAll(records);
   assert(result.blackholes, 'Should have blackholes');
-  assert(result.attention_curve, 'Should have attention_curve');
+  assert(result.attentionCurve, 'Should have attentionCurve');
 });
 
 test('analyzeAll() uses threshold parameter correctly', () => {

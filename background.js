@@ -3,6 +3,16 @@
 importScripts('dataProcessor.js', 'dataSync.js');
 // getPreferences(), DEFAULT_API_BASE_URL, DEFAULT_PREFERENCES are defined in dataSync.js
 
+// 日期工具（本地时间，不能用 toISOString 因为它返回 UTC）
+function _todayString() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function _toLocalDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // getPreferences 缓存（5 秒 TTL），避免热路径重复读取 storage
 let _prefsCache = null;
 let _prefsCacheTime = 0;
@@ -25,15 +35,15 @@ function getCachedClassifier(overrides = {}, feedback = {}) {
   return _classifierCache;
 }
 
-let autoSyncTimer = null;
-let isAutoSyncing = false;
+let _autoSyncTimer = null;
+let _isAutoSyncing = false;
 let _recentRecordKeys = null; // Set-based dedup cache for addBrowsingRecord
 
 // 干预冷却追踪 { key: lastTriggerTime }
-const interventionCooldowns = {};
+const _interventionCooldowns = {};
 
 // 存储当前活跃标签的信息
-let activeTab = {
+let _activeTab = {
   tabId: null,
   url: null,
   title: null,
@@ -41,7 +51,7 @@ let activeTab = {
 };
 
 // 专注会话状态
-let focusSession = {
+let _focusSession = {
   active: false,
   startTime: null,
   durationMinutes: 0,
@@ -52,16 +62,20 @@ let focusSession = {
 
 // 初始化：加载历史记录 + 创建右键菜单 + 生成认证 token
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('BrowseMind 已安装');
-  // 生成认证 token（首次安装时）
-  const { authToken } = await chrome.storage.local.get('authToken');
-  if (!authToken) {
-    const token = crypto.randomUUID();
-    await chrome.storage.local.set({ authToken: token });
-    console.log('已生成认证 token');
+  try {
+    console.log('BrowseMind 已安装');
+    // 生成认证 token（首次安装时）
+    const { authToken } = await chrome.storage.local.get('authToken');
+    if (!authToken) {
+      const token = crypto.randomUUID();
+      await chrome.storage.local.set({ authToken: token });
+      console.log('已生成认证 token');
+    }
+    collectHistoryData();
+    createContextMenus();
+  } catch (e) {
+    console.warn('onInstalled 处理失败:', e);
   }
-  collectHistoryData();
-  createContextMenus();
 });
 
 // ==================== 右键菜单 ====================
@@ -92,7 +106,7 @@ function createContextMenus() {
   });
 }
 
-function extractDomainFromUrl(url) {
+function extractDomain(url) {
   try {
     return WebsiteClassifier.normalizeDomain(new URL(url).hostname);
   } catch {
@@ -115,29 +129,33 @@ async function openDashboard() {
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  const url = info.linkUrl || info.pageUrl;
-  const domain = extractDomainFromUrl(url);
+  try {
+    const url = info.linkUrl || info.pageUrl;
+    const domain = extractDomain(url);
 
-  switch (info.menuItemId) {
-    case 'bm-allowlist':
-      if (!domain) return;
-      if (await appendToList('domainAllowlist', domain)) {
-        showNotification('info', `已将 ${domain} 加入白名单`);
-      } else {
-        showNotification('info', `${domain} 已在白名单中`);
-      }
-      break;
-    case 'bm-blocklist':
-      if (!domain) return;
-      if (await appendToList('domainBlocklist', domain)) {
-        showNotification('warning', `已将 ${domain} 加入黑名单`);
-      } else {
-        showNotification('info', `${domain} 已在黑名单中`);
-      }
-      break;
-    case 'bm-dashboard':
-      openDashboard();
-      break;
+    switch (info.menuItemId) {
+      case 'bm-allowlist':
+        if (!domain) return;
+        if (await appendToList('domainAllowlist', domain)) {
+          showNotification('info', `已将 ${domain} 加入白名单`);
+        } else {
+          showNotification('info', `${domain} 已在白名单中`);
+        }
+        break;
+      case 'bm-blocklist':
+        if (!domain) return;
+        if (await appendToList('domainBlocklist', domain)) {
+          showNotification('warning', `已将 ${domain} 加入黑名单`);
+        } else {
+          showNotification('info', `${domain} 已在黑名单中`);
+        }
+        break;
+      case 'bm-dashboard':
+        openDashboard();
+        break;
+    }
+  } catch (e) {
+    console.warn('contextMenu 处理失败:', e);
   }
 });
 
@@ -157,36 +175,48 @@ async function getSharedContext() {
 
 // 监听标签页激活（用户切换标签）
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  const ctx = await getSharedContext();
-  await saveTabDuration(ctx);
-  const tab = await chrome.tabs.get(activeInfo.tabId);
-  startTrackingTab(tab);
-  await checkTabIntervention(tab, ctx);
+  try {
+    const ctx = await getSharedContext();
+    await saveTabDuration(ctx);
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    startTrackingTab(tab);
+    await checkTabIntervention(tab, ctx);
+  } catch (e) {
+    console.warn('onActivated 处理失败:', e);
+  }
 });
 
 // 监听标签页更新（URL变化）
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.active) {
-    const ctx = await getSharedContext();
-    await saveTabDuration(ctx);
-    startTrackingTab(tab);
-    await checkTabIntervention(tab, ctx);
+  try {
+    if (changeInfo.status === 'complete' && tab.active) {
+      const ctx = await getSharedContext();
+      await saveTabDuration(ctx);
+      startTrackingTab(tab);
+      await checkTabIntervention(tab, ctx);
+    }
+  } catch (e) {
+    console.warn('onUpdated 处理失败:', e);
   }
 });
 
 // 监听窗口焦点变化
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
-  if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    const ctx = await getSharedContext();
-    await saveTabDuration(ctx);
-    activeTab = { tabId: null, url: null, title: null, startTime: null };
-  } else {
-    const [tab] = await chrome.tabs.query({ active: true, windowId });
-    if (tab) {
+  try {
+    if (windowId === chrome.windows.WINDOW_ID_NONE) {
       const ctx = await getSharedContext();
-      startTrackingTab(tab);
-      await checkTabIntervention(tab, ctx);
+      await saveTabDuration(ctx);
+      _activeTab = { tabId: null, url: null, title: null, startTime: null };
+    } else {
+      const [tab] = await chrome.tabs.query({ active: true, windowId });
+      if (tab) {
+        const ctx = await getSharedContext();
+        startTrackingTab(tab);
+        await checkTabIntervention(tab, ctx);
+      }
     }
+  } catch (e) {
+    console.warn('onFocusChanged 处理失败:', e);
   }
 });
 
@@ -194,7 +224,7 @@ chrome.windows.onFocusChanged.addListener(async (windowId) => {
 function startTrackingTab(tab) {
   if (!tab.url || tab.url.startsWith('chrome://')) return;
 
-  activeTab = {
+  _activeTab = {
     tabId: tab.id,
     url: tab.url,
     title: tab.title,
@@ -233,27 +263,27 @@ async function checkTabIntervention(tab, ctx) {
 
 // 保存标签页停留时间（可接收预读的共享上下文）
 async function saveTabDuration(ctx) {
-  if (!activeTab.startTime || !activeTab.url) return;
+  if (!_activeTab.startTime || !_activeTab.url) return;
 
   const preferences = ctx?.preferences || await getPreferences();
-  const duration = Math.floor((Date.now() - activeTab.startTime) / 1000); // 秒
+  const duration = Math.floor((Date.now() - _activeTab.startTime) / 1000); // 秒
   if (duration < preferences.minVisitDurationSeconds) return;
 
   const overrides = ctx?.classificationOverrides ?? (await chrome.storage.local.get('classificationOverrides')).classificationOverrides ?? {};
   const feedback = ctx?.classificationFeedback ?? (await chrome.storage.local.get('classificationFeedback')).classificationFeedback ?? {};
   const classifier = getCachedClassifier(overrides, feedback);
   let domain = null;
-  try { domain = WebsiteClassifier.normalizeDomain(new URL(activeTab.url).hostname); } catch {}
-  const category = classifier.classify(domain || '', activeTab.title || '', activeTab.url);
+  try { domain = WebsiteClassifier.normalizeDomain(new URL(_activeTab.url).hostname); } catch {}
+  const category = classifier.classify(domain || '', _activeTab.title || '', _activeTab.url);
 
   const record = {
-    url: activeTab.url,
-    title: activeTab.title,
+    url: _activeTab.url,
+    title: _activeTab.title,
     domain: domain,
     category: category,
-    visitTime: activeTab.startTime,
+    visitTime: _activeTab.startTime,
     duration: duration,
-    date: new Date(activeTab.startTime).toISOString().split('T')[0]
+    date: _toLocalDate(_activeTab.startTime)
   };
 
   // 存储到 chrome.storage
@@ -305,6 +335,7 @@ async function flushPendingRecords() {
   await chrome.storage.local.set({ browsingData });
 }
 
+// 从 Chrome 历史 API 采集数据，与本地记录合并（按 url+visitTime 去重）
 async function collectHistoryData() {
   const preferences = await getPreferences();
   const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
@@ -349,7 +380,7 @@ async function collectHistoryData() {
         category: category,
         visitTime: item.lastVisitTime,
         duration: 0,
-        date: new Date(item.lastVisitTime).toISOString().split('T')[0]
+        date: _toLocalDate(item.lastVisitTime)
       };
     });
 
@@ -376,11 +407,11 @@ chrome.alarms.create('cleanOldData', { periodInMinutes: 60 });
 // ==================== 专注会话 ====================
 
 function startFocusSession(durationMinutes) {
-  if (focusSession.active) {
+  if (_focusSession.active) {
     endFocusSession(false).catch(e => console.warn('结束旧专注会话失败:', e));
   }
   const now = Date.now();
-  focusSession = {
+  _focusSession = {
     active: true,
     startTime: now,
     durationMinutes,
@@ -388,54 +419,54 @@ function startFocusSession(durationMinutes) {
     interruptions: 0,
     domains: new Set()
   };
-  chrome.alarms.create('focusSessionEnd', { delayInMinutes: durationMinutes });
+  chrome.alarms.create('_focusSessionEnd', { delayInMinutes: durationMinutes });
   chrome.action.setBadgeText({ text: 'F' });
   chrome.action.setBadgeBackgroundColor({ color: '#6366f1' });
   console.log(`专注会话开始：${durationMinutes} 分钟`);
 }
 
 async function endFocusSession(completed = true) {
-  if (!focusSession.active) return;
+  if (!_focusSession.active) return;
   const now = Date.now();
-  const actualDuration = Math.floor((now - focusSession.startTime) / 1000);
+  const actualDuration = Math.floor((now - _focusSession.startTime) / 1000);
 
   const session = {
-    startTime: focusSession.startTime,
+    startTime: _focusSession.startTime,
     endTime: now,
-    plannedDuration: focusSession.durationMinutes * 60,
+    plannedDuration: _focusSession.durationMinutes * 60,
     actualDuration,
     completed,
-    interruptions: focusSession.interruptions,
-    domains: Array.from(focusSession.domains)
+    interruptions: _focusSession.interruptions,
+    domains: Array.from(_focusSession.domains)
   };
 
   // 保存到本地
-  const { focusSessions = [] } = await chrome.storage.local.get('focusSessions');
-  focusSessions.push(session);
-  await chrome.storage.local.set({ focusSessions });
+  const { _focusSessions = [] } = await chrome.storage.local.get('_focusSessions');
+  _focusSessions.push(session);
+  await chrome.storage.local.set({ _focusSessions });
 
-  focusSession = { active: false, startTime: null, durationMinutes: 0, endTime: null, interruptions: 0, domains: new Set() };
-  chrome.alarms.clear('focusSessionEnd');
+  _focusSession = { active: false, startTime: null, durationMinutes: 0, endTime: null, interruptions: 0, domains: new Set() };
+  chrome.alarms.clear('_focusSessionEnd');
   chrome.action.setBadgeText({ text: '' });
   console.log(`专注会话结束：${completed ? '完成' : '中断'}，实际 ${actualDuration} 秒`);
 }
 
 function getFocusStatus() {
-  if (!focusSession.active) return { active: false };
+  if (!_focusSession.active) return { active: false };
   return {
     active: true,
-    startTime: focusSession.startTime,
-    durationMinutes: focusSession.durationMinutes,
-    endTime: focusSession.endTime,
-    remainingSeconds: Math.max(0, Math.floor((focusSession.endTime - Date.now()) / 1000)),
-    interruptions: focusSession.interruptions
+    startTime: _focusSession.startTime,
+    durationMinutes: _focusSession.durationMinutes,
+    endTime: _focusSession.endTime,
+    remainingSeconds: Math.max(0, Math.floor((_focusSession.endTime - Date.now()) / 1000)),
+    interruptions: _focusSession.interruptions
   };
 }
 
 function recordFocusInterruption(domain) {
-  if (!focusSession.active) return;
-  focusSession.interruptions++;
-  focusSession.domains.add(domain);
+  if (!_focusSession.active) return;
+  _focusSession.interruptions++;
+  _focusSession.domains.add(domain);
 }
 
 // 定期更新目标进度（每5分钟）
@@ -467,7 +498,7 @@ async function checkDailySummary() {
   // 使用 >= 而非精确匹配，防止 alarm 偏移导致跳过目标小时
   if (now.getHours() < preferences.dailySummaryHour) return;
 
-  const today = now.toISOString().split('T')[0];
+  const today = _todayString();
   const { lastDailySummary = '' } = await chrome.storage.local.get('lastDailySummary');
   if (lastDailySummary === today) return;
 
@@ -485,8 +516,7 @@ async function checkDailySummary() {
     catStats[cat] = (catStats[cat] || 0) + (r.duration || 0);
   }
   const topCat = Object.entries(catStats).sort((a, b) => b[1] - a[1])[0];
-  const catNames = { learning: '学习', coding: '编程', entertainment: '娱乐', social: '社交', tools: '工具', other: '其他' };
-  const topCatText = topCat ? `${catNames[topCat[0]] || topCat[0]} ${Math.round(topCat[1] / 60)}分钟` : '';
+  const topCatText = topCat ? `${WebsiteClassifier.CATEGORY_NAMES[topCat[0]] || topCat[0]} ${Math.round(topCat[1] / 60)}分钟` : '';
 
   const hours = Math.floor(totalDuration / 3600);
   const minutes = Math.round((totalDuration % 3600) / 60);
@@ -504,14 +534,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       cleanOldData().catch(e => console.error('cleanOldData failed:', e));
     } else if (alarm.name === 'pruneCooldowns') {
       const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-      for (const key of Object.keys(interventionCooldowns)) {
-        if (interventionCooldowns[key] < cutoff) delete interventionCooldowns[key];
+      for (const key of Object.keys(_interventionCooldowns)) {
+        if (_interventionCooldowns[key] < cutoff) delete _interventionCooldowns[key];
       }
     } else if (alarm.name === 'updateGoalsProgress') {
       updateGoalsProgress().catch(e => console.error('updateGoalsProgress failed:', e));
     } else if (alarm.name === 'syncBrowsingData') {
       syncLocalDataInBackground('alarm').catch(e => console.error('syncBrowsingData failed:', e));
-    } else if (alarm.name === 'focusSessionEnd') {
+    } else if (alarm.name === '_focusSessionEnd') {
       endFocusSession(true).catch(e => console.error('endFocusSession failed:', e));
       showNotification('info', '专注会话完成！你做到了。').catch(e => console.error('showNotification failed:', e));
     } else if (alarm.name === 'dailySummary') {
@@ -526,6 +556,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // ==================== 目标监控功能 ====================
 
+// 更新目标进度 — 瞬时错误(502/503/504)自动重试最多 2 次
 async function updateGoalsProgress() {
   const maxRetries = 2;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -535,7 +566,7 @@ async function updateGoalsProgress() {
       if (!userId) return;
 
       const baseUrl = preferences.apiBaseUrl;
-      const today = new Date().toISOString().split('T')[0];
+      const today = _todayString();
 
       const { authToken } = await chrome.storage.local.get('authToken');
       const headers = authToken ? { 'X-Auth-Token': authToken } : {};
@@ -575,7 +606,7 @@ async function updateGoalsProgress() {
   }
 }
 
-// 检查当前是否在安静时段
+// 检查当前是否在安静时段（支持跨午夜时间范围，如 23:00-07:00）
 function isInQuietHours(preferences) {
   const start = preferences.quietHoursStart;
   const end = preferences.quietHoursEnd;
@@ -617,14 +648,26 @@ async function showNotification(type, message) {
       type === 'intervention' || type === 'warning' ? '浏览提醒' :
       '时间提醒';
 
+    const priority = preferences.notificationSound === false ? 1 : 2;
     const notificationId = await chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: title,
       message: message,
-      priority: 2
+      priority
     });
     console.log('通知已发送:', notificationId, type, message);
+
+    // 写入通知历史（最多 50 条）
+    try {
+      const { notificationHistory = '' } = await chrome.storage.local.get('notificationHistory');
+      const lines = notificationHistory ? notificationHistory.split('\n') : [];
+      lines.push(`${Date.now()}|${type}|${message}`);
+      while (lines.length > 50) lines.shift();
+      await chrome.storage.local.set({ notificationHistory: lines.join('\n') });
+    } catch (e) {
+      console.warn('写入通知历史失败:', e);
+    }
   } catch (error) {
     console.error('通知发送失败:', error);
     // API 失败时也尝试设置角标作为降级方案
@@ -645,19 +688,20 @@ async function scheduleAutoSync() {
   const preferences = await getPreferences();
   if (!preferences.autoSyncEnabled) return;
 
-  if (autoSyncTimer) {
-    clearTimeout(autoSyncTimer);
+  if (_autoSyncTimer) {
+    clearTimeout(_autoSyncTimer);
   }
 
-  autoSyncTimer = setTimeout(() => {
-    autoSyncTimer = null;
+  _autoSyncTimer = setTimeout(() => {
+    _autoSyncTimer = null;
     syncLocalDataInBackground('storage-change');
   }, preferences.autoSyncDebounceMs);
 }
 
+// 后台同步 — 防并发 + 最小间隔保护（source 标识调用来源，用于日志）
 async function syncLocalDataInBackground(source) {
-  if (isAutoSyncing) return;
-  isAutoSyncing = true;
+  if (_isAutoSyncing) return;
+  _isAutoSyncing = true;
 
   try {
     const preferences = await getPreferences();
@@ -679,7 +723,7 @@ async function syncLocalDataInBackground(source) {
   } catch (error) {
     console.error('后台自动同步失败:', source, error);
   } finally {
-    isAutoSyncing = false;
+    _isAutoSyncing = false;
   }
 }
 
@@ -704,6 +748,7 @@ function parseCategoryTimeLimits(str) {
   return limits;
 }
 
+// 干预检查（按优先级）：专注会话打断 > 黑名单 > 专注模式 > 分类时限 > 持续娱乐 > 学习下降
 async function checkInterventions(domain, category) {
   const preferences = await getCachedPreferences();
   if (!preferences.interventionsEnabled) return;
@@ -712,13 +757,12 @@ async function checkInterventions(domain, category) {
 
   // 预读 browsingData，避免后续 3 次重复读取
   const { browsingData = [] } = await chrome.storage.local.get('browsingData');
-  const today = new Date().toISOString().split('T')[0];
+  const today = _todayString();
 
   // 专注会话期间访问娱乐/社交站点 — 记录打断并提醒
-  if (focusSession.active && (category === 'entertainment' || category === 'social')) {
+  if (_focusSession.active && (category === 'entertainment' || category === 'social')) {
     recordFocusInterruption(domain);
-    const catNames = { entertainment: '娱乐', social: '社交' };
-    await showNotification('warning', `专注会话中！你正在访问${catNames[category]}类站点，已记录打断。`);
+    await showNotification('warning', `专注会话中！你正在访问${WebsiteClassifier.CATEGORY_NAMES[category]}类站点，已记录打断。`);
     interventionFired = true;
   }
 
@@ -734,8 +778,8 @@ async function checkInterventions(domain, category) {
   // 黑名单提醒
   const blockKey = `block:${normalizedDomain}`;
   if (blocklist.some(d => normalizedDomain === d || normalizedDomain.endsWith('.' + d))) {
-    if (!interventionCooldowns[blockKey] || now - interventionCooldowns[blockKey] > cooldownMs) {
-      interventionCooldowns[blockKey] = now;
+    if (!_interventionCooldowns[blockKey] || now - _interventionCooldowns[blockKey] > cooldownMs) {
+      _interventionCooldowns[blockKey] = now;
       await showNotification('warning', `你正在访问黑名单站点：${domain}`);
       interventionFired = true;
     }
@@ -744,10 +788,9 @@ async function checkInterventions(domain, category) {
   // 专注模式提醒（娱乐/社交类）
   if (preferences.focusModeEnabled && (category === 'entertainment' || category === 'social')) {
     const focusKey = `focus:${category}`;
-    if (!interventionCooldowns[focusKey] || now - interventionCooldowns[focusKey] > cooldownMs) {
-      interventionCooldowns[focusKey] = now;
-      const catNames = { entertainment: '娱乐', social: '社交' };
-      await showNotification('warning', `专注模式已开启，当前正在访问${catNames[category] || category}类站点。`);
+    if (!_interventionCooldowns[focusKey] || now - _interventionCooldowns[focusKey] > cooldownMs) {
+      _interventionCooldowns[focusKey] = now;
+      await showNotification('warning', `专注模式已开启，当前正在访问${WebsiteClassifier.CATEGORY_NAMES[category] || category}类站点。`);
       interventionFired = true;
     }
   }
@@ -761,12 +804,32 @@ async function checkInterventions(domain, category) {
 
     if (todayCategoryDuration >= timeLimits[category]) {
       const limitKey = `limit:${category}:${today}`;
-      if (!interventionCooldowns[limitKey] || now - interventionCooldowns[limitKey] > cooldownMs) {
-        interventionCooldowns[limitKey] = now;
-        const catNames = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具' };
+      if (!_interventionCooldowns[limitKey] || now - _interventionCooldowns[limitKey] > cooldownMs) {
+        _interventionCooldowns[limitKey] = now;
         const limitMin = Math.round(timeLimits[category] / 60);
-        await showNotification('warning', `${catNames[category] || category}类今日已使用 ${Math.round(todayCategoryDuration / 60)} 分钟，超过 ${limitMin} 分钟限制。`);
+        await showNotification('warning', `${WebsiteClassifier.CATEGORY_NAMES[category] || category}类今日已使用 ${Math.round(todayCategoryDuration / 60)} 分钟，超过 ${limitMin} 分钟限制。`);
         interventionFired = true;
+      }
+    }
+  }
+
+  // 自定义分类阈值提醒
+  if (preferences.customThresholds) {
+    const customLimits = parseCategoryTimeLimits(preferences.customThresholds);
+    const notifyCats = (preferences.notifyCategories || '').split(/[,，\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+    const catsToCheck = Object.keys(customLimits);
+    for (const cat of catsToCheck) {
+      const todayCatDuration = browsingData
+        .filter(r => r.date === today && r.category === cat)
+        .reduce((sum, r) => sum + (r.duration || 0), 0);
+      if (todayCatDuration >= customLimits[cat]) {
+        const custKey = `custom:${cat}:${today}`;
+        if (!_interventionCooldowns[custKey] || now - _interventionCooldowns[custKey] > cooldownMs) {
+          _interventionCooldowns[custKey] = now;
+          const limitMin = Math.round(customLimits[cat] / 60);
+          await showNotification('warning', `${WebsiteClassifier.CATEGORY_NAMES[cat] || cat}类今日已使用 ${Math.round(todayCatDuration / 60)} 分钟，超过自定义阈值 ${limitMin} 分钟。`);
+          interventionFired = true;
+        }
       }
     }
   }
@@ -775,14 +838,14 @@ async function checkInterventions(domain, category) {
   if (category === 'entertainment' || category === 'social') {
     const thresholdMin = preferences.continuousEntertainmentMinutes || 20;
     const contKey = `continuous:${thresholdMin}`;
-    if (!interventionCooldowns[contKey] || now - interventionCooldowns[contKey] > cooldownMs) {
+    if (!_interventionCooldowns[contKey] || now - _interventionCooldowns[contKey] > cooldownMs) {
       const cutoff = now - thresholdMin * 60 * 1000;
       const recent = browsingData.filter(r => r.visitTime > cutoff).sort((a, b) => a.visitTime - b.visitTime);
       if (recent.length >= 2) {
         const allDistracting = recent.every(r => r.category === 'entertainment' || r.category === 'social');
         const totalDur = recent.reduce((s, r) => s + (r.duration || 0), 0);
         if (allDistracting && totalDur >= thresholdMin * 60) {
-          interventionCooldowns[contKey] = now;
+          _interventionCooldowns[contKey] = now;
           await showNotification('intervention', `你已连续浏览娱乐/社交内容 ${Math.round(totalDur / 60)} 分钟，休息一下吧！`);
           interventionFired = true;
         }
@@ -792,17 +855,17 @@ async function checkInterventions(domain, category) {
 
   // 学习效率下降检测
   if (preferences.learningDropAlertEnabled && (category === 'learning' || category === 'coding')) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = _todayString();
     const dropKey = `learningDrop:${today}`;
-    if (!interventionCooldowns[dropKey]) {
+    if (!_interventionCooldowns[dropKey]) {
       const now2 = new Date();
       const currentHour = now2.getHours();
-      const yesterday = new Date(now2 - 86400000).toISOString().split('T')[0];
+      const yesterday = _toLocalDate(now2 - 86400000);
       const focusCats = new Set(['learning', 'coding']);
       const todayFocus = browsingData.filter(r => r.date === today && focusCats.has(r.category) && new Date(r.visitTime).getHours() <= currentHour).reduce((s, r) => s + (r.duration || 0), 0);
       const yesterdayFocus = browsingData.filter(r => r.date === yesterday && focusCats.has(r.category) && new Date(r.visitTime).getHours() <= currentHour).reduce((s, r) => s + (r.duration || 0), 0);
       if (yesterdayFocus > 1800 && todayFocus < yesterdayFocus * 0.4) {
-        interventionCooldowns[dropKey] = now;
+        _interventionCooldowns[dropKey] = now;
         await showNotification('info', `学习时间较昨日同时段下降超过 60%，保持专注！`);
         interventionFired = true;
       }
@@ -811,25 +874,29 @@ async function checkInterventions(domain, category) {
 
   // 自适应阈值：仅在干预实际触发时记录
   if (interventionFired) {
-    trackInterventionResponse(category);
-    checkAdaptiveThreshold(preferences);
+    const log = await trackInterventionResponse(category);
+    checkAdaptiveThreshold(preferences, log);
   }
 }
 
 // 自适应阈值 — 记录每次干预触发后用户是否切换回非娱乐站点
 async function trackInterventionResponse(category) {
-  if (category !== 'entertainment' && category !== 'social') return;
+  if (category !== 'entertainment' && category !== 'social') return null;
   const { interventionResponseLog = [] } = await chrome.storage.local.get('interventionResponseLog');
   // 只保留最近 30 条
   if (interventionResponseLog.length > 30) interventionResponseLog.splice(0, interventionResponseLog.length - 30);
   interventionResponseLog.push({ time: Date.now(), category, responded: false });
   await chrome.storage.local.set({ interventionResponseLog });
+  return interventionResponseLog;
 }
 
-// 检查连续未响应次数，达到阈值则发送建议
-async function checkAdaptiveThreshold(preferences) {
+// 自适应阈值：连续 7 次忽略干预后发送建议通知，24 小时冷却
+async function checkAdaptiveThreshold(preferences, interventionResponseLog) {
   if (!preferences.adaptiveThresholdEnabled) return;
-  const { interventionResponseLog = [] } = await chrome.storage.local.get('interventionResponseLog');
+  if (!interventionResponseLog) {
+    const data = await chrome.storage.local.get('interventionResponseLog');
+    interventionResponseLog = data.interventionResponseLog || [];
+  }
   if (interventionResponseLog.length < 7) return;
 
   // 检查最近 7 条未响应的干预
@@ -839,8 +906,8 @@ async function checkAdaptiveThreshold(preferences) {
 
   const key = 'adaptive:threshold';
   const now = Date.now();
-  if (interventionCooldowns[key] && now - interventionCooldowns[key] < 24 * 60 * 60 * 1000) return;
-  interventionCooldowns[key] = now;
+  if (_interventionCooldowns[key] && now - _interventionCooldowns[key] < 24 * 60 * 60 * 1000) return;
+  _interventionCooldowns[key] = now;
 
   await showNotification('info', '你已连续 7 次忽略了提醒，是否需要提高提醒阈值或调整提醒方式？');
   // 清空日志避免重复触发

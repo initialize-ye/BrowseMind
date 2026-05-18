@@ -24,11 +24,26 @@ const DEFAULT_PREFERENCES = {
   dailySummaryHour: 21,
   continuousEntertainmentMinutes: 20,
   learningDropAlertEnabled: false,
-  adaptiveThresholdEnabled: false
+  adaptiveThresholdEnabled: false,
+  // 主题自定义
+  accentColor: '',
+  fontSize: 'medium',
+  chartScheme: 'default',
+  // 智能通知增强
+  notificationHistory: '',
+  notificationSound: true,
+  notifyCategories: 'entertainment,social',
+  customThresholds: ''
 };
 
 // 模块级缓存：避免每次调用都重新计算 Object.keys
 const ALL_PREF_KEYS = Object.keys(DEFAULT_PREFERENCES);
+
+// 日期工具（本地时间，不能用 toISOString 因为它返回 UTC）
+function _toLocalDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 // 统一获取偏好设置（供 popup/dashboard/background 共用）
 async function getPreferences() {
@@ -57,7 +72,16 @@ async function getPreferences() {
     dailySummaryHour: stored.dailySummaryHour != null ? Number(stored.dailySummaryHour) : defaults.dailySummaryHour,
     continuousEntertainmentMinutes: stored.continuousEntertainmentMinutes != null ? Number(stored.continuousEntertainmentMinutes) : defaults.continuousEntertainmentMinutes,
     learningDropAlertEnabled: stored.learningDropAlertEnabled === true || stored.learningDropAlertEnabled === 'true',
-    adaptiveThresholdEnabled: stored.adaptiveThresholdEnabled === true || stored.adaptiveThresholdEnabled === 'true'
+    adaptiveThresholdEnabled: stored.adaptiveThresholdEnabled === true || stored.adaptiveThresholdEnabled === 'true',
+    // 主题自定义
+    accentColor: stored.accentColor || defaults.accentColor,
+    fontSize: stored.fontSize || defaults.fontSize,
+    chartScheme: stored.chartScheme || defaults.chartScheme,
+    // 智能通知增强
+    notificationHistory: stored.notificationHistory || defaults.notificationHistory,
+    notificationSound: stored.notificationSound === true || stored.notificationSound === 'true',
+    notifyCategories: stored.notifyCategories != null ? stored.notifyCategories : defaults.notifyCategories,
+    customThresholds: stored.customThresholds != null ? stored.customThresholds : defaults.customThresholds
   };
 }
 
@@ -71,7 +95,7 @@ function validateBrowsingData(data) {
   return data.filter(r => r && typeof r === 'object' && r.url && r.visitTime).map(r => {
     // 确保 date 字段存在且格式正确
     if (!r.date || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) {
-      try { r.date = new Date(r.visitTime).toISOString().split('T')[0]; } catch { r.date = new Date().toISOString().split('T')[0]; }
+      try { r.date = _toLocalDate(r.visitTime); } catch { r.date = _toLocalDate(Date.now()); }
     }
     return r;
   });
@@ -262,7 +286,7 @@ class DataSync {
     }
   }
 
-  // 同步本地数据到服务器
+  // 完整同步流程：同步设置 → 同步分类规则 → 上传浏览数据 → 拉取服务端记录
   async syncLocalData() {
     try {
       // 同步设置和分类规则
@@ -299,7 +323,7 @@ class DataSync {
         // 确保 date 字段格式正确 (YYYY-MM-DD)
         let date = record.date;
         if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-          try { date = new Date(record.visitTime).toISOString().split('T')[0]; } catch { date = new Date().toISOString().split('T')[0]; }
+          try { date = _toLocalDate(record.visitTime); } catch { date = _toLocalDate(Date.now()); }
         }
 
         return {
@@ -338,7 +362,7 @@ class DataSync {
 
   // extractDomain 已移至 shared.js
 
-  // 从服务器拉取浏览记录，合并到本地
+  // 从服务器拉取浏览记录，按 url+visitTime 去重后合并到本地
   async pullFromServer() {
     await this.initUserId();
     const authHeaders = await this._getAuthHeaders();
@@ -367,7 +391,7 @@ class DataSync {
         category: sr.category || 'other',
         visitTime,
         duration: sr.duration || 0,
-        date: sr.date || new Date(visitTime).toISOString().split('T')[0]
+        date: sr.date || _toLocalDate(visitTime)
       });
       existingKeys.add(key);
       added++;
@@ -410,7 +434,7 @@ class DataSync {
     }
   }
 
-  // 双向同步设置（冲突解决：最后修改时间较新者优先）
+  // 双向同步设置 — 三方决策：云端更新→拉取 / 本地更新→推送 / 首次→推送本地
   async syncSettings() {
     await this.initUserId();
     const authHeaders = await this._getAuthHeaders();

@@ -1,10 +1,20 @@
+// BrowseMind 仪表盘 - 数据可视化与分析工作台
 // getPreferences(), DEFAULT_API_BASE_URL, DEFAULT_PREFERENCES, escapeHtml are defined in dataSync.js
 // getChartPalette, invalidateChartPalette, prefersReducedMotion, chartAnimation, CATEGORY_MAP, GOAL_TYPE_NAMES, todayString, getGridColor are in shared.js
+const DEBUG = false;
 
 let palette = getChartPalette();
 let dataSync = null;
 let _connectionCache = { result: null, time: 0 };
 const CONNECTION_CACHE_TTL = 30000; // 30s
+// Centralized CSS variable fallbacks for canvas rendering (hex required by Canvas API)
+const CSS_FALLBACKS = {
+  accent: '#6366f1', surface3: '#e5e5e5', green: '#22c55e', yellow: '#eab308',
+  surface: '#1a1a2e', text: '#e8e8e8', muted: '#888'
+};
+function cssVar(name, fallback) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
 async function cachedCheckConnection() {
   const now = Date.now();
   if (_connectionCache.result !== null && now - _connectionCache.time < CONNECTION_CACHE_TTL) {
@@ -23,6 +33,7 @@ let attentionChart = null;
 let habitTrendChart = null;
 let currentClassifiedData = [];
 let domainFilterTimer = null;
+// 侧边栏标签页 ID 列表（与 HTML data-sidebar-tab 属性对应）
 const SIDEBAR_TABS = ['dashboard', 'insights', 'actions', 'goals', 'settings'];
 
 // formatDuration() is defined in dataSync.js (shared with popup)
@@ -34,12 +45,28 @@ function log(message) {
   box.textContent = `[${time}] ${message}\n${lines.join('\n')}`;
 }
 // ==================== 主题切换 ====================
-function applyTheme(themeMode) {
+function applyTheme(themeMode, options = {}) {
   const html = document.documentElement;
   if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     html.setAttribute('data-theme', 'dark');
   } else {
     html.removeAttribute('data-theme');
+  }
+  // 主题自定义：强调色
+  if (options.accentColor !== undefined) {
+    applyAccentColor(options.accentColor);
+  }
+  // 主题自定义：字体大小
+  if (options.fontSize && options.fontSize !== 'medium') {
+    html.setAttribute('data-font-size', options.fontSize);
+  } else {
+    html.removeAttribute('data-font-size');
+  }
+  // 主题自定义：图表配色方案
+  if (options.chartScheme && options.chartScheme !== 'default') {
+    html.setAttribute('data-chart-scheme', options.chartScheme);
+  } else {
+    html.removeAttribute('data-chart-scheme');
   }
   invalidateChartPalette(); // Clear cache before re-reading
   const btn = document.getElementById('themeToggleBtn');
@@ -63,8 +90,8 @@ function applyTheme(themeMode) {
       trendChart.update();
     }
     if (hourlyChart) {
-      const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#6366f1';
-      const inactiveColor = getComputedStyle(document.documentElement).getPropertyValue('--surface-3').trim() || '#e5e5e5';
+      const accentColor = cssVar('--accent', CSS_FALLBACKS.accent);
+      const inactiveColor = cssVar('--surface-3', CSS_FALLBACKS.surface3);
       const active = hourlyChart._activeHours || hourlyChart.data.datasets[0].data.map(v => v > 0);
       hourlyChart.data.datasets[0].backgroundColor = active.map(on => on ? accentColor : inactiveColor);
       hourlyChart.options.scales.y.grid.color = gridColor;
@@ -87,8 +114,8 @@ async function cycleTheme() {
   log(`主题已切换：${themeMode}`);
 }
 async function loadTheme() {
-  const { themeMode = 'light' } = await chrome.storage.local.get('themeMode');
-  applyTheme(themeMode);
+  const { themeMode = 'light', accentColor = '', fontSize = 'medium', chartScheme = 'default' } = await chrome.storage.local.get(['themeMode', 'accentColor', 'fontSize', 'chartScheme']);
+  applyTheme(themeMode, { accentColor, fontSize, chartScheme });
   // Listen for system theme changes
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
     const { themeMode: current = 'light' } = await chrome.storage.local.get('themeMode');
@@ -137,10 +164,6 @@ function setNote(message, type = 'info') {
   }, 4000);
 }
 // getPreferences() 由 dataSync.js 提供
-async function getApiBaseUrl() {
-  const { apiBaseUrl } = await getPreferences();
-  return apiBaseUrl;
-}
 async function loadSidebarState() {
   const { dashboardSidebarCollapsed = false, dashboardActiveSidebarTab = 'dashboard' } = await chrome.storage.local.get(['dashboardSidebarCollapsed', 'dashboardActiveSidebarTab']);
   isSidebarCollapsed = Boolean(dashboardSidebarCollapsed);
@@ -178,6 +201,7 @@ async function toggleSidebar() {
     });
   }, 320);
 }
+// 侧边栏标签切换 — 管理面板显示/隐藏、图表生命周期、懒加载
 async function switchSidebarTab(tab, options = {}) {
   if (!SIDEBAR_TABS.includes(tab)) {
     tab = 'dashboard';
@@ -202,7 +226,7 @@ async function switchSidebarTab(tab, options = {}) {
   try {
     await chrome.storage.local.set({ dashboardActiveSidebarTab: tab });
   } catch (e) {
-    console.warn('保存标签状态失败:', e);
+    if (DEBUG) console.warn('保存标签状态失败:', e);
   }
   if (tab === 'dashboard') {
     // 重新渲染图表（从其他标签切回时）
@@ -238,8 +262,9 @@ async function switchSidebarTab(tab, options = {}) {
     if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
   }
   if (tab === 'settings') {
-    try { await loadPreferences(); } catch (e) { console.warn('加载设置失败:', e); }
+    try { await loadPreferences(); } catch (e) { if (DEBUG) console.warn('加载设置失败:', e); }
     renderOverrideRules();
+    renderNotificationHistory();
   }
   if (tab === 'insights') {
     loadLatestAIAnalysis().catch(() => {});
@@ -247,6 +272,7 @@ async function switchSidebarTab(tab, options = {}) {
     loadReports().catch(() => {});
     loadFocusStats().catch(() => {});
     loadLeaderboard().catch(() => {});
+    renderProductivityPanel().catch(() => {});
   }
 }
 function applyPreferencesToForm(preferences) {
@@ -274,6 +300,14 @@ function applyPreferencesToForm(preferences) {
   document.getElementById('continuousEntertainmentInput').value = preferences.continuousEntertainmentMinutes || 20;
   document.getElementById('learningDropAlertEnabledInput').checked = Boolean(preferences.learningDropAlertEnabled);
   document.getElementById('adaptiveThresholdEnabledInput').checked = Boolean(preferences.adaptiveThresholdEnabled);
+  // 主题自定义
+  document.getElementById('accentColorInput').value = preferences.accentColor || '#6366f1';
+  document.getElementById('fontSizeInput').value = preferences.fontSize || 'medium';
+  document.getElementById('chartSchemeInput').value = preferences.chartScheme || 'default';
+  // 通知规则
+  document.getElementById('notifyCategoriesInput').value = preferences.notifyCategories || 'entertainment,social';
+  document.getElementById('customThresholdsInput').value = preferences.customThresholds || '';
+  document.getElementById('notificationSoundInput').checked = preferences.notificationSound !== false;
 }
 function updateInterventionWarning() {
   const warnEl = document.getElementById('interventionWarning');
@@ -311,11 +345,19 @@ function readPreferencesFromForm() {
     dailySummaryHour: Math.max(0, Math.min(23, Number(document.getElementById('dailySummaryHourInput').value || 21))),
     continuousEntertainmentMinutes: Math.max(5, Math.min(120, Number(document.getElementById('continuousEntertainmentInput').value || 20))),
     learningDropAlertEnabled: document.getElementById('learningDropAlertEnabledInput').checked,
-    adaptiveThresholdEnabled: document.getElementById('adaptiveThresholdEnabledInput').checked
+    adaptiveThresholdEnabled: document.getElementById('adaptiveThresholdEnabledInput').checked,
+    // 主题自定义
+    accentColor: document.getElementById('accentColorInput').value,
+    fontSize: document.getElementById('fontSizeInput').value,
+    chartScheme: document.getElementById('chartSchemeInput').value,
+    // 通知规则
+    notifyCategories: document.getElementById('notifyCategoriesInput').value.trim(),
+    customThresholds: document.getElementById('customThresholdsInput').value.trim(),
+    notificationSound: document.getElementById('notificationSoundInput').checked
   };
 }
 async function initDataSync() {
-  const apiBaseUrl = await getApiBaseUrl();
+  const { apiBaseUrl } = await getPreferences();
   if (!dataSync || dataSync.apiBaseUrl !== apiBaseUrl) {
     dataSync = new DataSync(apiBaseUrl);
     _connectionCache = { result: null, time: 0 };
@@ -488,7 +530,7 @@ function renderHabitCard(classifiedData) {
     const history = scorer.computeScoreHistory(14);
     renderHabitTrendChart(history);
   } catch (e) {
-    console.warn('习惯评分渲染失败:', e);
+    if (DEBUG) console.warn('习惯评分渲染失败:', e);
     card.style.display = 'none';
   }
 }
@@ -538,16 +580,16 @@ function renderHabitTrendChart(history) {
         c.save();
         c.setLineDash([4, 4]);
         c.lineWidth = 1;
-        c.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--green').trim() || '#22c55e';
+        c.strokeStyle = cssVar('--green', CSS_FALLBACKS.green);
         c.beginPath(); c.moveTo(chartArea.left, y70); c.lineTo(chartArea.right, y70); c.stroke();
-        c.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim() || '#eab308';
+        c.strokeStyle = cssVar('--yellow', CSS_FALLBACKS.yellow);
         c.beginPath(); c.moveTo(chartArea.left, y40); c.lineTo(chartArea.right, y40); c.stroke();
         c.restore();
       }
     }]
   });
 }
-let domainTrendChart = null;
+let _domainTrendChart = null;
 
 function showDomainDetail(domain) {
   const modal = document.getElementById('domainDetailModal');
@@ -563,7 +605,7 @@ function showDomainDetail(domain) {
   const totalVisits = records.length;
   const firstVisit = records[0].date || '';
   const lastVisit = records[records.length - 1].date || '';
-  const catName = CATEGORY_MAP[records[0].category] || '其他';
+  const catName = WebsiteClassifier.CATEGORY_NAMES[records[0].category] || '其他';
 
   title.textContent = domain;
   stats.innerHTML = `<div style="flex:1;min-width:60px;text-align:center;"><div style="font-size:22px;font-weight:700;color:var(--accent);">${formatDuration(totalDuration)}</div><div style="font-size:11px;color:var(--muted);">总时长</div></div><div style="flex:1;min-width:60px;text-align:center;"><div style="font-size:22px;font-weight:700;">${totalVisits}</div><div style="font-size:11px;color:var(--muted);">访问次数</div></div><div style="flex:1;min-width:60px;text-align:center;"><div style="font-size:14px;font-weight:600;">${escapeHtml(catName)}</div><div style="font-size:11px;color:var(--muted);">分类</div></div><div style="flex:1;min-width:60px;text-align:center;"><div style="font-size:13px;">${firstVisit} ~ ${lastVisit}</div><div style="font-size:11px;color:var(--muted);">时间范围</div></div>`;
@@ -584,10 +626,10 @@ function renderDomainTrendChart(history) {
   const canvas = document.getElementById('domainTrendChart');
   if (!canvas || !history || history.length < 2) { if (canvas) canvas.style.display = 'none'; return; }
   canvas.style.display = '';
-  if (domainTrendChart) { domainTrendChart.destroy(); domainTrendChart = null; }
+  if (_domainTrendChart) { _domainTrendChart.destroy(); _domainTrendChart = null; }
   const ctx = canvas.getContext('2d');
   const palette = getChartPalette();
-  domainTrendChart = new Chart(ctx, {
+  _domainTrendChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: history.map(h => h.date.slice(5)),
@@ -616,7 +658,7 @@ function renderCategoryList(categoryStats, classifier) {
     return `<div class="category-row"><div><strong>${info.icon} ${escapeHtml(info.name)}</strong><div class="category-meta">${stat.visits} 次</div></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(percentage, 100)}%; background:${palette[index % palette.length]}"></div></div><div class="category-meta">${percentage.toFixed(1)}%</div></div>`;
   }).join('');
 }
-const DOMAIN_PAGE_SIZE = 50;
+const DOMAIN_PAGE_SIZE = 50; // 域名排行榜每页显示数量
 let _allDomains = [];
 let _domainPage = 1;
 
@@ -700,8 +742,8 @@ function renderHourlyChart(hourlyDist) {
   const labels = allHours.map(item => `${item.hour}:00`);
   const data = allHours.map(item => Math.round(item.duration / 60));
   const activeHours = allHours.map(item => item.duration > 0);
-  const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#6366f1';
-  const inactiveColor = getComputedStyle(document.documentElement).getPropertyValue('--surface-3').trim() || '#e5e5e5';
+  const accentColor = cssVar('--accent', CSS_FALLBACKS.accent);
+  const inactiveColor = cssVar('--surface-3', CSS_FALLBACKS.surface3);
   const bgColors = activeHours.map(active => active ? accentColor : inactiveColor);
   if (hourlyChart) {
     hourlyChart.data.labels = labels;
@@ -726,7 +768,7 @@ function switchDashboardChart(chartType) {
   const tabs = document.querySelectorAll('#dashboardChartTabs .chart-tab');
   tabs.forEach(t => t.classList.toggle('active', t.dataset.chart === chartType));
   const desc = document.getElementById('trendChartDesc');
-  const titles = { trend: ['趋势', '时长与访问次数'], radar: ['雷达', '本周 vs 上周分类对比'], sunburst: ['层级', '分类 → 域名分布'], scatter: ['散点', '访问时间 vs 停留时长'] };
+  const titles = { trend: ['趋势', '时长与访问次数'], radar: ['雷达', '本周 vs 上周分类对比'], sunburst: ['层级', '分类 → 域名分布'], scatter: ['散点', '访问时间 vs 停留时长'], stackedArea: ['面积', '7 天分类趋势'], treemap: ['域名图', '按停留时长排序'] };
   const [title, descText] = titles[chartType] || titles.trend;
   document.getElementById('trendChartTitle').textContent = title;
   if (desc) desc.textContent = descText;
@@ -738,6 +780,8 @@ function _renderActiveDashboardChart() {
     case 'radar': renderRadarChart(); break;
     case 'sunburst': renderSunburstChart(); break;
     case 'scatter': renderScatterChart(); break;
+    case 'stackedArea': renderStackedAreaChart(); break;
+    case 'treemap': renderTreemap(); break;
     default: if (currentClassifiedData.length) { const analyzer = new StatisticsAnalyzer(currentClassifiedData); renderTrendChart(calculateDailyTrend(currentClassifiedData)); } break;
   }
 }
@@ -762,16 +806,16 @@ function bindDashboardChartSwitcher() {
     if (days === 'all') { fromInput.value = ''; toInput.value = ''; }
     else {
       const from = new Date(to); from.setDate(to.getDate() - parseInt(days) + 1);
-      fromInput.value = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
-      toInput.value = `${to.getFullYear()}-${String(to.getMonth() + 1).padStart(2, '0')}-${String(to.getDate()).padStart(2, '0')}`;
+      fromInput.value = toLocalDate(from);
+      toInput.value = toLocalDate(to);
     }
     applyRange();
   }));
   // Set defaults
   const today = new Date();
   const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 6);
-  toInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  fromInput.value = `${weekAgo.getFullYear()}-${String(weekAgo.getMonth() + 1).padStart(2, '0')}-${String(weekAgo.getDate()).padStart(2, '0')}`;
+  toInput.value = toLocalDate(today);
+  fromInput.value = toLocalDate(weekAgo);
 }
 
 function applyDateRange(from, to) {
@@ -795,15 +839,14 @@ function destroyDashboardChart() { if (trendChart) { trendChart.destroy(); trend
 // 雷达图：本周 vs 上周分类对比
 function renderRadarChart() {
   destroyDashboardChart();
-  const categories = ['learning', 'coding', 'entertainment', 'social', 'tools', 'other'];
-  const catLabels = ['学习', '编程', '娱乐', '社交', '工具', '其他'];
+  const categories = WebsiteClassifier.CATEGORIES;
+  const catLabels = Object.values(WebsiteClassifier.CATEGORY_NAMES);
   const today = new Date();
-  const toStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const thisWeekStart = new Date(today); thisWeekStart.setDate(today.getDate() - 6);
   const lastWeekStart = new Date(today); lastWeekStart.setDate(today.getDate() - 13);
   const lastWeekEnd = new Date(today); lastWeekEnd.setDate(today.getDate() - 7);
   const sumByCat = (data, from, to) => {
-    const fromStr = toStr(from), toStr2 = toStr(to);
+    const fromStr = toLocalDate(from), toStr2 = toLocalDate(to);
     const filtered = data.filter(r => r.date >= fromStr && r.date <= toStr2);
     const total = filtered.reduce((s, r) => s + (r.duration || 0), 0) || 1;
     return categories.map(c => {
@@ -827,7 +870,7 @@ function renderRadarChart() {
 // 嵌套环形图：分类 → 域名层级
 function renderSunburstChart() {
   destroyDashboardChart();
-  const categories = ['learning', 'coding', 'entertainment', 'social', 'tools', 'other'];
+  const categories = WebsiteClassifier.CATEGORIES;
   const catTotals = {};
   const domainByCat = {};
   currentClassifiedData.forEach(r => {
@@ -885,7 +928,176 @@ function renderScatterChart() {
   });
 }
 
+// 堆叠面积图：7 天各分类趋势
+function renderStackedAreaChart() {
+  destroyDashboardChart();
+  const cats = WebsiteClassifier.CATEGORIES;
+  const catNames = WebsiteClassifier.CATEGORY_NAMES;
+  const pal = getChartPalette();
+  const palAlpha = getChartPaletteWithAlpha(0.35);
+  const today = new Date();
+  const labels = [];
+  const dailyData = {};
+  cats.forEach(c => dailyData[c] = []);
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const ds = toLocalDate(d.getTime());
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    labels.push(`${month}/${day}`);
+    const dayRecords = currentClassifiedData.filter(r => r.date === ds);
+    cats.forEach(cat => {
+      const total = dayRecords.filter(r => r.category === cat).reduce((s, r) => s + (r.duration || 0), 0);
+      dailyData[cat].push(Math.round(total / 60));
+    });
+  }
+  const datasets = cats.map((cat, i) => ({
+    label: catNames[cat] || cat,
+    data: dailyData[cat],
+    backgroundColor: palAlpha[i],
+    borderColor: pal[i],
+    borderWidth: 1.5,
+    fill: 'origin',
+    tension: 0.35,
+    pointRadius: 3,
+    pointHoverRadius: 5
+  }));
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: chartAnimation,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { grid: { color: getGridColor() } },
+        y: { stacked: true, beginAtZero: true, title: { display: true, text: '分钟' }, grid: { color: getGridColor() } }
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true } },
+        tooltip: { mode: 'index', callbacks: { footer: (items) => `合计: ${items.reduce((s, i) => s + i.parsed.y, 0)} 分钟` } }
+      }
+    }
+  });
+}
+
+// 域名 treemap（Canvas 手动绘制）
+function renderTreemap() {
+  destroyDashboardChart();
+  const canvas = document.getElementById('trendChart');
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+
+  // Aggregate by domain
+  const domainMap = {};
+  currentClassifiedData.forEach(r => {
+    const d = r.domain || 'unknown';
+    if (!domainMap[d]) domainMap[d] = { domain: d, category: r.category || 'other', duration: 0 };
+    domainMap[d].duration += (r.duration || 0);
+  });
+  const domains = Object.values(domainMap).sort((a, b) => b.duration - a.duration).slice(0, 24);
+  const total = domains.reduce((s, d) => s + d.duration, 0);
+  if (total === 0) {
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#999';
+    ctx.font = '14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('暂无数据', W / 2, H / 2);
+    return;
+  }
+
+  const catColors = getCategoryColors();
+  const pal = getChartPalette();
+  const getColor = (cat, idx) => catColors[cat] || pal[idx % pal.length];
+
+  // Squarified treemap layout
+  function squarify(items, x, y, w, h) {
+    if (items.length === 0 || w <= 0 || h <= 0) return;
+    if (items.length === 1) {
+      items[0].rect = { x, y, w, h };
+      return;
+    }
+    const sum = items.reduce((s, d) => s + d.duration, 0);
+    const vertical = w >= h;
+    let acc = 0;
+    let bestIdx = 0;
+    let bestRatio = Infinity;
+    const side = vertical ? h : w;
+    for (let i = 0; i < items.length; i++) {
+      acc += items[i].duration;
+      const segW = (acc / sum) * (vertical ? w : h);
+      const worst = Math.max(...items.slice(0, i + 1).map(d => {
+        const segH = (d.duration / acc) * side;
+        return Math.max(segW / segH, segH / segW);
+      }));
+      if (worst < bestRatio) { bestRatio = worst; bestIdx = i; }
+    }
+    const group = items.slice(0, bestIdx + 1);
+    const rest = items.slice(bestIdx + 1);
+    const groupSum = group.reduce((s, d) => s + d.duration, 0);
+    const frac = groupSum / sum;
+    if (vertical) {
+      const gw = w * frac;
+      let gy = y;
+      group.forEach(d => { const gh = (d.duration / groupSum) * h; d.rect = { x, y: gy, w: gw, h: gh }; gy += gh; });
+      squarify(rest, x + gw, y, w - gw, h);
+    } else {
+      const gh = h * frac;
+      let gx = x;
+      group.forEach(d => { const gw2 = (d.duration / groupSum) * w; d.rect = { x: gx, y, w: gw2, h: gh }; gx += gw2; });
+      squarify(rest, x, y + gh, w, h - gh);
+    }
+  }
+  squarify(domains, 1, 1, W - 2, H - 2);
+
+  // Draw
+  const cs = getComputedStyle(document.documentElement);
+  const textColor = cs.getPropertyValue('--text').trim() || '#1a1a1a';
+  const mutedColor = cs.getPropertyValue('--muted').trim() || '#666';
+  const surfaceColor = cs.getPropertyValue('--surface').trim() || '#fff';
+  ctx.font = '600 11px system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  domains.forEach((d, idx) => {
+    const r = d.rect;
+    if (!r || r.w < 2 || r.h < 2) return;
+    const color = getColor(d.category, idx);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, 3);
+    ctx.fill();
+    // Label — only if rect is large enough
+    if (r.w > 40 && r.h > 22) {
+      const pct = Math.round(d.duration / total * 100);
+      const label = d.domain.replace(/^www\./, '');
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = 2;
+      ctx.font = `600 ${Math.max(10, Math.min(13, r.w / 8))}px system-ui, sans-serif`;
+      const maxW = r.w - 8;
+      let displayLabel = label;
+      while (ctx.measureText(displayLabel).width > maxW && displayLabel.length > 3) displayLabel = displayLabel.slice(0, -1);
+      if (r.h > 34) {
+        ctx.fillText(displayLabel, r.x + 4, r.y + r.h / 2 - 7, maxW);
+        ctx.font = '400 10px system-ui, sans-serif';
+        ctx.fillText(`${formatDuration(d.duration)} (${pct}%)`, r.x + 4, r.y + r.h / 2 + 8, maxW);
+      } else {
+        ctx.fillText(displayLabel, r.x + 4, r.y + r.h / 2, maxW);
+      }
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+    }
+  });
+}
+
 // ==================== 活跃热力图（GitHub 贡献图风格） ====================
+// GitHub 风格热力图 — 按日聚合浏览时长，自适应单元格大小，支持月份边界和 tooltip
 function renderHeatmap(browsingData) {
   const grid = document.getElementById('heatmapGrid');
   const labelsEl = document.getElementById('heatmapLabels');
@@ -895,7 +1107,7 @@ function renderHeatmap(browsingData) {
   // Aggregate duration by date
   const dailyDuration = {};
   for (const r of browsingData) {
-    const d = r.date || (r.visitTime ? (() => { const dt = new Date(r.visitTime); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; })() : null);
+    const d = r.date || (r.visitTime ? toLocalDate(r.visitTime) : null);
     if (d) dailyDuration[d] = (dailyDuration[d] || 0) + (r.duration || 0);
   }
 
@@ -988,9 +1200,18 @@ function renderHeatmap(browsingData) {
     summaryEl.textContent = `过去 26 周共 ${activeDays} 天有浏览活动，平均每日 ${formatDuration(avgDuration)}${maxDay ? '，最活跃日 ' + maxDay[0] + ' ' + formatDuration(maxDay[1]) : ''}`;
   }
 
-  // GitHub-style tooltip
+  // GitHub-style tooltip — hover 显示时长 + 当日 Top 3 域名
   const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const monthFull = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  // 预构建日期→域名聚合索引
+  const dateDomainMap = {};
+  for (const r of browsingData) {
+    const d = r.date || (r.visitTime ? toLocalDate(r.visitTime) : null);
+    if (!d) continue;
+    if (!dateDomainMap[d]) dateDomainMap[d] = {};
+    const dom = (r.domain || '').replace(/^www\./, '');
+    dateDomainMap[d][dom] = (dateDomainMap[d][dom] || 0) + (r.duration || 0);
+  }
   grid.onmousemove = (e) => {
     const cell = e.target.closest('.heatmap-cell');
     if (!cell) { tip.classList.remove('visible'); return; }
@@ -999,9 +1220,13 @@ function renderHeatmap(browsingData) {
     const dur = Number(cell.dataset.duration);
     const label = dur > 0 ? `<span class="tip-count">${formatDuration(dur)}</span> 浏览时间` : '无浏览数据';
     const dateLabel = `${weekdays[d.getDay()]}，${monthFull[d.getMonth()]}${d.getDate()}日`;
-    tip.innerHTML = `${label}<br><span class="tip-date">${dateLabel}</span>`;
-    tip.style.left = e.clientX + 12 + 'px';
-    tip.style.top = e.clientY - 40 + 'px';
+    let domainHtml = '';
+    if (dur > 0 && dateDomainMap[dateStr]) {
+      const top3 = Object.entries(dateDomainMap[dateStr]).sort((a, b) => b[1] - a[1]).slice(0, 3);
+      domainHtml = top3.map(([dom, dur2]) => `<br><span class="tip-date">${dom} ${formatDuration(dur2)}</span>`).join('');
+    }
+    tip.innerHTML = `${label}<br><span class="tip-date">${dateLabel}</span>${domainHtml}`;
+    tip.style.transform = `translate(${e.clientX + 12}px, ${e.clientY - 40}px)`;
     tip.classList.add('visible');
   };
   grid.onmouseleave = () => tip.classList.remove('visible');
@@ -1011,7 +1236,7 @@ function renderHeatmap(browsingData) {
 let _timelineData = [];
 let _timelineTimer = null;
 let _timelineView = 'list';
-let timelineChart = null;
+let _timelineChart = null;
 
 function renderTimeline(browsingData) {
   _timelineData = browsingData.slice().sort((a, b) => (b.visitTime || 0) - (a.visitTime || 0));
@@ -1085,10 +1310,11 @@ function _debounceTimeline() {
   _timelineTimer = setTimeout(_applyTimelineFilter, 250);
 }
 
+// 时间线浮动条形图 — 每条记录按访问时间排列，条长度表示时长，颜色表示分类
 function renderTimelineChart(records, catColors) {
   const canvas = document.getElementById('timelineChart');
   if (!canvas || !records.length) return;
-  if (timelineChart) { timelineChart.destroy(); timelineChart = null; }
+  if (_timelineChart) { _timelineChart.destroy(); _timelineChart = null; }
 
   // 按时间排序，取前 80 条避免图表过密
   const sorted = records.slice().sort((a, b) => (a.visitTime || 0) - (b.visitTime || 0)).slice(0, 80);
@@ -1112,7 +1338,7 @@ function renderTimelineChart(records, catColors) {
   const ctx = canvas.getContext('2d');
   canvas.height = Math.max(160, sorted.length * 18 + 40);
 
-  timelineChart = new Chart(ctx, {
+  _timelineChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels,
@@ -1166,32 +1392,32 @@ function renderTimelineChart(records, catColors) {
 
 function renderBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
-  if (!blackholes || !blackholes.top_blackholes || !blackholes.top_blackholes.length) {
+  if (!blackholes || !blackholes.topBlackholes || !blackholes.topBlackholes.length) {
     container.innerHTML = '<div class="empty">没有明显的时间黑洞 — 你的浏览节奏很健康。</div>';
     return;
   }
-  const items = blackholes.top_blackholes.slice(0, 5).map(item => {
-    const pct = blackholes.total_wasted_time > 0 ? Math.round(item.total_duration / blackholes.total_wasted_time * 100) : 0;
+  const items = blackholes.topBlackholes.slice(0, 5).map(item => {
+    const pct = blackholes.totalWastedTime > 0 ? Math.round(item.totalDuration / blackholes.totalWastedTime * 100) : 0;
     const catName = WebsiteClassifier.CATEGORY_NAMES[item.category] || '其他';
-    const typeLabel = WebsiteClassifier.BLACKHOLE_TYPE_LABELS[item.blackhole_type] || '';
-    const meta = item.blackhole_type === 'high_frequency'
-      ? `${item.visit_count} 次访问 · 累计 ${formatDuration(item.total_duration)}`
-      : `${item.long_sessions_count} 次长访问 · 最长 ${formatDuration(item.longest_session)}`;
-    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(item.domain)} <span style="font-size:11px;font-weight:500;color:var(--muted);background:var(--surface-2);padding:1px 6px;border-radius:4px;">${catName}</span> <span style="font-size:11px;font-weight:500;color:var(--yellow);">${typeLabel}</span></div><div class="domain-meta">${meta}</div></div><div style="text-align:right"><div class="domain-meta">${formatDuration(item.total_duration)}</div><div class="domain-meta" style="font-size:11px">${pct}%</div></div></div>`;
+    const typeLabel = WebsiteClassifier.BLACKHOLE_TYPE_LABELS[item.blackholeType] || '';
+    const meta = item.blackholeType === 'high_frequency'
+      ? `${item.visitCount} 次访问 · 累计 ${formatDuration(item.totalDuration)}`
+      : `${item.longSessionsCount} 次长访问 · 最长 ${formatDuration(item.longestSession)}`;
+    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(item.domain)} <span style="font-size:11px;font-weight:500;color:var(--muted);background:var(--surface-2);padding:1px 6px;border-radius:4px;">${catName}</span> <span style="font-size:11px;font-weight:500;color:var(--yellow);">${typeLabel}</span></div><div class="domain-meta">${meta}</div></div><div style="text-align:right"><div class="domain-meta">${formatDuration(item.totalDuration)}</div><div class="domain-meta" style="font-size:11px">${pct}%</div></div></div>`;
   }).join('');
-  const wp = Number(blackholes.waste_percentage || 0).toFixed(1);
-  container.innerHTML = `<div class="status-note danger"><strong>${wp}%</strong> 的时间陷入黑洞 · 共 ${formatDuration(blackholes.total_wasted_time)}</div>${items}`;
+  const wp = Number(blackholes.wastePercentage || 0).toFixed(1);
+  container.innerHTML = `<div class="status-note danger"><strong>${wp}%</strong> 的时间陷入黑洞 · 共 ${formatDuration(blackholes.totalWastedTime)}</div>${items}`;
 }
 function renderAttentionCurve(attentionCurve) {
   const statsContainer = document.getElementById('attentionStats');
-  if (!attentionCurve || !attentionCurve.hourly_focus) {
+  if (!attentionCurve || !attentionCurve.hourlyFocus) {
     statsContainer.innerHTML = '<div class="empty">专注曲线需要更多数据 — 同步后再来看看。</div>';
     return;
   }
-  const peakLabels = (attentionCurve.peak_hours || []).map(h => `${h}:00`).join('、') || '—';
+  const peakLabels = (attentionCurve.peakHours || []).map(h => `${escapeHtml(String(h))}:00`).join('、') || '—';
   const recommendation = attentionCurve.recommendations && attentionCurve.recommendations[0] ? `<div class="status-note">${escapeHtml(attentionCurve.recommendations[0])}</div>` : '';
-  statsContainer.innerHTML = `<div class="insight-cards"><div class="insight-card"><span>专注分数</span><strong>${Math.round(attentionCurve.focus_score || 0)}</strong></div><div class="insight-card"><span>高效时段</span><strong>${(attentionCurve.peak_hours || []).length}</strong><small>${peakLabels}</small></div></div>${recommendation}`;
-  const activeHours = attentionCurve.hourly_focus.filter(item => item.total_duration > 0);
+  statsContainer.innerHTML = `<div class="insight-cards"><div class="insight-card"><span>专注分数</span><strong>${Math.round(attentionCurve.focusScore || 0)}</strong></div><div class="insight-card"><span>高效时段</span><strong>${(attentionCurve.peakHours || []).length}</strong><small>${peakLabels}</small></div></div>${recommendation}`;
+  const activeHours = attentionCurve.hourlyFocus.filter(item => item.totalDuration > 0);
   if (!activeHours.length) { if (attentionChart) { attentionChart.destroy(); attentionChart = null; } return; }
   const labels = activeHours.map(item => `${item.hour}:00`);
   const scores = activeHours.map(item => item.score);
@@ -1211,10 +1437,7 @@ function renderAIAnalysis(analysis) {
   const container = document.getElementById('aiAnalysisResult');
 
   const categoryColors = getCategoryColors();
-  const categoryNames = {
-    learning: '学习', coding: '编程', entertainment: '娱乐',
-    social: '社交', tools: '工具', other: '其他'
-  };
+  const categoryNames = WebsiteClassifier.CATEGORY_NAMES;
 
   // 1. 总结卡片
   let html = `<div class="ai-summary-card"><div class="ai-summary-label">行为总结</div><p>${escapeHtml(analysis.summary || '暂无总结')}</p></div>`;
@@ -1237,7 +1460,7 @@ function renderAIAnalysis(analysis) {
   // 3. 热门网站表格
   const domains = analysis.top_domains || [];
   if (domains.length > 0) {
-    const rows = domains.slice(0, 8).map((d, i) => `<tr><td style="color:var(--muted);font-size:11px;">${i + 1}</td><td class="domain-name">${escapeHtml(d.domain)}</td><td>${d.visits} 次</td><td class="domain-dur">${formatDuration(d.total_duration)}</td></tr>`).join('');
+    const rows = domains.slice(0, 8).map((d, i) => `<tr><td style="color:var(--muted);font-size:11px;">${i + 1}</td><td class="domain-name">${escapeHtml(d.domain)}</td><td>${d.visits} 次</td><td class="domain-dur">${formatDuration(d.totalDuration)}</td></tr>`).join('');
     html += `<div class="ai-table-wrap"><div class="ai-table-title">热门网站</div><table class="ai-table"><thead><tr><th>#</th><th>网站</th><th>访问</th><th>时长</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
@@ -1274,7 +1497,7 @@ function renderReports(reports) {
         <div class="report-card-meta">
           <span class="report-type-badge">${escapeHtml(typeLabel)}</span>
           <span class="report-date">${escapeHtml(date)}</span>
-          ${report.total_duration ? `<span class="report-duration">${formatDuration(report.total_duration)}</span>` : ''}
+          ${report.totalDuration ? `<span class="report-duration">${formatDuration(report.totalDuration)}</span>` : ''}
         </div>
         <div class="report-card-summary">${escapeHtml(summary) || '暂无总结'}</div>
         <div class="report-card-indicator" aria-hidden="true">▼</div>
@@ -1320,7 +1543,7 @@ async function loadAdvancedInsights() {
     if (response.ok) {
       const analysis = await response.json();
       renderBlackholes(analysis.blackholes);
-      renderAttentionCurve(analysis.attention_curve);
+      renderAttentionCurve(analysis.attentionCurve);
       return;
     }
     if (response.status !== 404) {
@@ -1338,7 +1561,7 @@ async function loadAdvancedInsights() {
   const localAnalyzer = new LocalAdvancedAnalyzer(preferences.blackholeThresholdMinutes);
   const analysis = localAnalyzer.analyzeAll(browsingData, preferences.blackholeThresholdMinutes);
   renderBlackholes(analysis.blackholes);
-  renderAttentionCurve(analysis.attention_curve);
+  renderAttentionCurve(analysis.attentionCurve);
 }
 
 async function runComparison() {
@@ -1371,8 +1594,8 @@ async function runComparison() {
 function renderComparison(data, p1Days, p2Days) {
   const container = document.getElementById('compareResult');
   if (!data || !data.period1 || !data.period2) { container.innerHTML = '<div class="goal-card"><p class="muted">对比数据不可用。</p></div>'; return; }
-  const p1Dur = data.period1.total_duration || 0;
-  const p2Dur = data.period2.total_duration || 0;
+  const p1Dur = data.period1.totalDuration || 0;
+  const p2Dur = data.period2.totalDuration || 0;
   const absDiff = p1Dur - p2Dur;
   const absIcon = absDiff > 0 ? '+' : '';
 
@@ -1432,6 +1655,69 @@ function renderComparison(data, p1Days, p2Days) {
 
 let _focusTimer = null;
 
+// 效率报告面板 — 本周 vs 上周对比 + 效率趋势
+async function renderProductivityPanel() {
+  const container = document.getElementById('productivityPanel');
+  if (!container) return;
+  const { browsingData = [], classificationOverrides = {}, classificationFeedback = [] } = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback']);
+  const data = validateBrowsingData(browsingData);
+  if (data.length < 3) { container.innerHTML = '<div class="empty">积累几天数据后生成效率报告。</div>'; return; }
+
+  const processor = new DataProcessor(data);
+  const cleaned = processor.clean().getData();
+  const classifier = new WebsiteClassifier(classificationOverrides, classificationFeedback);
+  const classified = classifier.classifyBatch(cleaned);
+  const scorer = new HabitScorer(classified);
+  const comparison = scorer.computeWeeklyComparison();
+  const scoreHistory = scorer.computeScoreHistory(7);
+  const todayScore = scorer.computeDailyScore(_toLocalDate(Date.now()));
+
+  // 效率分环形图
+  const scoreColor = todayScore >= 70 ? 'var(--green)' : todayScore >= 40 ? 'var(--yellow)' : 'var(--red)';
+  const scoreLabel = todayScore >= 80 ? '优秀' : todayScore >= 60 ? '良好' : todayScore >= 40 ? '一般' : '需改善';
+
+  // 趋势迷你图（最近 7 天）
+  const trendBars = scoreHistory.map(s => {
+    const h = Math.max(4, Math.round(s.score * 0.6));
+    const color = s.score >= 70 ? 'var(--green)' : s.score >= 40 ? 'var(--yellow)' : 'var(--red)';
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="width:100%;max-width:24px;height:${h}px;background:${color};border-radius:3px 3px 0 0;"></div><span style="font-size:9px;color:var(--muted);">${s.date.slice(5)}</span></div>`;
+  }).join('');
+
+  // 周对比指标
+  const pct = (v) => v > 0 ? `<span style="color:var(--green);">+${v}%</span>` : v < 0 ? `<span style="color:var(--red);">${v}%</span>` : '<span style="color:var(--muted);">持平</span>';
+  const pt = (v) => v > 0 ? `<span style="color:var(--green);">+${v}分</span>` : v < 0 ? `<span style="color:var(--red);">${v}分</span>` : '<span style="color:var(--muted);">持平</span>';
+
+  // 最佳/最差日
+  const scored = scoreHistory.filter(s => s.score != null);
+  const best = scored.reduce((a, b) => b.score > a.score ? b : a, scored[0]);
+  const worst = scored.reduce((a, b) => b.score < a.score ? b : a, scored[0]);
+
+  container.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3);">
+      <div style="text-align:center;padding:var(--space-3);background:var(--surface-2);border-radius:var(--radius-md);">
+        <div style="font-size:32px;font-weight:700;color:${scoreColor};">${todayScore ?? '--'}</div>
+        <div style="font-size:12px;color:var(--muted);">今日效率分 · ${scoreLabel}</div>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:4px;padding:var(--space-3) var(--space-2);background:var(--surface-2);border-radius:var(--radius-md);height:80px;">${trendBars}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--space-2);font-size:12px;margin-bottom:var(--space-3);">
+      <div style="text-align:center;padding:var(--space-2);background:var(--surface-2);border-radius:var(--radius-sm);">
+        <div style="font-weight:600;">${formatDuration(comparison.thisWeek.totalDuration)}</div>
+        <div style="color:var(--muted);">本周总时长 ${pct(comparison.diff.totalChange)}</div>
+      </div>
+      <div style="text-align:center;padding:var(--space-2);background:var(--surface-2);border-radius:var(--radius-sm);">
+        <div style="font-weight:600;">${comparison.thisWeek.focusRatio}%</div>
+        <div style="color:var(--muted);">专注比例 ${pct(comparison.diff.ratioChange)}</div>
+      </div>
+      <div style="text-align:center;padding:var(--space-2);background:var(--surface-2);border-radius:var(--radius-sm);">
+        <div style="font-weight:600;">${comparison.thisWeek.avgScore}分</div>
+        <div style="color:var(--muted);">平均效率 ${pt(comparison.diff.scoreChange)}</div>
+      </div>
+    </div>
+    ${best && worst ? `<div style="font-size:12px;color:var(--muted);">最佳：<strong style="color:var(--green);">${best.date.slice(5)}</strong> (${best.score}分) · 最差：<strong style="color:var(--red);">${worst.date.slice(5)}</strong> (${worst.score}分)</div>` : ''}
+  `;
+}
+
 async function loadFocusStats() {
   // 查询当前会话状态
   let status = { active: false };
@@ -1440,7 +1726,7 @@ async function loadFocusStats() {
       const timer = setTimeout(() => resolve({ active: false }), 2000);
       chrome.runtime.sendMessage({ action: 'focusStatus' }, res => {
         clearTimeout(timer);
-        if (chrome.runtime.lastError) console.warn('focusStatus:', chrome.runtime.lastError.message);
+        if (chrome.runtime.lastError) if (DEBUG) console.warn('focusStatus:', chrome.runtime.lastError.message);
         resolve(res?.status || { active: false });
       });
     });
@@ -1450,11 +1736,7 @@ async function loadFocusStats() {
   // 统计今日专注时长
   const { focusSessions = [] } = await chrome.storage.local.get('focusSessions');
   const today = todayString();
-  const todaySessions = focusSessions.filter(s => {
-    const dt = new Date(s.startTime);
-    const d = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-    return d === today;
-  });
+  const todaySessions = focusSessions.filter(s => toLocalDate(s.startTime) === today);
   const todayMinutes = Math.round(todaySessions.reduce((sum, s) => sum + (s.completed ? s.actualDuration : 0), 0) / 60);
   document.getElementById('focusTodayTime').textContent = todayMinutes;
 
@@ -1468,7 +1750,6 @@ async function loadFocusStats() {
 
 function calculateFocusStreak(sessions) {
   if (!sessions.length) return 0;
-  const toLocalDate = (ts) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const completedDates = new Set(
     sessions.filter(s => s.completed).map(s => toLocalDate(s.startTime))
   );
@@ -1524,7 +1805,7 @@ function renderFocusHistory(sessions) {
     const timeStr = `${start.getHours()}:${String(start.getMinutes()).padStart(2, '0')}`;
     const dur = Math.round(s.actualDuration / 60);
     const status = s.completed ? '<span style="color:var(--green);">完成</span>' : '<span style="color:var(--red);">中断</span>';
-    return `<div class="domain-row"><div><div class="domain-name">${timeStr} · ${dur} 分钟</div><div class="domain-meta">打断 ${s.interruptions} 次</div></div>${status}</div>`;
+    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(timeStr)} · ${dur} 分钟</div><div class="domain-meta">打断 ${Number(s.interruptions) || 0} 次</div></div>${status}</div>`;
   }).join('');
   container.innerHTML = `<div style="font-size:12px;font-weight:600;margin-bottom:6px;">最近会话</div>${html}`;
 }
@@ -1571,13 +1852,13 @@ async function loadReports(reportType) {
     const response = await authFetch(`${dataSync.apiBaseUrl}/api/reports/${dataSync.userId}?limit=10${typeParam}`);
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
-      console.error('历史报告加载失败:', response.status, errorText);
+      if (DEBUG) console.error('历史报告加载失败:', response.status, errorText);
       renderReports([]);
       return;
     }
     renderReports(await response.json());
   } catch (error) {
-    console.error('历史报告加载失败:', error);
+    if (DEBUG) console.error('历史报告加载失败:', error);
     renderReports([]);
   }
 }
@@ -1647,7 +1928,7 @@ async function loadLeaderboard() {
     const data = await response.json();
     renderLeaderboard(data.entries || [], sortBy);
   } catch (error) {
-    console.error('排行榜加载失败:', error);
+    if (DEBUG) console.error('排行榜加载失败:', error);
     container.innerHTML = '<div class="empty">加载排行榜失败。</div>';
   }
 }
@@ -1658,7 +1939,7 @@ function renderLeaderboard(entries, sortBy) {
     container.innerHTML = '<div class="empty">暂无排行数据，点击"加入排行"成为第一位参与者。</div>';
     return;
   }
-  const labels = { learning_duration: '学习时长', focus_duration: '专注时长', total_duration: '总浏览时长' };
+  const labels = { learning_duration: '学习时长', focus_duration: '专注时长', totalDuration: '总浏览时长' };
   const valueLabel = labels[sortBy] || '时长';
 
   let html = `<table class="leaderboard-table"><thead><tr><th class="lb-rank">#</th><th>用户</th><th style="text-align:right">${escapeHtml(valueLabel)}</th></tr></thead><tbody>`;
@@ -1727,7 +2008,7 @@ async function loadAnalytics() {
   // Window data to analysisDays for metrics display
   const windowStart = new Date();
   windowStart.setDate(windowStart.getDate() - analysisDays);
-  const windowStartStr = windowStart.toISOString().split('T')[0];
+  const windowStartStr = toLocalDate(windowStart);
   const windowedData = classifiedData.filter(r => r.date >= windowStartStr);
   currentClassifiedData = classifiedData;
   renderMetrics(windowedData);
@@ -1750,7 +2031,7 @@ async function refreshDashboard() {
   try {
     analytics = await loadAnalytics();
   } catch (e) {
-    console.warn('loadAnalytics 失败:', e);
+    if (DEBUG) console.warn('loadAnalytics 失败:', e);
     analytics = { count: 0, topCategoryText: '数据加载失败。' };
     // Still render heatmap/timeline with raw storage data
     try {
@@ -1775,7 +2056,7 @@ async function refreshDashboard() {
   // 并行加载独立模块
   const tasks = [loadGoals()];
   if (activeSidebarTab === 'insights') {
-    tasks.push(loadAdvancedInsights(), loadReports(), loadLatestAIAnalysis(), loadFocusStats(), loadLeaderboard());
+    tasks.push(loadAdvancedInsights(), loadReports(), loadLatestAIAnalysis(), loadFocusStats(), loadLeaderboard(), renderProductivityPanel());
   }
   await Promise.allSettled(tasks);
 
@@ -1803,7 +2084,7 @@ async function loadGoals() {
   const list = document.getElementById('goalList');
   try { await initDataSync(); if (!(await cachedCheckConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>还没有目标</strong><p class="muted">设一个今日目标，看看自己能走多远。</p></div></div>'; return; } list.innerHTML = goals.map(goal => { const pct = Number(goal.progress_percentage || 0); const achieved = pct >= 100; const warning = pct >= 80 && !achieved; const barClass = achieved ? 'achieved' : (warning ? 'warning' : ''); const safeGoalType = escapeHtml(GOAL_TYPE_NAMES[goal.goal_type] || goal.goal_type);
 const safeGoalId = escapeHtml(String(goal.id));
-return `<div class="goal-card ${achieved ? 'achieved' : ''}"><div><strong>${safeGoalType}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${pct.toFixed(1)}%${achieved ? ' <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;"><path d="M9 12l2 2 4-4"/></svg>' : ''}</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${safeGoalId}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${safeGoalId}">停用</button><button class="danger" data-goal-id="${safeGoalId}">删除</button></div><div class="bar-track"><div class="bar-fill ${barClass}" style="width: ${Math.min(pct, 100)}%"></div></div></div>`; }).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${error.message}</p></div></div>`; }
+return `<div class="goal-card ${achieved ? 'achieved' : ''}"><div><strong>${safeGoalType}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${pct.toFixed(1)}%${achieved ? ' <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;"><path d="M9 12l2 2 4-4"/></svg>' : ''}</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${safeGoalId}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${safeGoalId}">停用</button><button class="danger" data-goal-id="${safeGoalId}">删除</button></div><div class="bar-track"><div class="bar-fill ${barClass}" style="width: ${Math.min(pct, 100)}%"></div></div></div>`; }).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${escapeHtml(error.message)}</p></div></div>`; }
 }
 async function refreshGoalProgress() {
   const button = document.getElementById('refreshGoalsBtn');
@@ -1886,6 +2167,7 @@ function showGoalConfirm(message, onConfirm) {
 }
 let _autoSaveTimer = null;
 let _settingsStatusTimer = null;
+// 设置自动保存 — 500ms 防抖，避免频繁写入 storage
 function autoSaveSettings() {
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(async () => {
@@ -1907,6 +2189,25 @@ function showSettingsStatus(text) {
 async function resetApiBaseUrl() { const button = document.getElementById('resetApiBtn'); setButtonBusy(button, true, '恢复中...'); try { await chrome.storage.local.set({ ...DEFAULT_PREFERENCES }); await initDataSync(); await loadPreferences(); setNote('已恢复默认插件设置', 'success'); log('已恢复默认插件设置'); await refreshDashboard(); } finally { setButtonBusy(button, false); } }
 async function testApiConnection() { const button = document.getElementById('testApiBtn'); setButtonBusy(button, true, '测试中...'); try { await initDataSync(); const connected = await dataSync.checkConnection(); _connectionCache = { result: connected, time: Date.now() }; setNote(connected ? '连接成功' : '连接失败，请检查云服务器服务', connected ? 'success' : 'danger'); log(connected ? '后端连接测试成功' : '后端连接测试失败'); } finally { setButtonBusy(button, false); } }
 
+// 渲染通知历史列表
+async function renderNotificationHistory() {
+  const container = document.getElementById('notificationHistoryList');
+  if (!container) return;
+  const { notificationHistory = '' } = await chrome.storage.local.get('notificationHistory');
+  if (!notificationHistory) { container.innerHTML = '<div class="empty">暂无通知记录</div>'; return; }
+  const items = notificationHistory.split('\n').filter(Boolean).reverse().slice(0, 50);
+  const typeIcons = { info: '💡', warning: '⚠️', intervention: '🔔', achieved: '🎉' };
+  container.innerHTML = items.map(item => {
+    const [timeStr, type, ...msgParts] = item.split('|');
+    const msg = msgParts.join('|');
+    const icon = typeIcons[type] || '📌';
+    const d = new Date(Number(timeStr));
+    const timeDisplay = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:flex-start;"><span>${icon}</span><div style="flex:1;min-width:0;"><div style="color:var(--text);">${escapeHtml(msg)}</div><div style="color:var(--muted);font-size:11px;">${timeDisplay}</div></div></div>`;
+  }).join('');
+}
+
+// 生成分享卡片 — Canvas 绘制今日统计摘要图，支持下载为 PNG
 async function generateShareCard() {
   const { browsingData = [], classificationOverrides = {}, classificationFeedback = {} } = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback']);
   if (!browsingData.length) { setNote('暂无数据，无法生成分享卡片', 'danger'); return; }
@@ -1937,10 +2238,9 @@ async function generateShareCard() {
   const ctx = canvas.getContext('2d');
 
   // 背景
-  const cs = getComputedStyle(document.documentElement);
-  const bg = cs.getPropertyValue('--surface').trim() || '#1a1a2e';
-  const text = cs.getPropertyValue('--text').trim() || '#e8e8e8';
-  const muted = cs.getPropertyValue('--muted').trim() || '#888';
+  const bg = cssVar('--surface', CSS_FALLBACKS.surface);
+  const text = cssVar('--text', CSS_FALLBACKS.text);
+  const muted = cssVar('--muted', CSS_FALLBACKS.muted);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 600, 400);
 
@@ -2066,6 +2366,7 @@ function initImport() {
   fileInput.addEventListener('change', handleImportFile);
 }
 
+// 导入文件处理 — 支持 JSON（browsingData 数组）和 CSV 格式，自动合并去重
 async function handleImportFile(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -2109,7 +2410,7 @@ async function handleImportFile(e) {
         }
         if (!record.category) record.category = 'other';
         if (!record.date && record.visitTime) {
-          record.date = new Date(record.visitTime).toISOString().split('T')[0];
+          record.date = toLocalDate(record.visitTime);
         }
         browsingData.push(record);
         existingKeys.add(key);
@@ -2176,21 +2477,26 @@ document.querySelectorAll('[data-pref]').forEach(el => {
 });
 document.getElementById('notificationsEnabledInput').addEventListener('change', updateInterventionWarning);
 document.getElementById('interventionsEnabledInput').addEventListener('change', updateInterventionWarning);
-document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true }).catch(e => console.error('切换标签失败:', e))); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
+// 主题自定义：即时预览
+document.getElementById('accentColorInput')?.addEventListener('input', (e) => { applyAccentColor(e.target.value); invalidateChartPalette(); });
+document.getElementById('fontSizeInput')?.addEventListener('change', (e) => { const html = document.documentElement; if (e.target.value !== 'medium') html.setAttribute('data-font-size', e.target.value); else html.removeAttribute('data-font-size'); });
+document.getElementById('chartSchemeInput')?.addEventListener('change', (e) => { const html = document.documentElement; if (e.target.value !== 'default') html.setAttribute('data-chart-scheme', e.target.value); else html.removeAttribute('data-chart-scheme'); invalidateChartPalette(); });
+document.getElementById('clearNotificationHistoryBtn')?.addEventListener('click', async () => { await chrome.storage.local.set({ notificationHistory: '' }); renderNotificationHistory(); });
+document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true }).catch(e => { if (DEBUG) console.error('切换标签失败:', e); })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
 
 const _dashLoadingMsgs = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
 let _dashLoadTimer = null;
-function startDashLoadingRotation() {
+function startDashboardLoadingRotation() {
   const el = document.getElementById('statusNote');
   if (!el) return;
   let i = 0;
   _dashLoadTimer = setInterval(() => { i = (i + 1) % _dashLoadingMsgs.length; el.textContent = _dashLoadingMsgs[i]; }, 1800);
 }
-function stopDashLoadingRotation() { clearInterval(_dashLoadTimer); _dashLoadTimer = null; }
+function stopDashboardLoadingRotation() { clearInterval(_dashLoadTimer); _dashLoadTimer = null; }
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    startDashLoadingRotation();
+    startDashboardLoadingRotation();
     await loadSidebarState();
     if (activeSidebarTab === 'actions') activeSidebarTab = 'dashboard';
     bindEvents();
@@ -2200,9 +2506,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await switchSidebarTab(activeSidebarTab);
     await refreshDashboard();
   } catch (e) {
-    console.error('仪表盘初始化失败:', e);
+    if (DEBUG) console.error('仪表盘初始化失败:', e);
   } finally {
-    stopDashLoadingRotation();
+    stopDashboardLoadingRotation();
   }
 });
 
@@ -2231,8 +2537,8 @@ window.addEventListener('beforeunload', () => {
   if (hourlyChart) { hourlyChart.destroy(); hourlyChart = null; }
   if (attentionChart) { attentionChart.destroy(); attentionChart = null; }
   if (habitTrendChart) { habitTrendChart.destroy(); habitTrendChart = null; }
-  if (domainTrendChart) { domainTrendChart.destroy(); domainTrendChart = null; }
-  if (timelineChart) { timelineChart.destroy(); timelineChart = null; }
+  if (_domainTrendChart) { _domainTrendChart.destroy(); _domainTrendChart = null; }
+  if (_timelineChart) { _timelineChart.destroy(); _timelineChart = null; }
   clearTimeout(_focusTimer);
   clearTimeout(_autoSaveTimer);
   clearTimeout(_timelineTimer);

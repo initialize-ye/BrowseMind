@@ -1,5 +1,11 @@
 // BrowseMind 数据处理模块 - 清洗、分类、统计
 
+// 日期工具（本地时间，不能用 toISOString 因为它返回 UTC）
+function _toLocalDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /**
  * 数据清洗：提取域名、去重、分组
  */
@@ -106,6 +112,7 @@ class DataProcessor {
 class WebsiteClassifier {
   // 分类名称映射
   static CATEGORY_NAMES = { entertainment: '娱乐', social: '社交', learning: '学习', coding: '编程', tools: '工具', other: '其他' };
+  static CATEGORIES = ['learning', 'coding', 'entertainment', 'social', 'tools', 'other'];
   // 黑洞类型标签
   static BLACKHOLE_TYPE_LABELS = { long_session: '长时间沉浸', high_frequency: '频繁访问', both: '沉浸 + 频繁' };
   // popup 用的简短版本
@@ -285,7 +292,9 @@ class WebsiteClassifier {
         ]
       }
     };
+    // 分类最低置信度分数 — 低于此值归为 'other'
     this.minimumScore = 28;
+    // 需特殊处理的模糊域名 — 内容平台需根据标题二次判断
     this.ambiguousDomains = ['google.com', 'baidu.com', 'bing.com', 'youtube.com', 'bilibili.com', 'reddit.com', 'zhihu.com', 'medium.com', 'douban.com'];
   }
 
@@ -308,32 +317,38 @@ class WebsiteClassifier {
     return keywords.some(keyword => text.includes(keyword));
   }
 
+  // 根据规则计算分类得分：域名(90) > 主机名关键词(45) > 标题强关键词(28/个) > 标题弱关键词(12/个) > 路径关键词(18)
   calculateRuleScore(rule, hostname, title, path) {
     let score = 0;
     let matchedBy = [];
 
+    // 域名匹配 — 最高权重，域名是分类的最强信号
     if (rule.domains.some(ruleDomain => this.matchesDomain(hostname, ruleDomain))) {
       score += 90;
       matchedBy.push('domain');
     }
 
+    // 主机名关键词匹配 — 如 'news.' 前缀
     if (this.includesAny(hostname, rule.strongKeywords)) {
       score += 45;
       matchedBy.push('hostname');
     }
 
+    // 标题强关键词 — 每命中一个加 28 分，上限 60
     const strongTitleHits = (rule.strongKeywords || []).filter(keyword => title.includes(keyword)).length;
     if (strongTitleHits) {
       score += Math.min(60, strongTitleHits * 28);
       matchedBy.push('title');
     }
 
+    // 标题弱关键词 — 每命中一个加 12 分，上限 30
     const weakTitleHits = (rule.weakKeywords || []).filter(keyword => title.includes(keyword)).length;
     if (weakTitleHits) {
       score += Math.min(30, weakTitleHits * 12);
       matchedBy.push('title');
     }
 
+    // 路径关键词 — URL 路径中包含关键词
     if (path && this.includesAny(path, rule.strongKeywords)) {
       score += 18;
       matchedBy.push('path');
@@ -355,6 +370,7 @@ class WebsiteClassifier {
     }
   }
 
+  // 对模糊域名（youtube/bilibili/reddit 等）根据标题关键词调整分类得分
   applyAmbiguousOverrides(scores, hostname, title) {
     const isVideoLearning = this.includesAny(title, [
       'tutorial', 'course', 'lesson', 'lecture', 'how to', 'learn', '教程', '课程', '学习', '讲解', '公开课'
@@ -364,24 +380,28 @@ class WebsiteClassifier {
       '代码', '编程', '开发', '算法', '接口', '源码'
     ]);
 
+    // 视频学习标题 → 提升 learning 分（技术内容 +130，非技术 +110），降低 entertainment 分
     if ((this.matchesDomain(hostname, 'youtube.com') || this.matchesDomain(hostname, 'bilibili.com')) && isVideoLearning) {
       scores.learning.score += isTechnical ? 130 : 110;
       scores.learning.matchedBy.push('ambiguous-title');
       scores.entertainment.score = Math.max(0, scores.entertainment.score - 35);
     }
 
+    // 技术讨论标题 → 提升 learning 分 +120，降低 social 分
     if ((this.matchesDomain(hostname, 'reddit.com') || this.matchesDomain(hostname, 'zhihu.com') || this.matchesDomain(hostname, 'medium.com')) && isTechnical) {
       scores.learning.score += 120;
       scores.learning.matchedBy.push('ambiguous-title');
       scores.social.score = Math.max(0, scores.social.score - 30);
     }
 
+    // GitHub 始终归为 coding
     if (this.matchesDomain(hostname, 'github.com')) {
       scores.coding.score += 80;
       scores.coding.matchedBy.push('platform');
     }
   }
 
+  // 分类决策树：用户覆盖 > 路径规则 > 评分规则 > 模糊域名调整 > 反馈学习 > 最低置信度检查
   classifyDetailed(domain, title = '', url = '') {
     const { hostname, path } = this.parseInput(domain, url);
     const lowerTitle = (title || '').toLowerCase();
@@ -490,7 +510,7 @@ class StatisticsAnalyzer {
   // 单次遍历计算所有统计（缓存结果）
   _computeAll() {
     if (this._cache) return this._cache;
-    const today = new Date().toISOString().split('T')[0];
+    const today = _toLocalDate(Date.now());
     const categoryStats = {};
     const todayCategoryStats = {};
     const hourlyStats = Array(24).fill(0).map((_, hour) => ({ hour, duration: 0, visits: 0 }));
@@ -551,15 +571,16 @@ class StatisticsAnalyzer {
  * 移植自 backend/advanced_analyzer.py
  */
 class LocalAdvancedAnalyzer {
-  static DISTRACTION_CATEGORIES = new Set(['entertainment', 'social']);
-  static FOCUS_CATEGORIES = new Set(['learning', 'coding', 'tools']);
-  static HIGH_FREQUENCY_VISITS = 10;
+  static DISTRACTION_CATEGORIES = new Set(['entertainment', 'social']); // 干扰类分类
+  static FOCUS_CATEGORIES = new Set(['learning', 'coding', 'tools']); // 专注类分类
+  static HIGH_FREQUENCY_VISITS = 10; // 高频访问阈值（次/天）
 
   constructor(thresholdMinutes = 30) {
     this.thresholdSeconds = thresholdMinutes * 60;
   }
 
-  // 时间黑洞检测
+  // 时间黑洞检测：识别长时间单次访问或高频访问的域名
+  // 娱乐/社交类域名权重 1.5x，排序更靠前
   detectBlackholes(records) {
     const blackholes = [];
     let totalDuration = 0;
@@ -572,56 +593,57 @@ class LocalAdvancedAnalyzer {
       if (!domain) continue;
 
       if (!domainStats[domain]) {
-        domainStats[domain] = { domain, total_duration: 0, visit_count: 0, long_sessions: [], category: '' };
+        domainStats[domain] = { domain, totalDuration: 0, visitCount: 0, longSessions: [], category: '' };
       }
       const s = domainStats[domain];
-      s.total_duration += duration;
-      s.visit_count++;
+      s.totalDuration += duration;
+      s.visitCount++;
       s.category = record.category || 'other';
 
       if (duration >= this.thresholdSeconds) {
-        s.long_sessions.push({ duration, date: record.date || '', title: record.title || '', url: record.url || '' });
+        s.longSessions.push({ duration, date: record.date || '', title: record.title || '', url: record.url || '' });
       }
     }
 
     for (const stats of Object.values(domainStats)) {
-      const isLong = stats.long_sessions.length > 0;
-      const isHighFreq = stats.visit_count >= LocalAdvancedAnalyzer.HIGH_FREQUENCY_VISITS && stats.total_duration >= this.thresholdSeconds;
+      const isLong = stats.longSessions.length > 0;
+      const isHighFreq = stats.visitCount >= LocalAdvancedAnalyzer.HIGH_FREQUENCY_VISITS && stats.totalDuration >= this.thresholdSeconds;
       if (!isLong && !isHighFreq) continue;
 
-      const blackhole_type = isLong && isHighFreq ? 'both' : isLong ? 'long_session' : 'high_frequency';
+      const blackholeType = isLong && isHighFreq ? 'both' : isLong ? 'long_session' : 'high_frequency';
       blackholes.push({
         domain: stats.domain,
         category: stats.category,
-        total_duration: stats.total_duration,
-        visit_count: stats.visit_count,
-        long_sessions_count: stats.long_sessions.length,
-        longest_session: stats.long_sessions.length ? Math.max(...stats.long_sessions.map(s => s.duration)) : 0,
-        sessions: stats.long_sessions.slice(0, 5),
-        blackhole_type
+        totalDuration: stats.totalDuration,
+        visitCount: stats.visitCount,
+        longSessionsCount: stats.longSessions.length,
+        longestSession: stats.longSessions.length ? Math.max(...stats.longSessions.map(s => s.duration)) : 0,
+        sessions: stats.longSessions.slice(0, 5),
+        blackholeType
       });
     }
 
     blackholes.sort((a, b) => {
       const wa = LocalAdvancedAnalyzer.DISTRACTION_CATEGORIES.has(a.category) ? 1.5 : 1;
       const wb = LocalAdvancedAnalyzer.DISTRACTION_CATEGORIES.has(b.category) ? 1.5 : 1;
-      return (b.total_duration * wb) - (a.total_duration * wa);
+      return (b.totalDuration * wb) - (a.totalDuration * wa);
     });
 
-    const blackholeTime = blackholes.reduce((s, b) => s + b.total_duration, 0);
+    const blackholeTime = blackholes.reduce((s, b) => s + b.totalDuration, 0);
     return {
       blackholes,
-      total_wasted_time: blackholeTime,
-      waste_percentage: totalDuration > 0 ? Math.round(blackholeTime / totalDuration * 1000) / 10 : 0,
-      top_blackholes: blackholes.slice(0, 5),
-      threshold_minutes: this.thresholdSeconds / 60
+      totalWastedTime: blackholeTime,
+      wastePercentage: totalDuration > 0 ? Math.round(blackholeTime / totalDuration * 1000) / 10 : 0,
+      topBlackholes: blackholes.slice(0, 5),
+      thresholdMinutes: this.thresholdSeconds / 60
     };
   }
 
-  // 注意力曲线分析
+  // 注意力曲线分析：按小时统计专注/娱乐时长，计算每小时注意力分数
+  // 分数公式：focusRatio * 100 - entRatio * 50（专注占比越高分越高，娱乐越多扣分越多）
   analyzeAttention(records) {
     const hourlyStats = Array(24).fill(null).map(() => ({
-      total_duration: 0, focus_duration: 0, entertainment_duration: 0, other_duration: 0
+      totalDuration: 0, focusDuration: 0, entertainmentDuration: 0, otherDuration: 0
     }));
 
     for (const record of records) {
@@ -639,34 +661,34 @@ class LocalAdvancedAnalyzer {
 
       const duration = record.duration || 0;
       const category = record.category || 'other';
-      hourlyStats[hour].total_duration += duration;
+      hourlyStats[hour].totalDuration += duration;
 
       if (LocalAdvancedAnalyzer.FOCUS_CATEGORIES.has(category)) {
-        hourlyStats[hour].focus_duration += duration;
+        hourlyStats[hour].focusDuration += duration;
       } else if (LocalAdvancedAnalyzer.DISTRACTION_CATEGORIES.has(category)) {
-        hourlyStats[hour].entertainment_duration += duration;
+        hourlyStats[hour].entertainmentDuration += duration;
       } else {
-        hourlyStats[hour].other_duration += duration;
+        hourlyStats[hour].otherDuration += duration;
       }
     }
 
     const hourlyFocus = hourlyStats.map((s, hour) => {
       let score = 0;
-      if (s.total_duration > 0) {
-        const focusRatio = s.focus_duration / s.total_duration;
-        const entRatio = s.entertainment_duration / s.total_duration;
+      if (s.totalDuration > 0) {
+        const focusRatio = s.focusDuration / s.totalDuration;
+        const entRatio = s.entertainmentDuration / s.totalDuration;
         score = Math.max(0, Math.min(100, focusRatio * 100 - entRatio * 50));
       }
       return {
         hour,
         score: Math.round(score * 10) / 10,
-        total_duration: s.total_duration,
-        focus_duration: s.focus_duration,
-        entertainment_duration: s.entertainment_duration
+        totalDuration: s.totalDuration,
+        focusDuration: s.focusDuration,
+        entertainmentDuration: s.entertainmentDuration
       };
     });
 
-    const activeHours = hourlyFocus.filter(h => h.total_duration > 0);
+    const activeHours = hourlyFocus.filter(h => h.totalDuration > 0);
     let avgScore = 0, peakHours = [], lowHours = [];
 
     if (activeHours.length) {
@@ -678,10 +700,10 @@ class LocalAdvancedAnalyzer {
     const recommendations = this._generateRecommendations(peakHours, lowHours, hourlyFocus);
 
     return {
-      hourly_focus: hourlyFocus,
-      peak_hours: peakHours.map(h => h.hour),
-      low_hours: lowHours.map(h => h.hour),
-      focus_score: Math.round(avgScore * 10) / 10,
+      hourlyFocus,
+      peakHours: peakHours.map(h => h.hour),
+      lowHours: lowHours.map(h => h.hour),
+      focusScore: Math.round(avgScore * 10) / 10,
       recommendations
     };
   }
@@ -694,13 +716,13 @@ class LocalAdvancedAnalyzer {
     if (lowHours.length) {
       recs.push(`你在 ${this._formatTimeRanges(lowHours.map(h => h.hour))} 容易分心，建议减少娱乐网站访问`);
     }
-    const morning = hourlyFocus.filter(h => h.hour >= 6 && h.hour <= 11 && h.total_duration > 0);
+    const morning = hourlyFocus.filter(h => h.hour >= 6 && h.hour <= 11 && h.totalDuration > 0);
     if (morning.length) {
       const morningAvg = morning.reduce((s, h) => s + h.score, 0) / morning.length;
       if (morningAvg < 50) recs.push('早晨效率较低，建议调整作息或减少早晨的娱乐时间');
     }
     const lateNight = hourlyFocus.filter(h => h.hour >= 23 || h.hour <= 2);
-    const lateDuration = lateNight.reduce((s, h) => s + h.total_duration, 0);
+    const lateDuration = lateNight.reduce((s, h) => s + h.totalDuration, 0);
     if (lateDuration > 3600) recs.push('深夜浏览时间较长，建议早点休息以保证第二天效率');
     if (!recs.length) recs.push('保持当前的浏览习惯，继续加油！');
     return recs;
@@ -724,7 +746,7 @@ class LocalAdvancedAnalyzer {
     const detector = new LocalAdvancedAnalyzer(thresholdMinutes || this.thresholdSeconds / 60);
     return {
       blackholes: detector.detectBlackholes(records),
-      attention_curve: detector.analyzeAttention(records)
+      attentionCurve: detector.analyzeAttention(records)
     };
   }
 }
@@ -737,6 +759,7 @@ class HabitScorer {
     this._blackholeDetector = new LocalAdvancedAnalyzer(30);
   }
 
+  // 每日评分（满分 100）：学习比例(0-40) + 专注完成率(0-25) + 黑洞惩罚(0-20) + 浏览分散度(0-15)
   computeDailyScore(date) {
     const dayData = this.data.filter(r => r.date === date);
     if (!dayData.length) return null;
@@ -753,10 +776,7 @@ class HabitScorer {
     const learningScore = Math.min(40, Math.round(learningRatio * 50));
 
     // 专注完成率 (0-25)
-    const daySessions = this.focusSessions.filter(s => {
-      const d = new Date(s.startTime);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === date;
-    });
+    const daySessions = this.focusSessions.filter(s => _toLocalDate(s.startTime) === date);
     const completionRate = daySessions.length > 0
       ? daySessions.filter(s => s.completed).length / daySessions.length
       : 0;
@@ -774,12 +794,12 @@ class HabitScorer {
     return Math.min(100, Math.max(0, learningScore + focusScore + blackholeScore + consistencyScore));
   }
 
+  // 生产力指数：过去 N 天的专注时长 / 总时长 * 100
   computeProductivityIndex(days = 7) {
     const today = new Date();
     let totalFocus = 0, totalTime = 0;
     for (let i = 0; i < days; i++) {
-      const d = new Date(today - i * 86400000);
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dateStr = _toLocalDate(today - i * 86400000);
       const dayData = this.data.filter(r => r.date === dateStr);
       const t = dayData.reduce((s, r) => s + (r.duration || 0), 0);
       const f = dayData.filter(r => r.category === 'learning' || r.category === 'coding')
@@ -794,8 +814,7 @@ class HabitScorer {
     const today = new Date();
     const history = [];
     for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today - i * 86400000);
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dateStr = _toLocalDate(today - i * 86400000);
       const score = this.computeDailyScore(dateStr);
       if (score !== null) history.push({ date: dateStr, score });
     }
@@ -808,6 +827,43 @@ class HabitScorer {
     if (score >= 60) return '尝试增加专注会话，减少娱乐时间占比';
     if (score >= 40) return '学习时间偏低，建议设定每日学习目标';
     return '浏览习惯需要改善，建议开启专注模式和干预提醒';
+  }
+
+  // 本周 vs 上周对比：返回 {thisWeek, lastWeek, diff} 各含 totalDuration/focusDuration/focusRatio/avgScore
+  computeWeeklyComparison() {
+    const today = new Date();
+    const dayOfWeek = today.getDay() || 7; // 1=Mon, 7=Sun
+    const thisWeekStart = new Date(today); thisWeekStart.setDate(today.getDate() - dayOfWeek + 1);
+    const lastWeekStart = new Date(thisWeekStart); lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+
+    const weekStats = (start, end) => {
+      let total = 0, focus = 0, scores = [];
+      for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+        const ds = _toLocalDate(d);
+        const dayData = this.data.filter(r => r.date === ds);
+        total += dayData.reduce((s, r) => s + (r.duration || 0), 0);
+        focus += dayData.filter(r => r.category === 'learning' || r.category === 'coding').reduce((s, r) => s + (r.duration || 0), 0);
+        const score = this.computeDailyScore(ds);
+        if (score !== null) scores.push(score);
+      }
+      return {
+        totalDuration: total,
+        focusDuration: focus,
+        focusRatio: total > 0 ? Math.round(focus / total * 100) : 0,
+        avgScore: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0,
+        days: scores.length
+      };
+    };
+
+    const thisWeek = weekStats(thisWeekStart, today);
+    const lastWeek = weekStats(lastWeekStart, thisWeekStart);
+    const diff = {
+      totalChange: lastWeek.totalDuration > 0 ? Math.round((thisWeek.totalDuration - lastWeek.totalDuration) / lastWeek.totalDuration * 100) : 0,
+      focusChange: lastWeek.focusDuration > 0 ? Math.round((thisWeek.focusDuration - lastWeek.focusDuration) / lastWeek.focusDuration * 100) : 0,
+      ratioChange: thisWeek.focusRatio - lastWeek.focusRatio,
+      scoreChange: thisWeek.avgScore - lastWeek.avgScore
+    };
+    return { thisWeek, lastWeek, diff };
   }
 }
 

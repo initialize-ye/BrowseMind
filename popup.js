@@ -39,7 +39,7 @@ document.getElementById('dashboardBtn').addEventListener('click', openDashboard)
 document.getElementById('closeModal').addEventListener('click', closeModal);
 document.getElementById('addGoalBtn').addEventListener('click', openGoalModal);
 document.getElementById('closeGoalModal').addEventListener('click', closeGoalModal);
-document.getElementById('saveGoalBtn').addEventListener('click', saveGoal);
+document.getElementById('saveGoalBtn').addEventListener('click', createGoal);
 document.querySelectorAll('.chart-tab').forEach(btn => {
   btn.addEventListener('click', () => switchChart(btn.dataset.chart, btn));
 });
@@ -206,7 +206,18 @@ function startLoadingRotation() {
 }
 function stopLoadingRotation() { clearInterval(_loadingMsgTimer); _loadingMsgTimer = null; }
 
+// 弹窗数据加载管线：读取 storage → 分类处理 → 渲染统计/图表/排行 → 加载目标和习惯评分
 async function loadData() {
+  // 应用主题设置
+  const { themeMode = 'light', accentColor = '', fontSize = 'medium', chartScheme = 'default' } = await chrome.storage.local.get(['themeMode', 'accentColor', 'fontSize', 'chartScheme']);
+  const html = document.documentElement;
+  if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) html.setAttribute('data-theme', 'dark');
+  else html.removeAttribute('data-theme');
+  if (accentColor) applyAccentColor(accentColor);
+  if (fontSize !== 'medium') html.setAttribute('data-font-size', fontSize); else html.removeAttribute('data-font-size');
+  if (chartScheme !== 'default') html.setAttribute('data-chart-scheme', chartScheme); else html.removeAttribute('data-chart-scheme');
+  invalidateChartPalette();
+
   const loading = document.getElementById('loading');
   const content = document.getElementById('content');
   const emptyState = document.getElementById('emptyState');
@@ -399,12 +410,12 @@ function renderSummaryCard(classifiedData) {
   const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
   const todayData = classifiedData.filter(r => r.date === today);
   const yesterdayData = classifiedData.filter(r => r.date === yesterdayStr);
-  const todayDur = todayData.reduce((s, r) => s + (r.duration || 0), 0);
-  const yesterdayDur = yesterdayData.reduce((s, r) => s + (r.duration || 0), 0);
+  const todayDuration = todayData.reduce((s, r) => s + (r.duration || 0), 0);
+  const yesterdayDuration = yesterdayData.reduce((s, r) => s + (r.duration || 0), 0);
   const todayFocus = todayData.filter(r => r.category === 'learning' || r.category === 'coding').reduce((s, r) => s + (r.duration || 0), 0);
-  const focusPct = todayDur > 0 ? Math.round(todayFocus / todayDur * 100) : 0;
-  const diff = todayDur - yesterdayDur;
-  const pct = yesterdayDur > 0 ? Math.round(Math.abs(diff) / yesterdayDur * 100) : 0;
+  const focusPct = todayDuration > 0 ? Math.round(todayFocus / todayDuration * 100) : 0;
+  const diff = todayDuration - yesterdayDuration;
+  const pct = yesterdayDuration > 0 ? Math.round(Math.abs(diff) / yesterdayDuration * 100) : 0;
   const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
   const arrowColor = diff > 0 ? 'var(--yellow)' : diff < 0 ? 'var(--green)' : 'var(--muted)';
   card.style.display = 'flex';
@@ -416,8 +427,7 @@ function renderSummaryCard(classifiedData) {
 let _contextMenuEl = null;
 function showDomainContextMenu(event, domain, currentCategory) {
   hideContextMenu();
-  const categories = ['learning', 'coding', 'entertainment', 'social', 'tools', 'other'];
-  const catNames = { learning: '学习', coding: '编程', entertainment: '娱乐', social: '社交', tools: '工具', other: '其他' };
+  const categories = WebsiteClassifier.CATEGORIES;
   const menu = document.createElement('div');
   menu.className = 'context-menu';
   menu.style.cssText = `position:fixed;left:${Math.min(event.clientX, window.innerWidth - 180)}px;top:${Math.min(event.clientY, window.innerHeight - 220)}px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:0 4px 16px oklch(0% 0 0 / 0.12);z-index:9999;min-width:160px;padding:4px;font-size:12px;`;
@@ -430,7 +440,7 @@ function showDomainContextMenu(event, domain, currentCategory) {
     btn.addEventListener('mouseleave', () => btn.style.background = 'transparent');
     menu.appendChild(btn);
   };
-  addItem(`修改分类 (${catNames[currentCategory] || currentCategory})`, () => showCategoryPickerPopup(domain, currentCategory));
+  addItem(`修改分类 (${WebsiteClassifier.CATEGORY_NAMES[currentCategory] || currentCategory})`, () => showCategoryPickerPopup(domain, currentCategory));
   const sep = document.createElement('div');
   sep.style.cssText = 'height:1px;background:var(--line);margin:4px 0;';
   menu.appendChild(sep);
@@ -444,11 +454,10 @@ function showDomainContextMenu(event, domain, currentCategory) {
 function hideContextMenu() { if (_contextMenuEl) { _contextMenuEl.remove(); _contextMenuEl = null; } }
 
 function showCategoryPickerPopup(domain, currentCategory) {
-  const categories = ['learning', 'coding', 'entertainment', 'social', 'tools', 'other'];
-  const catNames = { learning: '学习', coding: '编程', entertainment: '娱乐', social: '社交', tools: '工具', other: '其他' };
+  const categories = WebsiteClassifier.CATEGORIES;
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:oklch(0% 0 0/0.32);';
-  modal.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius-md);padding:20px;max-width:280px;width:100%;"><h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">修改 ${escapeHtml(domain)} 的分类</h3><div style="display:flex;flex-wrap:wrap;gap:6px;">${categories.map(c => `<button class="ghost${c === currentCategory ? ' primary' : ''}" data-cat="${c}" style="min-height:34px;padding:6px 12px;font-size:12px;">${catNames[c]}</button>`).join('')}</div></div>`;
+  modal.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius-md);padding:20px;max-width:280px;width:100%;"><h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">修改 ${escapeHtml(domain)} 的分类</h3><div style="display:flex;flex-wrap:wrap;gap:6px;">${categories.map(c => `<button class="ghost${c === currentCategory ? ' primary' : ''}" data-cat="${c}" style="min-height:34px;padding:6px 12px;font-size:12px;">${WebsiteClassifier.CATEGORY_NAMES[c]}</button>`).join('')}</div></div>`;
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.remove();
     const btn = e.target.closest('[data-cat]');
@@ -469,16 +478,22 @@ async function applyCategoryOverride(domain, category) {
 }
 
 async function addToBlocklist(domain) {
-  const storage = await chrome.storage.local.get(['blocklist']);
-  const list = storage.blocklist || [];
-  if (!list.includes(domain)) { list.push(domain); await chrome.storage.local.set({ blocklist: list }); }
+  const { domainBlocklist = '' } = await chrome.storage.local.get('domainBlocklist');
+  const list = domainBlocklist.split(/[,，\n\r]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (!list.includes(domain)) {
+    list.push(domain);
+    await chrome.storage.local.set({ domainBlocklist: list.join(',') });
+  }
   notifyPopup('success', `已将 ${domain} 加入黑名单`);
 }
 
 async function addToAllowlist(domain) {
-  const storage = await chrome.storage.local.get(['allowlist']);
-  const list = storage.allowlist || [];
-  if (!list.includes(domain)) { list.push(domain); await chrome.storage.local.set({ allowlist: list }); }
+  const { domainAllowlist = '' } = await chrome.storage.local.get('domainAllowlist');
+  const list = domainAllowlist.split(/[,，\n\r]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (!list.includes(domain)) {
+    list.push(domain);
+    await chrome.storage.local.set({ domainAllowlist: list.join(',') });
+  }
   notifyPopup('success', `已将 ${domain} 加入白名单`);
 }
 
@@ -920,16 +935,13 @@ async function showAIAnalysis() {
   }
 }
 
-// 显示 AI 分析结果
+// 显示 AI 分析结果 — analysis 包含：summary, category_stats, top_domains, issues, suggestions
 function displayAIAnalysis(analysis) {
   const content = document.getElementById('aiAnalysisContent');
 
   // 颜色映射
   const categoryColors = getCategoryColors();
-  const categoryNames = {
-    learning: '学习', coding: '编程', entertainment: '娱乐',
-    social: '社交', tools: '工具', other: '其他'
-  };
+  const categoryNames = WebsiteClassifier.CATEGORY_NAMES;
 
   // 1. 总结卡片
   let html = `
@@ -943,11 +955,11 @@ function displayAIAnalysis(analysis) {
   const stats = analysis.category_stats || [];
   if (stats.length > 0) {
     const segments = stats.map(s => {
-      const color = categoryColors[s.category] || pal[4];
+      const color = categoryColors[s.category] || getChartPalette()[4];
       return `<div class="ai-stacked-segment" style="width:${s.percentage}%;background:${color}"></div>`;
     }).join('');
     const legend = stats.map(s => {
-      const color = categoryColors[s.category] || pal[4];
+      const color = categoryColors[s.category] || getChartPalette()[4];
       const name = categoryNames[s.category] || s.category;
       return `<span class="ai-legend-item"><span class="ai-legend-dot" style="background:${color}"></span>${name} <span class="ai-legend-pct">${s.percentage}%</span></span>`;
     }).join('');
@@ -968,7 +980,7 @@ function displayAIAnalysis(analysis) {
         <td style="color:var(--muted);font-size:11px;">${i + 1}</td>
         <td class="domain-name">${escapeHtml(d.domain)}</td>
         <td>${d.visits} 次</td>
-        <td class="domain-dur">${formatDuration(d.total_duration)}</td>
+        <td class="domain-dur">${formatDuration(d.totalDuration)}</td>
       </tr>
     `).join('');
     html += `
@@ -1058,6 +1070,7 @@ function displayAdvancedAnalysisEmptyState(message = '同步云端数据后将�
 let _analysisCache = { data: null, time: 0 };
 const ANALYSIS_CACHE_TTL = 60000; // 60 秒
 
+// 高级分析：优先从后端获取，失败时回退到本地 LocalAdvancedAnalyzer
 async function loadAdvancedAnalysis() {
   try {
     const isConnected = await dataSync.checkConnection();
@@ -1066,7 +1079,7 @@ async function loadAdvancedAnalysis() {
       const now = Date.now();
       if (_analysisCache.data && now - _analysisCache.time < ANALYSIS_CACHE_TTL) {
         displayBlackholes(_analysisCache.data.blackholes);
-        displayAttentionCurve(_analysisCache.data.attention_curve);
+        displayAttentionCurve(_analysisCache.data.attentionCurve);
         return;
       }
 
@@ -1081,7 +1094,7 @@ async function loadAdvancedAnalysis() {
         const analysis = await response.json();
         _analysisCache = { data: analysis, time: now };
         displayBlackholes(analysis.blackholes);
-        displayAttentionCurve(analysis.attention_curve);
+        displayAttentionCurve(analysis.attentionCurve);
         return;
       }
 
@@ -1102,7 +1115,7 @@ async function loadAdvancedAnalysis() {
     const localAnalyzer = new LocalAdvancedAnalyzer(preferences.blackholeThresholdMinutes);
     const analysis = localAnalyzer.analyzeAll(browsingData, preferences.blackholeThresholdMinutes);
     displayBlackholes(analysis.blackholes);
-    displayAttentionCurve(analysis.attention_curve);
+    displayAttentionCurve(analysis.attentionCurve);
   } catch (error) {
     console.error('高级分析失败:', error);
     displayAdvancedAnalysisEmptyState('高级分析暂时不可用，请稍后重试');
@@ -1113,13 +1126,13 @@ async function loadAdvancedAnalysis() {
 function displayBlackholes(blackholes) {
   const container = document.getElementById('blackholeStats');
 
-  if (!blackholes.top_blackholes || blackholes.top_blackholes.length === 0) {
+  if (!blackholes.topBlackholes || blackholes.topBlackholes.length === 0) {
     container.innerHTML = '<p class="empty-line" style="color:var(--green);">没有时间黑洞 — 你的浏览节奏很好</p>';
     return;
   }
 
-  const wastePercentage = blackholes.waste_percentage;
-  const totalWasted = formatDuration(blackholes.total_wasted_time);
+  const wastePercentage = blackholes.wastePercentage;
+  const totalWasted = formatDuration(blackholes.totalWastedTime);
 
   let html = `
     <div style="text-align: center; margin-bottom: 12px; padding: 8px; background: var(--red-soft); border-radius: 8px;">
@@ -1128,17 +1141,17 @@ function displayBlackholes(blackholes) {
     </div>
   `;
 
-  html += blackholes.top_blackholes.slice(0, 3).map(bh => {
+  html += blackholes.topBlackholes.slice(0, 3).map(bh => {
     const catName = escapeHtml(WebsiteClassifier.CATEGORY_NAMES[bh.category] || '其他');
-    const typeLabel = escapeHtml(WebsiteClassifier.BLACKHOLE_TYPE_LABELS_SHORT[bh.blackhole_type] || '');
-    const meta = bh.blackhole_type === 'high_frequency'
-      ? `${bh.visit_count} 次访问 · 累计 ${formatDuration(bh.total_duration)}`
-      : `${bh.long_sessions_count} 次长时间访问 · 最长 ${formatDuration(bh.longest_session)}`;
+    const typeLabel = escapeHtml(WebsiteClassifier.BLACKHOLE_TYPE_LABELS_SHORT[bh.blackholeType] || '');
+    const meta = bh.blackholeType === 'high_frequency'
+      ? `${bh.visitCount} 次访问 · 累计 ${formatDuration(bh.totalDuration)}`
+      : `${bh.longSessionsCount} 次长时间访问 · 最长 ${formatDuration(bh.longestSession)}`;
     return `
       <div class="blackhole-item">
         <div class="blackhole-header">
           <span class="blackhole-domain">${escapeHtml(bh.domain)} <span style="font-size:10px;color:var(--muted);background:var(--surface-2);padding:1px 5px;border-radius:3px;">${catName}</span> <span style="font-size:10px;color:var(--yellow);">${typeLabel}</span></span>
-          <span class="blackhole-duration">${formatDuration(bh.total_duration)}</span>
+          <span class="blackhole-duration">${formatDuration(bh.totalDuration)}</span>
         </div>
         <div class="blackhole-meta">
           ${meta}
@@ -1155,8 +1168,8 @@ function displayAttentionCurve(attentionCurve) {
   const statsContainer = document.getElementById('attentionStats');
 
   // 显示统计信息
-  const focusScore = attentionCurve.focus_score;
-  const peakHours = attentionCurve.peak_hours;
+  const focusScore = attentionCurve.focusScore;
+  const peakHours = attentionCurve.peakHours;
   const recommendations = attentionCurve.recommendations;
 
   let statsHtml = `
@@ -1183,7 +1196,7 @@ function displayAttentionCurve(attentionCurve) {
   statsContainer.innerHTML = statsHtml;
 
   // 绘制注意力曲线图
-  drawAttentionChart(attentionCurve.hourly_focus);
+  drawAttentionChart(attentionCurve.hourlyFocus);
 }
 
 // 绘制注意力曲线图
@@ -1195,7 +1208,7 @@ function drawAttentionChart(hourlyFocus) {
   }
 
   // 只显示有数据的小时
-  const activeHours = hourlyFocus.filter(h => h.total_duration > 0);
+  const activeHours = hourlyFocus.filter(h => h.totalDuration > 0);
   if (activeHours.length === 0) {
     const statsContainer = document.getElementById('attentionStats');
     statsContainer.innerHTML = '<p class="empty-line">暂无足够数据生成注意力曲线</p>';
@@ -1356,7 +1369,7 @@ function closeGoalModal() {
 }
 
 let _savingGoal = false;
-async function saveGoal() {
+async function createGoal() {
   if (_savingGoal) return;
   _savingGoal = true;
   const saveBtn = document.getElementById('saveGoalBtn');

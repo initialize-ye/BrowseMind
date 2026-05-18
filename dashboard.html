@@ -24,33 +24,35 @@
     .panel { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow); content-visibility: auto; contain-intrinsic-size: auto 200px; }
     .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: var(--space-5); align-items: start; transition: grid-template-columns 0.28s cubic-bezier(0.32, 0.94, 0.60, 1); }
     .analytics-main { min-width: 0; order: 2; }
-    .sidebar { position: sticky; top: 16px; order: 1; min-height: calc(100vh - 32px); padding: 20px 16px; border-radius: 0; background: var(--surface-2); color: var(--text); border-right: 1px solid var(--line); transition: padding 0.28s cubic-bezier(0.32, 0.94, 0.60, 1); overflow: hidden; }
-    .sidebar::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--green)); }
+    .sidebar { position: sticky; top: 16px; order: 1; min-height: calc(100vh - 32px); padding: 20px 16px; border-radius: var(--radius-md) 0 0 var(--radius-md); background: var(--surface); color: var(--text); border-right: 1px solid var(--line); box-shadow: 1px 0 0 var(--surface-2); transition: padding 0.28s cubic-bezier(0.32, 0.94, 0.60, 1), background 0.28s var(--ease-out); overflow: hidden; }
+    .sidebar::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent), color-mix(in oklch, var(--accent) 60%, var(--green))); }
     .sidebar-shell { display: grid; gap: 0; }
     .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
     .sidebar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .sidebar-brand-copy { min-width: 0; line-height: 1.2; }
     .sidebar-title { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.02em; margin: 0; line-height: 1.2; }
     .sidebar-subtitle { margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 450; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sidebar-toggle { width: 30px; height: 30px; padding: 0; border-radius: 6px; color: var(--muted); background: transparent; font-size: 14px; transition: color 0.18s var(--ease-out), background 0.18s var(--ease-out); }
-    .sidebar-toggle:hover { color: var(--text); background: var(--surface-3); box-shadow: none; transform: none; }
+    .sidebar-toggle { width: 38px; height: 38px; padding: 0; border-radius: 6px; color: var(--muted); background: transparent; font-size: 14px; transition: color 0.18s var(--ease-out), background 0.18s var(--ease-out), transform 0.18s var(--ease-out); }
+    .sidebar-toggle:hover { color: var(--accent); background: var(--accent-soft); box-shadow: none; transform: none; }
     .sidebar-label { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 0 4px; margin: 4px 0 10px; }
     .sidebar-tabs { display: grid; gap: 1px; padding: 0; border: 0; background: transparent; box-shadow: none; margin-bottom: 12px; }
     .sidebar-tab { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 10px; border: 0; border-radius: 7px; padding: 10px 12px; color: var(--muted); background: transparent; font-weight: 500; font-size: 13px; text-align: left; cursor: pointer; transition: transform 0.18s cubic-bezier(0.32, 0.94, 0.60, 1), background 0.15s var(--ease-out), color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out); }
-    .sidebar-tab:hover { color: var(--text); background: var(--surface-3); transform: translateX(2px); }
-    .sidebar-tab.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; box-shadow: inset 2px 0 0 0 var(--accent); }
-    .sidebar-tab.active::after { content: ''; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--accent); opacity: 0.7; }
+    .sidebar-tab:hover { color: var(--text); background: var(--surface-2); transform: translateX(2px); }
+    .sidebar-tab.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; box-shadow: inset 3px 0 0 0 var(--accent); }
+    .sidebar-tab.active::after { content: ''; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: 0.6; }
     .sidebar-tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; font-size: 14px; flex: 0 0 20px; transition: transform 0.18s cubic-bezier(0.32, 0.94, 0.60, 1); }
     .sidebar-tab:hover .sidebar-tab-icon { transform: scale(1.08); }
     .sidebar-tab-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sidebar .section-title h2, .sidebar .section-title p { color: inherit; }
     .sidebar .section-title p, .sidebar label, .sidebar .category-meta, .sidebar .domain-meta { color: var(--muted); }
+    html[data-theme="dark"] .sidebar { background: var(--surface); border-right-color: var(--line); box-shadow: 1px 0 0 var(--surface-2); }
+    html[data-theme="dark"] .metric { background: var(--surface); }
     .sidebar .note { background: var(--accent-glow); color: var(--accent); }
     .sidebar .note.success { background: var(--green-soft); color: var(--green); }
     .sidebar .note.danger { background: var(--red-soft); color: var(--red); }
     .sidebar input, .sidebar select, .sidebar textarea { border-color: var(--line); background: var(--surface-2); color: var(--text); }
     .sidebar input:focus, .sidebar select:focus, .sidebar textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-    body.sidebar-collapsed .sidebar { padding: 16px 0; }
+    body.sidebar-collapsed .sidebar { padding: 16px 0; border-radius: var(--radius-md) 0 0 var(--radius-md); }
     body:not(.sidebar-collapsed) .sidebar { padding: 20px 16px; }
     body.sidebar-collapsed .sidebar-label,
     body.sidebar-collapsed .sidebar-brand-copy,
@@ -58,23 +60,23 @@
     body:not(.sidebar-collapsed) .sidebar-label,
     body:not(.sidebar-collapsed) .sidebar-brand-copy { display: block; }
     body:not(.sidebar-collapsed) .sidebar-tab-label { display: inline; }
-    body.sidebar-collapsed .sidebar-shell { gap: 8px; justify-items: center; }
+    body.sidebar-collapsed .sidebar-shell { gap: 6px; justify-items: center; }
     body:not(.sidebar-collapsed) .sidebar-shell { gap: 0; justify-items: normal; }
-    body.sidebar-collapsed .sidebar-header { width: 100%; flex-direction: column; align-items: center; gap: 0; padding-bottom: 12px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+    body.sidebar-collapsed .sidebar-header { width: 100%; flex-direction: column; align-items: center; gap: 0; padding-bottom: 14px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
     body:not(.sidebar-collapsed) .sidebar-header { width: auto; flex-direction: row; align-items: center; gap: 10px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
     body.sidebar-collapsed .sidebar-brand { gap: 0; justify-content: center; }
     body:not(.sidebar-collapsed) .sidebar-brand { gap: 10px; }
-    body.sidebar-collapsed .sidebar-toggle { margin: 0; width: 34px; height: 34px; font-size: 14px; }
-    body:not(.sidebar-collapsed) .sidebar-toggle { width: 30px; height: 30px; font-size: 14px; }
+    body.sidebar-collapsed .sidebar-toggle { margin: 0; width: 38px; height: 38px; font-size: 14px; }
+    body:not(.sidebar-collapsed) .sidebar-toggle { width: 38px; height: 38px; font-size: 14px; }
+    body.sidebar-collapsed .sidebar-brand-copy { display: none; }
     body.sidebar-collapsed .sidebar-tabs { width: 100%; gap: 0; align-items: center; justify-items: center; }
     body:not(.sidebar-collapsed) .sidebar-tabs { width: auto; gap: 1px; align-items: normal; }
-    body.sidebar-collapsed .sidebar-tab { justify-content: center; padding: 12px 0; margin: 0 8px; border-radius: 8px; }
+    body.sidebar-collapsed .sidebar-tab { justify-content: center; padding: 11px 0; margin: 0 10px; border-radius: 8px; }
     body:not(.sidebar-collapsed) .sidebar-tab { justify-content: flex-start; padding: 10px 12px; margin: 0; border-radius: 7px; }
-    body.sidebar-collapsed .sidebar-tab.active { background: var(--accent-soft); box-shadow: none; }
+    body.sidebar-collapsed .sidebar-tab.active { background: var(--accent-soft); box-shadow: inset 3px 0 0 0 var(--accent); }
     body.sidebar-collapsed .sidebar-tab.active::after { display: none; }
-    body.sidebar-collapsed .sidebar-tab:hover { background: var(--surface-3); transform: none; }
+    body.sidebar-collapsed .sidebar-tab:hover { background: var(--surface-2); transform: none; }
     body.sidebar-collapsed .sidebar-tab:hover .sidebar-tab-icon { transform: none; }
-    body.sidebar-collapsed .sidebar-tab.active { box-shadow: none; }
     body.sidebar-collapsed .sidebar-tab-icon { width: 22px; font-size: 16px; flex: 0 0 22px; }
     body.sidebar-collapsed .sidebar-tabs { margin-bottom: 0; }
     .main-view { display: none; }
@@ -82,7 +84,7 @@
     .view-shell { display: grid; gap: var(--space-4); }
     .view-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: var(--space-5); }
     .view-copy { min-width: 0; }
-    .view-copy h2 { font-size: 24px; letter-spacing: -0.03em; font-weight: 700; color: var(--accent); }
+    .view-copy h2 { font-size: 24px; letter-spacing: -0.03em; font-weight: 700; color: var(--text); }
     .view-copy p { margin-top: 6px; color: var(--muted); line-height: 1.6; font-size: 13px; overflow-wrap: anywhere; }
     .hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: var(--space-4); margin-bottom: var(--space-4); }
     .intro, .status-panel { padding: var(--space-5); }
@@ -92,7 +94,8 @@
     .intro p, .section-title p, .muted { color: var(--muted); line-height: 1.6; font-size: 13px; }
     .status-note { margin-top: var(--space-3); padding: 12px 14px; border-radius: var(--radius-sm); color: var(--accent); background: var(--accent-soft); font-size: 13px; line-height: 1.6; }
     .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: var(--space-4); }
-    .metric { padding: 18px 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-2); box-shadow: none; border-top: 2.5px solid var(--chart-2); }
+    .metric { padding: 18px 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow); border-top: 2.5px solid var(--chart-2); transition: box-shadow 0.2s var(--ease-out), transform 0.2s var(--ease-out); }
+    .metric:hover { box-shadow: 0 2px 8px oklch(18% 0.012 58 / 0.1); transform: translateY(-1px); }
     .metric:nth-child(2) { border-top-color: var(--chart-1); }
     .metric:nth-child(3) { border-top-color: var(--chart-3); }
     .metric:nth-child(4) { border-top-color: var(--chart-4); }
@@ -120,7 +123,7 @@
     .heatmap-legend { display: flex; align-items: center; justify-content: flex-end; gap: 3px; margin-top: var(--space-2); font-size: 10px; color: var(--muted); }
     .heatmap-legend-cell { width: 10px; height: 10px; border-radius: 2px; outline: 1px solid oklch(90% 0 0 / 0.5); outline-offset: -1px; }
     html[data-theme="dark"] .heatmap-legend-cell { outline-color: oklch(25% 0 0 / 0.6); }
-    .heatmap-tip { position: fixed; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 500; color: var(--text); box-shadow: var(--shadow); z-index: 999; opacity: 0; transition: opacity 0.1s; white-space: nowrap; }
+    .heatmap-tip { position: fixed; left: 0; top: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 500; color: var(--text); box-shadow: var(--shadow); z-index: 999; opacity: 0; transition: opacity 0.1s; white-space: nowrap; will-change: transform, opacity; }
     .heatmap-tip .tip-count { font-weight: 700; }
     .heatmap-tip .tip-date { color: var(--muted); font-weight: 400; }
     .heatmap-tip.visible { opacity: 1; }
@@ -138,10 +141,10 @@
     .timeline-cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .timeline-empty { padding: var(--space-6); text-align: center; color: var(--muted); font-size: 13px; }
     .timeline-count { font-size: 12px; color: var(--muted); margin-bottom: var(--space-2); }
-    .section-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); padding-left: 12px; border-left: 3px solid var(--accent); }
+    .section-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); padding-left: 12px; border-left: 3px solid var(--accent); border-radius: 0; }
     .section-title h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
     .chart-tabs { display: flex; gap: 2px; padding: 3px; border-radius: var(--radius-sm); background: var(--surface-2); }
-    .chart-tab { all: unset; cursor: pointer; padding: 5px 10px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; color: var(--muted); background: transparent; transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out); }
+    .chart-tab { all: unset; cursor: pointer; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; color: var(--muted); background: transparent; transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out); }
     .chart-tab:hover { color: var(--text); }
     .chart-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-glow); }
     .chart-tab.active { color: var(--accent); background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
@@ -154,7 +157,8 @@
     .setting-row { grid-template-columns: 1fr; }
     .category-row:last-child, .domain-row:last-child, .goal-card:last-child, .setting-row:last-child { border-bottom: 0; }
     .insight-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: var(--space-3); }
-    .insight-card { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+    .insight-card { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); transition: box-shadow 0.2s var(--ease-out), transform 0.2s var(--ease-out); }
+    .insight-card:hover { box-shadow: 0 2px 8px oklch(18% 0.012 58 / 0.08); transform: translateY(-1px); }
     .insight-card span { display: block; color: var(--muted); font-size: 11px; font-weight: 500; }
     .insight-card strong { display: block; margin-top: 6px; font-size: 32px; line-height: 1; font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; color: var(--accent); }
     .insight-card small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
@@ -171,8 +175,8 @@
     .goal-card .bar-fill.warning { background: var(--yellow); }
 
     /* Report cards */
-    .report-card { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); overflow: hidden; margin-bottom: 8px; transition: box-shadow 0.15s var(--ease-out); }
-    .report-card:hover { box-shadow: var(--shadow); }
+    .report-card { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); overflow: hidden; margin-bottom: 8px; transition: box-shadow 0.2s var(--ease-out), transform 0.2s var(--ease-out); }
+    .report-card:hover { box-shadow: 0 2px 8px oklch(18% 0.012 58 / 0.08); transform: translateY(-1px); }
     .report-card-header { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; padding: 14px 16px; cursor: pointer; user-select: none; }
     .report-card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
     .report-type-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
@@ -244,6 +248,7 @@
   <div id="toastContainer" aria-live="polite" style="position:fixed;top:16px;right:16px;z-index:9999;max-width:380px;pointer-events:none;"></div>
   <div id="categoryPicker" role="dialog" aria-label="修改分类" aria-modal="true" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9998;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:0 12px 40px rgba(0,0,0,.18);padding:20px;min-width:280px;max-width:360px;"></div>
   <main class="page">
+    <h1 class="sr-only">BrowseMind 数据分析工作台</h1>
     <header class="topbar"></header>
 
     <div class="layout">
@@ -253,7 +258,7 @@
             <div class="sidebar-brand">
               <div class="brand-mark"><svg viewBox="0 0 26 26" fill="none"><rect x="1" y="1" width="24" height="24" rx="5" fill="var(--accent)"/><g transform="translate(4.5,4) scale(0.72)" stroke="oklch(100% 0 0)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M12 2a7 7 0 00-4.6 1.7A5.5 5.5 0 003 9a5.5 5.5 0 002.2 4.5A4.5 4.5 0 009.5 18h1a.5.5 0 00.5-.5V16a2 2 0 012-2h0a2 2 0 012 2v1.5a.5.5 0 00.5.5h1a4.5 4.5 0 004.3-4.5A5.5 5.5 0 0021 9a5.5 5.5 0 00-4.4-5.3A7 7 0 0012 2z"/><path d="M9 13v-1a3 3 0 016 0v1"/></g></svg></div>
               <div class="sidebar-brand-copy">
-                <h1 class="sidebar-title">BrowseMind</h1>
+                <span class="sidebar-title" role="heading" aria-level="2">BrowseMind</span>
                 <div class="sidebar-subtitle">工作台</div>
               </div>
             </div>
@@ -287,14 +292,14 @@
 
           <div style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-4);flex-wrap:wrap;">
             <span style="font-size:12px;color:var(--muted);">时间范围</span>
-            <input type="date" id="dateRangeFrom" style="width:auto;padding:6px 10px;font-size:12px;">
+            <input type="date" id="dateRangeFrom" aria-label="起始日期" style="width:auto;padding:6px 10px;font-size:12px;">
             <span style="color:var(--muted);font-size:12px;">至</span>
-            <input type="date" id="dateRangeTo" style="width:auto;padding:6px 10px;font-size:12px;">
+            <input type="date" id="dateRangeTo" aria-label="结束日期" style="width:auto;padding:6px 10px;font-size:12px;">
             <div style="display:flex;gap:2px;margin-left:var(--space-2);">
-              <button class="ghost" data-range="7" style="min-height:30px;padding:4px 10px;font-size:11px;">7天</button>
-              <button class="ghost" data-range="14" style="min-height:30px;padding:4px 10px;font-size:11px;">14天</button>
-              <button class="ghost" data-range="30" style="min-height:30px;padding:4px 10px;font-size:11px;">30天</button>
-              <button class="ghost" data-range="all" style="min-height:30px;padding:4px 10px;font-size:11px;">全部</button>
+              <button class="ghost" data-range="7" style="min-height:36px;padding:6px 12px;font-size:11px;">7天</button>
+              <button class="ghost" data-range="14" style="min-height:36px;padding:6px 12px;font-size:11px;">14天</button>
+              <button class="ghost" data-range="30" style="min-height:36px;padding:6px 12px;font-size:11px;">30天</button>
+              <button class="ghost" data-range="all" style="min-height:36px;padding:6px 12px;font-size:11px;">全部</button>
             </div>
           </div>
 
@@ -333,7 +338,7 @@
 
           <section class="dashboard-grid">
             <div>
-              <div class="panel"><div class="section-title"><div><h2 id="trendChartTitle">趋势</h2><p id="trendChartDesc">时长与访问次数</p></div><div class="chart-tabs" id="dashboardChartTabs"><button class="chart-tab active" data-chart="trend">趋势</button><button class="chart-tab" data-chart="radar">雷达</button><button class="chart-tab" data-chart="sunburst">层级</button><button class="chart-tab" data-chart="scatter">散点</button></div></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
+              <div class="panel"><div class="section-title"><div><h2 id="trendChartTitle">趋势</h2><p id="trendChartDesc">时长与访问次数</p></div><div class="chart-tabs" id="dashboardChartTabs"><button class="chart-tab active" data-chart="trend">趋势</button><button class="chart-tab" data-chart="radar">雷达</button><button class="chart-tab" data-chart="sunburst">层级</button><button class="chart-tab" data-chart="scatter">散点</button><button class="chart-tab" data-chart="stackedArea">面积</button><button class="chart-tab" data-chart="treemap">域名图</button></div></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
               <div class="panel"><div class="section-title"><div><h2>分类构成</h2><p>按停留时长排序</p></div><select id="categoryFilterInput" aria-label="筛选分类"><option value="all">全部分类</option><option value="learning">学习</option><option value="coding">编程</option><option value="entertainment">娱乐</option><option value="social">社交</option><option value="tools">工具</option><option value="other">仅看其他</option></select></div><div id="categoryList" aria-live="polite"></div></div>
             </div>
             <div>
@@ -374,8 +379,9 @@
               <div class="panel"><div class="section-title"><div><h2>专注曲线</h2><p>按小时估算专注度</p></div></div><div id="attentionStats" aria-live="polite"><div class="empty">积累几小时浏览数据后生成专注曲线。</div></div><div class="chart-box small"><canvas id="attentionChart"></canvas></div></div>
             </section>
             <section class="panel"><div class="section-title"><div><h2>专注会话</h2><p>番茄钟式专注计时</p></div><div class="button-row compact"><button id="focusStartBtn" class="secondary">开始专注</button></div></div><div id="focusPanel"><div class="insight-cards"><div class="insight-card"><span>今日专注</span><strong id="focusTodayTime">0</strong><small>分钟</small></div><div class="insight-card"><span>连续天数</span><strong id="focusStreak">0</strong><small>天</small></div></div><div id="focusSessionInfo" style="display:none;margin-top:10px;padding:10px;background:var(--accent-soft);border-radius:8px;font-size:12px;"></div><div id="focusHistory" style="margin-top:10px;"></div></div></section>
+            <section class="panel"><div class="section-title"><div><h2>效率报告</h2><p>本周 vs 上周效率对比</p></div></div><div id="productivityPanel"><div class="empty">积累几天数据后生成效率报告。</div></div></section>
             <section class="panel"><div class="section-title"><div><h2>周期对比</h2><p>对比两个时间段的浏览变化</p></div></div><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><select id="comparePeriod1" aria-label="对比近期天数" style="padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:12px;width:auto;min-height:32px;"><option value="7" selected>近 7 天</option><option value="14">近 14 天</option><option value="30">近 30 天</option></select><span style="color:var(--muted);font-size:12px;">vs</span><select id="comparePeriod2" aria-label="对比参照天数" style="padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:12px;width:auto;min-height:32px;"><option value="7">7 天前</option><option value="14" selected>14 天前</option><option value="30">30 天前</option></select><button id="compareBtn" class="secondary" style="font-size:12px;min-height:32px;padding:6px 14px;">对比</button></div><div id="compareResult" aria-live="polite"><div class="empty">选择时间段后点击"对比"查看变化。</div></div></section>
-            <section class="panel"><div class="section-title"><div><h2>学习排行榜</h2><p>匿名排名，按学习时长对比</p></div><div class="button-row compact"><select id="leaderboardSort" aria-label="排行依据" style="padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:11px;"><option value="learning_duration" selected>学习时长</option><option value="focus_duration">专注时长</option><option value="total_duration">总浏览时长</option></select><button id="leaderboardJoinBtn" class="secondary" style="font-size:11px;min-height:28px;padding:4px 12px;">加入排行</button><button id="leaderboardRefreshBtn" class="ghost" style="font-size:11px;min-height:28px;padding:4px 10px;">刷新</button></div></div><div id="leaderboardContent" aria-live="polite"><div class="empty">点击"加入排行"参与匿名排名。</div></div></section>
+            <section class="panel"><div class="section-title"><div><h2>学习排行榜</h2><p>匿名排名，按学习时长对比</p></div><div class="button-row compact"><select id="leaderboardSort" aria-label="排行依据" style="padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:11px;"><option value="learning_duration" selected>学习时长</option><option value="focus_duration">专注时长</option><option value="total_duration">总浏览时长</option></select><button id="leaderboardJoinBtn" class="secondary" style="font-size:11px;min-height:36px;padding:6px 12px;">加入排行</button><button id="leaderboardRefreshBtn" class="ghost" style="font-size:11px;min-height:36px;padding:6px 10px;">刷新</button></div></div><div id="leaderboardContent" aria-live="polite"><div class="empty">点击"加入排行"参与匿名排名。</div></div></section>
             <section class="inline-grid">
               <div class="panel"><div class="section-title"><div><h2>AI 分析结果</h2><p>完整总结、问题和建议</p></div></div><div id="aiAnalysisResult" aria-live="polite"><div class="empty">点击"AI 分析"或刷新洞察后显示结果。</div></div></div>
               <div class="panel"><div class="section-title"><div><h2>历史报告</h2><p>最近保存的 AI 分析</p></div><div class="button-row compact"><select id="reportTypeFilter" aria-label="报告类型" style="padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:11px;"><option value="">全部</option><option value="ai_7d">按需 7 天</option><option value="ai_14d">按需 14 天</option><option value="ai_30d">按需 30 天</option><option value="ai_weekly">自动周报</option><option value="ai_monthly">自动月报</option></select></div></div><div id="reportList" aria-live="polite"><div class="empty">暂无历史报告。</div></div></div>
@@ -387,7 +393,7 @@
           <div class="view-shell">
             <div class="view-header panel"><div class="view-copy"><h2>插件操作</h2><p>同步数据、导出记录，并查看最近操作日志。</p></div><button id="refreshBtnActions" class="secondary">刷新状态</button></div>
             <div class="panel"><div class="button-row compact"><button id="syncBtn">立即同步</button><button id="exportJsonBtn" class="ghost">导出本地 JSON</button><button id="exportCloudBtn" class="ghost">导出云端数据</button><select id="exportDaysSelect" aria-label="导出时间范围" style="padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-1);color:var(--text);font-size:12px;"><option value="0">全部</option><option value="7">近 7 天</option><option value="14">近 14 天</option><option value="30" selected>近 30 天</option></select><button id="shareCardBtn" class="ghost">分享卡片</button><button id="clearLocalBtn" class="danger">清空本地数据</button></div><div class="note" id="operationNote" aria-live="polite"></div><div class="log-box" id="logBox" aria-live="polite" style="margin-top:14px;">等待操作...</div></div>
-            <div class="panel" style="margin-top:12px;"><h3 style="margin:0 0 10px;font-size:13px;">导入数据</h3><div class="button-row compact"><input type="file" id="importFileInput" accept=".json" style="display:none;"><button id="importBtn" class="ghost">选择文件导入</button><span id="importFileName" style="font-size:12px;color:var(--muted);line-height:32px;"></span></div><div class="note" id="importNote" aria-live="polite"></div></div>
+            <div class="panel" style="margin-top:12px;"><h2 style="margin:0 0 10px;font-size:13px;font-weight:600;">导入数据</h2><div class="button-row compact"><input type="file" id="importFileInput" accept=".json" style="display:none;"><button id="importBtn" class="ghost">选择文件导入</button><span id="importFileName" style="font-size:12px;color:var(--muted);line-height:32px;"></span></div><div class="note" id="importNote" aria-live="polite"></div></div>
           </div>
         </section>
 
@@ -401,9 +407,11 @@
         <section class="main-view" id="mainViewSettings" data-main-view="settings" role="tabpanel" aria-labelledby="sidebarTabSettings" tabindex="0" hidden>
           <div class="view-shell">
             <div class="view-header panel"><div class="view-copy"><h2>插件设置</h2><p>统一管理同步、分析窗口和通知参数。修改后自动保存。</p></div><div class="button-row compact"><button id="themeToggleBtn" class="ghost" style="min-width:100px;"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-2px;margin-right:2px;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg> 亮色</button><button id="testApiBtn" class="ghost">测试连接</button><button id="resetApiBtn" class="ghost">恢复默认</button></div></div>
-            <div class="panel"><div id="settingsStatus" class="settings-status" aria-live="polite"></div><div class="settings-grid"><div class="setting-row"><div><strong>后端 API 地址</strong><p class="muted">用于同步、AI 分析和自动高级分析。</p></div><input id="apiBaseUrlInput" type="url" placeholder="http://119.29.55.112:8000" data-pref="apiBaseUrl"></div><div class="toggle-row"><div><strong>启用自动同步</strong><p class="muted">记录变化后自动上传到云端。</p></div><input id="autoSyncEnabledInput" type="checkbox" data-pref="autoSyncEnabled"></div><div class="toggle-row"><div><strong>启用通知提醒</strong><p class="muted">目标提醒与达成通知。</p></div><input id="notificationsEnabledInput" type="checkbox" data-pref="notificationsEnabled"></div><div class="inline-grid"><div><label for="autoSyncDebounceInput">自动同步防抖（秒）</label><input id="autoSyncDebounceInput" type="number" min="1" max="3600" value="15" data-pref="autoSyncDebounceSeconds"></div><div><label for="autoSyncMinIntervalInput">最小同步间隔（秒）</label><input id="autoSyncMinIntervalInput" type="number" min="10" max="86400" value="120" data-pref="autoSyncMinIntervalSeconds"></div></div><div class="inline-grid"><div><label for="dataRetentionDaysInput">本地数据保留（天）</label><input id="dataRetentionDaysInput" type="number" min="1" max="365" value="7" data-pref="dataRetentionDays"></div><div><label for="minVisitDurationInput">最小记录时长（秒）</label><input id="minVisitDurationInput" type="number" min="1" max="600" value="3" data-pref="minVisitDurationSeconds"></div></div><div class="inline-grid"><div><label for="blackholeThresholdInput">高级分析时间黑洞阈值（分钟）</label><input id="blackholeThresholdInput" type="number" min="1" max="600" value="30" data-pref="blackholeThresholdMinutes"></div><div><label for="analysisDaysInput">分析窗口（天）</label><select id="analysisDaysInput" data-pref="analysisDays"><option value="7">7 天</option><option value="14">14 天</option><option value="30">30 天</option></select></div></div></div></div>
-          <div class="panel"><div class="section-title"><div><h2>主动干预</h2><p>超时提醒、黑白名单和专注模式。</p></div></div><div class="settings-grid"><div class="toggle-row"><div><strong>启用主动干预</strong><p class="muted">开启后，访问特定站点或超时会收到提醒。</p></div><input id="interventionsEnabledInput" type="checkbox" data-pref="interventionsEnabled" onchange="updateInterventionWarning()"></div><div id="interventionWarning" style="display:none;padding:10px 14px;border-radius:var(--radius-sm);background:var(--yellow-soft);color:var(--yellow);font-size:12px;margin-bottom:4px;">已开启主动干预，但"启用通知提醒"未勾选 — 干预通知将不会弹出。请在上方勾选通知提醒。</div><div class="toggle-row"><div><strong>专注模式</strong><p class="muted">开启后，访问娱乐/社交类站点时会收到提醒。</p></div><input id="focusModeEnabledInput" type="checkbox" data-pref="focusModeEnabled"></div><div class="setting-row"><div><label for="domainAllowlistInput">白名单域名（不提醒，逗号分隔）</label><input id="domainAllowlistInput" type="text" placeholder="example.com, github.com" data-pref="domainAllowlist"></div></div><div class="setting-row"><div><label for="domainBlocklistInput">黑名单域名（始终提醒，逗号分隔）</label><input id="domainBlocklistInput" type="text" placeholder="tiktok.com, douyin.com" data-pref="domainBlocklist"></div></div><div class="setting-row"><div><label for="categoryTimeLimitsInput">分类时长限制（格式：分类:分钟，逗号分隔）</label><input id="categoryTimeLimitsInput" type="text" placeholder="entertainment:30, social:20" data-pref="categoryTimeLimits"></div></div><div class="setting-row"><div><label for="interventionCooldownInput">提醒冷却时间（分钟）</label><input id="interventionCooldownInput" type="number" min="1" max="1440" value="30" data-pref="interventionCooldownMinutes"></div></div><div class="setting-row"><div><label for="continuousEntertainmentInput">连续娱乐检测阈值（分钟）</label><input id="continuousEntertainmentInput" type="number" min="5" max="120" value="20" data-pref="continuousEntertainmentMinutes"></div></div><div class="toggle-row"><div><strong>学习效率下降提醒</strong><p class="muted">今日学习时间较昨日同时段大幅下降时提醒。</p></div><input id="learningDropAlertEnabledInput" type="checkbox" data-pref="learningDropAlertEnabled"></div><div class="toggle-row"><div><strong>自适应阈值</strong><p class="muted">连续 7 次忽略提醒后，建议调整阈值。</p></div><input id="adaptiveThresholdEnabledInput" type="checkbox" data-pref="adaptiveThresholdEnabled"></div></div></div>
-          <div class="panel"><div class="section-title"><div><h2>安静时段与专注</h2><p>设定免打扰时间和专注参数。</p></div></div><div class="settings-grid"><div class="inline-grid"><div><label for="quietHoursStartInput">安静时段开始</label><input id="quietHoursStartInput" type="time" data-pref="quietHoursStart"></div><div><label for="quietHoursEndInput">安静时段结束</label><input id="quietHoursEndInput" type="time" data-pref="quietHoursEnd"></div></div><div class="setting-row"><div><label for="focusDurationsInput">专注时长选项（分钟，逗号分隔）</label><input id="focusDurationsInput" type="text" placeholder="25,45,60" data-pref="focusDurations"></div></div><div class="toggle-row"><div><strong>每日浏览摘要通知</strong><p class="muted">每天定时发送浏览行为摘要。</p></div><input id="dailySummaryEnabledInput" type="checkbox" data-pref="dailySummaryEnabled"></div><div class="setting-row"><div><label for="dailySummaryHourInput">摘要发送时间（小时，0-23）</label><input id="dailySummaryHourInput" type="number" min="0" max="23" value="21" data-pref="dailySummaryHour"></div></div></div></div>
+            <div class="panel"><div id="settingsStatus" class="settings-status" aria-live="polite"></div><div class="settings-grid"><div class="setting-row"><div><strong>后端 API 地址</strong><p class="muted">用于同步、AI 分析和自动高级分析。</p></div><input id="apiBaseUrlInput" type="url" placeholder="http://119.29.55.112:8000" data-pref="apiBaseUrl" aria-label="后端 API 地址"></div><div class="toggle-row"><div><strong>启用自动同步</strong><p class="muted">记录变化后自动上传到云端。</p></div><input id="autoSyncEnabledInput" type="checkbox" data-pref="autoSyncEnabled" aria-label="启用自动同步"></div><div class="toggle-row"><div><strong>启用通知提醒</strong><p class="muted">目标提醒与达成通知。</p></div><input id="notificationsEnabledInput" type="checkbox" data-pref="notificationsEnabled" aria-label="启用通知提醒"></div><div class="inline-grid"><div><label for="autoSyncDebounceInput">自动同步防抖（秒）</label><input id="autoSyncDebounceInput" type="number" min="1" max="3600" value="15" data-pref="autoSyncDebounceSeconds"></div><div><label for="autoSyncMinIntervalInput">最小同步间隔（秒）</label><input id="autoSyncMinIntervalInput" type="number" min="10" max="86400" value="120" data-pref="autoSyncMinIntervalSeconds"></div></div><div class="inline-grid"><div><label for="dataRetentionDaysInput">本地数据保留（天）</label><input id="dataRetentionDaysInput" type="number" min="1" max="365" value="7" data-pref="dataRetentionDays"></div><div><label for="minVisitDurationInput">最小记录时长（秒）</label><input id="minVisitDurationInput" type="number" min="1" max="600" value="3" data-pref="minVisitDurationSeconds"></div></div><div class="inline-grid"><div><label for="blackholeThresholdInput">高级分析时间黑洞阈值（分钟）</label><input id="blackholeThresholdInput" type="number" min="1" max="600" value="30" data-pref="blackholeThresholdMinutes"></div><div><label for="analysisDaysInput">分析窗口（天）</label><select id="analysisDaysInput" data-pref="analysisDays"><option value="7">7 天</option><option value="14">14 天</option><option value="30">30 天</option></select></div></div></div></div>
+          <div class="panel"><div class="section-title"><div><h2>主动干预</h2><p>超时提醒、黑白名单和专注模式。</p></div></div><div class="settings-grid"><div class="toggle-row"><div><strong>启用主动干预</strong><p class="muted">开启后，访问特定站点或超时会收到提醒。</p></div><input id="interventionsEnabledInput" type="checkbox" data-pref="interventionsEnabled" aria-label="启用主动干预" onchange="updateInterventionWarning()"></div><div id="interventionWarning" style="display:none;padding:10px 14px;border-radius:var(--radius-sm);background:var(--yellow-soft);color:var(--yellow);font-size:12px;margin-bottom:4px;">已开启主动干预，但"启用通知提醒"未勾选 — 干预通知将不会弹出。请在上方勾选通知提醒。</div><div class="toggle-row"><div><strong>专注模式</strong><p class="muted">开启后，访问娱乐/社交类站点时会收到提醒。</p></div><input id="focusModeEnabledInput" type="checkbox" data-pref="focusModeEnabled" aria-label="专注模式"></div><div class="setting-row"><div><label for="domainAllowlistInput">白名单域名（不提醒，逗号分隔）</label><input id="domainAllowlistInput" type="text" placeholder="example.com, github.com" data-pref="domainAllowlist"></div></div><div class="setting-row"><div><label for="domainBlocklistInput">黑名单域名（始终提醒，逗号分隔）</label><input id="domainBlocklistInput" type="text" placeholder="tiktok.com, douyin.com" data-pref="domainBlocklist"></div></div><div class="setting-row"><div><label for="categoryTimeLimitsInput">分类时长限制（格式：分类:分钟，逗号分隔）</label><input id="categoryTimeLimitsInput" type="text" placeholder="entertainment:30, social:20" data-pref="categoryTimeLimits"></div></div><div class="setting-row"><div><label for="interventionCooldownInput">提醒冷却时间（分钟）</label><input id="interventionCooldownInput" type="number" min="1" max="1440" value="30" data-pref="interventionCooldownMinutes"></div></div><div class="setting-row"><div><label for="continuousEntertainmentInput">连续娱乐检测阈值（分钟）</label><input id="continuousEntertainmentInput" type="number" min="5" max="120" value="20" data-pref="continuousEntertainmentMinutes"></div></div><div class="toggle-row"><div><strong>学习效率下降提醒</strong><p class="muted">今日学习时间较昨日同时段大幅下降时提醒。</p></div><input id="learningDropAlertEnabledInput" type="checkbox" data-pref="learningDropAlertEnabled" aria-label="学习效率下降提醒"></div><div class="toggle-row"><div><strong>自适应阈值</strong><p class="muted">连续 7 次忽略提醒后，建议调整阈值。</p></div><input id="adaptiveThresholdEnabledInput" type="checkbox" data-pref="adaptiveThresholdEnabled" aria-label="自适应阈值"></div></div></div>
+          <div class="panel"><div class="section-title"><div><h2>安静时段与专注</h2><p>设定免打扰时间和专注参数。</p></div></div><div class="settings-grid"><div class="inline-grid"><div><label for="quietHoursStartInput">安静时段开始</label><input id="quietHoursStartInput" type="time" data-pref="quietHoursStart"></div><div><label for="quietHoursEndInput">安静时段结束</label><input id="quietHoursEndInput" type="time" data-pref="quietHoursEnd"></div></div><div class="setting-row"><div><label for="focusDurationsInput">专注时长选项（分钟，逗号分隔）</label><input id="focusDurationsInput" type="text" placeholder="25,45,60" data-pref="focusDurations"></div></div><div class="toggle-row"><div><strong>每日浏览摘要通知</strong><p class="muted">每天定时发送浏览行为摘要。</p></div><input id="dailySummaryEnabledInput" type="checkbox" data-pref="dailySummaryEnabled" aria-label="每日浏览摘要通知"></div><div class="setting-row"><div><label for="dailySummaryHourInput">摘要发送时间（小时，0-23）</label><input id="dailySummaryHourInput" type="number" min="0" max="23" value="21" data-pref="dailySummaryHour"></div></div></div></div>
+          <div class="panel"><div class="section-title"><div><h2>外观</h2><p>自定义强调色、字体大小和图表配色。</p></div></div><div class="settings-grid"><div class="setting-row"><div><strong>强调色</strong><p class="muted">替换默认的紫色强调色。</p></div><input id="accentColorInput" type="color" value="#6366f1" data-pref="accentColor" aria-label="强调色" style="width:48px;height:34px;padding:2px;border:1px solid var(--line);border-radius:var(--radius-sm);cursor:pointer;"></div><div class="setting-row"><div><strong>字体大小</strong><p class="muted">调整全局字体基准大小。</p></div><select id="fontSizeInput" data-pref="fontSize" aria-label="字体大小"><option value="small">小</option><option value="medium" selected>中</option><option value="large">大</option></select></div><div class="setting-row"><div><strong>图表配色方案</strong><p class="muted">切换图表使用的调色板。</p></div><select id="chartSchemeInput" data-pref="chartScheme" aria-label="图表配色方案"><option value="default">默认</option><option value="warm">暖色</option><option value="cool">冷色</option><option value="mono">单色</option></select></div></div></div>
+          <div class="panel"><div class="section-title"><div><h2>通知规则</h2><p>自定义哪些分类触发提醒和阈值。</p></div></div><div class="settings-grid"><div class="setting-row"><div><strong>提醒分类</strong><p class="muted">访问这些分类时触发提醒（逗号分隔）。</p></div><input id="notifyCategoriesInput" type="text" placeholder="entertainment,social" data-pref="notifyCategories" aria-label="提醒分类"></div><div class="setting-row"><div><strong>自定义分类阈值</strong><p class="muted">格式：分类:分钟，逗号分隔。如 entertainment:30, social:20</p></div><input id="customThresholdsInput" type="text" placeholder="entertainment:30, social:20" data-pref="customThresholds" aria-label="自定义分类阈值"></div><div class="toggle-row"><div><strong>通知声音</strong><p class="muted">通知是否附带提示音。</p></div><input id="notificationSoundInput" type="checkbox" data-pref="notificationSound" aria-label="通知声音"></div></div><div style="margin-top:var(--space-3);"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-2);"><strong style="font-size:13px;">通知历史</strong><button id="clearNotificationHistoryBtn" class="ghost" style="font-size:11px;padding:4px 8px;">清空</button></div><div id="notificationHistoryList" style="max-height:200px;overflow-y:auto;font-size:12px;"><div class="empty">暂无通知记录</div></div></div></div>
           <div class="panel"><div class="section-title"><div><h2>自定义分类规则</h2><p>修正误分类的站点，规则优先于内置分类。</p></div></div><div id="overrideRuleList" aria-live="polite"><div class="empty">点击域名列表中的「修改分类」按钮即可添加规则。</div></div></div>
           </div>
         </section>

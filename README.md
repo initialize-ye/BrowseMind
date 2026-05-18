@@ -87,8 +87,6 @@ cp .env.example .env
 # 编辑 .env，填入你的 OpenAI 或 DeepSeek Key
 ```
 
-AI 配置说明见 [AI_SETUP.md](AI_SETUP.md)
-
 ## 💡 使用指南
 
 ### Popup 弹窗能做什么

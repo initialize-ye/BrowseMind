@@ -5,10 +5,12 @@
 ## 常用命令
 
 ### Chrome 扩展开发
-- 在 `chrome://extensions/` 中将仓库根目录作为“已解压的扩展程序”加载。
+- 在 `chrome://extensions/` 中将仓库根目录作为”已解压的扩展程序”加载。
 - 修改 `popup`、`background`、`manifest` 等扩展文件后，需要在扩展管理页重新加载插件。
 - 本地验证弹窗交互时，直接使用扩展弹窗。
 - 验证仪表盘时，通过扩展入口打开 `dashboard.html`，或直接作为扩展页面访问。
+- 语法检查：`node -c background.js && node -c popup.js && node -c dashboard.js && node -c dataSync.js && node -c dataProcessor.js && node -c shared.js`
+- 前端测试：`node test_frontend.js`（75 个测试，覆盖 DataProcessor、WebsiteClassifier、StatisticsAnalyzer、LocalAdvancedAnalyzer、Background 工具函数等）
 
 ### 后端开发
 ```bash
@@ -38,6 +40,8 @@ BrowseMind 由 Chrome 扩展前端和 FastAPI 后端两部分组成。
 
 ### 扩展端
 - `manifest.json` 定义了 Manifest V3 扩展，使用 service worker 形式的后台脚本，声明 popup UI、storage/history/tab/alarms/notifications 权限，并通过严格 CSP 仅允许本地脚本。
+- `shared.js` 是 popup/dashboard 共用的工具模块（日期工具、图表调色板、分类颜色、`extractDomain` 等）。由于使用 `window.matchMedia`，**不能在 background.js（service worker）中导入**。
+- `shared.css` 是 popup/dashboard 共用的设计令牌（OKLCH 色彩系统）和基础组件样式。
 - `background.js` 是数据采集核心。它监听标签切换、标签更新、窗口焦点变化，统计当前标签停留时间，将浏览记录写入 `chrome.storage.local`，安装时导入最近历史记录，并定时调用后端更新目标进度。
 - `popup.html` + `popup.js` 是主扩展界面。弹窗从本地存储读取浏览数据，在前端完成分类与聚合，渲染图表，触发同步与 AI 分析，加载目标数据，并展示来自后端的高级分析结果。
 - `dashboard.html` + `dashboard.js` 是更大的分析与操作界面。仪表盘仍以本地数据展示为主，同时提供同步、AI 分析、目标管理、导出/清空数据、后端地址配置等操作。
@@ -63,6 +67,8 @@ BrowseMind 由 Chrome 扩展前端和 FastAPI 后端两部分组成。
 - AI 分析、高级分析、云端目标进度、提醒等服务端功能依赖当前 `userId` 已同步到后端的数据。
 
 ## 项目实现注意事项
+- 命名规范：JS 文件/函数/变量用 camelCase，类名用 PascalCase，常量用 SCREAMING_SNAKE_CASE，模块级私有变量用 `_` 前缀（如 `_prefsCache`）。后端 Python 用 snake_case。
+- `dataProcessor.js` 包含 6 个类：`DataProcessor`（数据清洗）、`WebsiteClassifier`（域名分类）、`StatisticsAnalyzer`（统计分析）、`LocalAdvancedAnalyzer`（本地高级分析：时间黑洞+注意力曲线）、`HabitScorer`（习惯评分）。
 - 默认后端地址是 Ubuntu 云服务器 `http://119.29.55.112:8000`，但 popup、dashboard、background 都允许通过 `chrome.storage.local.apiBaseUrl` 覆盖。
 - 目标进度更新接口使用 query 参数，不是 JSON body：`/api/goals/{user_id}/update-progress?date=YYYY-MM-DD`。
 - 当当前 `userId` 在后端还没有同步数据时，高级分析接口返回 404 是正常情况；前端应将其视为空状态，而不是致命错误。

@@ -42,15 +42,48 @@ let _chartPaletteTheme = null;
 
 function getChartPalette() {
   const theme = document.documentElement.dataset.theme || 'light';
-  if (_chartPaletteCache && _chartPaletteTheme === theme) return _chartPaletteCache;
+  const scheme = document.documentElement.dataset.chartScheme || 'default';
+  const key = `${theme}-${scheme}`;
+  if (_chartPaletteCache && _chartPaletteTheme === key) return _chartPaletteCache;
   const cs = getComputedStyle(document.documentElement);
   _chartPaletteCache = [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
-  _chartPaletteTheme = theme;
+  _chartPaletteTheme = key;
   return _chartPaletteCache;
 }
 
 function invalidateChartPalette() {
   _chartPaletteCache = null;
+}
+
+// 返回带透明度的调色板，alpha ∈ [0,1]
+function getChartPaletteWithAlpha(alpha) {
+  const pal = getChartPalette();
+  return pal.map(hex => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  });
+}
+
+// ==================== 主题应用工具 ====================
+function applyAccentColor(hex) {
+  const root = document.documentElement;
+  if (!hex) {
+    root.removeAttribute('data-accent');
+    root.style.removeProperty('--accent');
+    root.style.removeProperty('--accent-soft');
+    root.style.removeProperty('--accent-glow');
+    return;
+  }
+  // hex → HSL components for oklch-like usage via hsl()
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  root.style.setProperty('--accent', hex);
+  root.style.setProperty('--accent-soft', `color-mix(in srgb, ${hex} 15%, var(--bg))`);
+  root.style.setProperty('--accent-glow', `color-mix(in srgb, ${hex} 20%, transparent)`);
+  root.setAttribute('data-accent', hex);
 }
 
 // ==================== 分类颜色映射 ====================
