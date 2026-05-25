@@ -36,6 +36,7 @@ document.getElementById('refreshBtn').addEventListener('click', loadData);
 document.getElementById('syncBtn').addEventListener('click', syncToCloud);
 document.getElementById('aiAnalysisBtn').addEventListener('click', showAIAnalysis);
 document.getElementById('dashboardBtn').addEventListener('click', openDashboard);
+document.getElementById('cleanOldBtn').addEventListener('click', cleanOldData);
 document.getElementById('closeModal').addEventListener('click', closeModal);
 document.getElementById('addGoalBtn').addEventListener('click', openGoalModal);
 document.getElementById('closeGoalModal').addEventListener('click', closeGoalModal);
@@ -358,6 +359,31 @@ async function loadData() {
       hint = '请求超时，请稍后重试';
     }
     if (p) p.textContent = `加载出错：${hint}`;
+  }
+}
+
+async function cleanOldData() {
+  const btn = document.getElementById('cleanOldBtn');
+  try {
+    btn.disabled = true;
+    btn.textContent = '清理中...';
+    const preferences = await getPreferences();
+    const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+    const retentionStart = Date.now() - preferences.dataRetentionDays * 24 * 60 * 60 * 1000;
+    const filtered = browsingData.filter(r => r.visitTime > retentionStart);
+    const removed = browsingData.length - filtered.length;
+    if (removed === 0) {
+      btn.textContent = '无旧数据';
+    } else {
+      await chrome.storage.local.set({ browsingData: filtered });
+      btn.textContent = `已清理 ${removed} 条`;
+      loadData();
+    }
+  } catch (e) {
+    btn.textContent = '清理失败';
+    console.error('cleanOldData:', e);
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = '清理'; }, 2000);
   }
 }
 
@@ -966,12 +992,18 @@ async function showAIAnalysis() {
 
   } catch (error) {
     console.error('AI 分析失败:', error);
+    const isConnection = error.message.includes('连接') || error.message.includes('fetch') || error.message.includes('network');
     content.innerHTML = `
       <p style="color: var(--red); text-align: center;">
         AI 分析失败<br>
         ${escapeHtml(error.message)}<br><br>
         ${error.message.includes('API') ? '请配置 AI_API_KEY 环境变量' : ''}
       </p>
+      <div style="margin-top:12px;padding:10px;background:var(--surface-2);border-radius:8px;font-size:12px;text-align:center;">
+        <div style="color:var(--muted);margin-bottom:6px;">💡 本地分析仍可用</div>
+        <div>仪表盘的「洞察」页面提供本地时间黑洞检测和专注曲线分析，无需后端连接。</div>
+        <button onclick="openDashboard()" class="action-btn" style="margin-top:8px;font-size:12px;padding:6px 16px;">打开仪表盘</button>
+      </div>
     `;
   } finally {
     _aiAnalysisRunning = false;
@@ -1167,43 +1199,11 @@ async function loadAdvancedAnalysis() {
 
 // 显示时间黑洞
 function displayBlackholes(blackholes) {
-  const container = document.getElementById('blackholeStats');
-
-  if (!blackholes.topBlackholes || blackholes.topBlackholes.length === 0) {
-    container.innerHTML = '<p class="empty-line" style="color:var(--green);">没有时间黑洞 — 你的浏览节奏很好</p>';
-    return;
-  }
-
-  const wastePercentage = blackholes.wastePercentage;
-  const totalWasted = formatDuration(blackholes.totalWastedTime);
-
-  let html = `
-    <div style="text-align: center; margin-bottom: 12px; padding: 8px; background: var(--red-soft); border-radius: 8px;">
-      <div style="font-size: 20px; font-weight: 700; color: var(--red);">${wastePercentage}%</div>
-      <div style="font-size: 11px; color: var(--muted);">黑洞时间占比 · 共 ${totalWasted}</div>
-    </div>
-  `;
-
-  html += blackholes.topBlackholes.slice(0, 3).map(bh => {
-    const catName = escapeHtml(WebsiteClassifier.CATEGORY_NAMES[bh.category] || '其他');
-    const typeLabel = escapeHtml(WebsiteClassifier.BLACKHOLE_TYPE_LABELS_SHORT[bh.blackholeType] || '');
-    const meta = bh.blackholeType === 'high_frequency'
-      ? `${bh.visitCount} 次访问 · 累计 ${formatDuration(bh.totalDuration)}`
-      : `${bh.longSessionsCount} 次长时间访问 · 最长 ${formatDuration(bh.longestSession)}`;
-    return `
-      <div class="blackhole-item">
-        <div class="blackhole-header">
-          <span class="blackhole-domain">${escapeHtml(bh.domain)} <span style="font-size:10px;color:var(--muted);background:var(--surface-2);padding:1px 5px;border-radius:3px;">${catName}</span> <span style="font-size:10px;color:var(--yellow);">${typeLabel}</span></span>
-          <span class="blackhole-duration">${formatDuration(bh.totalDuration)}</span>
-        </div>
-        <div class="blackhole-meta">
-          ${meta}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  container.innerHTML = html;
+  renderBlackholesToContainer(document.getElementById('blackholeStats'), blackholes, {
+    maxItems: 3,
+    emptyMsg: '没有时间黑洞 — 你的浏览节奏很好',
+    useShortLabels: true
+  });
 }
 
 // 显示注意力曲线

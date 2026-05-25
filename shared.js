@@ -130,3 +130,24 @@ function getGridColor() {
   const cs = getComputedStyle(document.documentElement);
   return cs.getPropertyValue('--chart-grid').trim() || 'oklch(88% 0.01 58 / 0.5)';
 }
+
+// ==================== 时间黑洞渲染（popup/dashboard 共用） ====================
+function renderBlackholesToContainer(container, blackholes, options = {}) {
+  const { maxItems = 5, emptyMsg = '没有明显的时间黑洞。', useShortLabels = false } = options;
+  if (!container || !blackholes || !blackholes.topBlackholes || !blackholes.topBlackholes.length) {
+    if (container) container.innerHTML = `<div class="empty">${escapeHtml(emptyMsg)}</div>`;
+    return;
+  }
+  const labels = useShortLabels ? WebsiteClassifier.BLACKHOLE_TYPE_LABELS_SHORT : WebsiteClassifier.BLACKHOLE_TYPE_LABELS;
+  const wp = Number(blackholes.wastePercentage || 0).toFixed(1);
+  const items = blackholes.topBlackholes.slice(0, maxItems).map(item => {
+    const pct = blackholes.totalWastedTime > 0 ? Math.round(item.totalDuration / blackholes.totalWastedTime * 100) : 0;
+    const catName = WebsiteClassifier.CATEGORY_NAMES[item.category] || '其他';
+    const typeLabel = labels[item.blackholeType] || '';
+    const meta = item.blackholeType === 'high_frequency'
+      ? `${item.visitCount} 次访问 · 累计 ${formatDuration(item.totalDuration)}`
+      : `${item.longSessionsCount} 次长访问 · 最长 ${formatDuration(item.longestSession)}`;
+    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(item.domain)} <span style="font-size:11px;font-weight:500;color:var(--muted);background:var(--surface-2);padding:1px 6px;border-radius:4px;">${escapeHtml(catName)}</span> <span style="font-size:11px;font-weight:500;color:var(--yellow);">${escapeHtml(typeLabel)}</span></div><div class="domain-meta">${meta}</div></div><div style="text-align:right"><div class="domain-meta">${formatDuration(item.totalDuration)}</div><div class="domain-meta" style="font-size:11px">${pct}%</div></div></div>`;
+  }).join('');
+  container.innerHTML = `<div class="status-note danger"><strong>${wp}%</strong> 的时间陷入黑洞 · 共 ${formatDuration(blackholes.totalWastedTime)}</div>${items}`;
+}

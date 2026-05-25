@@ -1426,22 +1426,10 @@ function renderTimelineChart(records, catColors) {
 }
 
 function renderBlackholes(blackholes) {
-  const container = document.getElementById('blackholeStats');
-  if (!blackholes || !blackholes.topBlackholes || !blackholes.topBlackholes.length) {
-    container.innerHTML = '<div class="empty">没有明显的时间黑洞 — 你的浏览节奏很健康。</div>';
-    return;
-  }
-  const items = blackholes.topBlackholes.slice(0, 5).map(item => {
-    const pct = blackholes.totalWastedTime > 0 ? Math.round(item.totalDuration / blackholes.totalWastedTime * 100) : 0;
-    const catName = WebsiteClassifier.CATEGORY_NAMES[item.category] || '其他';
-    const typeLabel = WebsiteClassifier.BLACKHOLE_TYPE_LABELS[item.blackholeType] || '';
-    const meta = item.blackholeType === 'high_frequency'
-      ? `${item.visitCount} 次访问 · 累计 ${formatDuration(item.totalDuration)}`
-      : `${item.longSessionsCount} 次长访问 · 最长 ${formatDuration(item.longestSession)}`;
-    return `<div class="domain-row"><div><div class="domain-name">${escapeHtml(item.domain)} <span style="font-size:11px;font-weight:500;color:var(--muted);background:var(--surface-2);padding:1px 6px;border-radius:4px;">${catName}</span> <span style="font-size:11px;font-weight:500;color:var(--yellow);">${typeLabel}</span></div><div class="domain-meta">${meta}</div></div><div style="text-align:right"><div class="domain-meta">${formatDuration(item.totalDuration)}</div><div class="domain-meta" style="font-size:11px">${pct}%</div></div></div>`;
-  }).join('');
-  const wp = Number(blackholes.wastePercentage || 0).toFixed(1);
-  container.innerHTML = `<div class="status-note danger"><strong>${wp}%</strong> 的时间陷入黑洞 · 共 ${formatDuration(blackholes.totalWastedTime)}</div>${items}`;
+  renderBlackholesToContainer(document.getElementById('blackholeStats'), blackholes, {
+    maxItems: 5,
+    emptyMsg: '没有明显的时间黑洞 — 你的浏览节奏很健康。'
+  });
 }
 function renderAttentionCurve(attentionCurve) {
   const statsContainer = document.getElementById('attentionStats');
@@ -2108,7 +2096,7 @@ async function syncNow() {
 async function runAIAnalysis() {
   const button = document.getElementById('aiBtn');
   setButtonBusy(button, true, '分析中...');
-  try { const preferences = await getPreferences(); await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); renderAIAnalysis(analysis); await loadReports(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); await switchSidebarTab('insights', { focusPanel: true }); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); } finally { setButtonBusy(button, false); }
+  try { const preferences = await getPreferences(); await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); renderAIAnalysis(analysis); await loadReports(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); await switchSidebarTab('insights', { focusPanel: true }); } catch (error) { setNote(`AI 分析失败：${error.message}。本地分析（时间黑洞/专注曲线）仍可在洞察页面使用。`, 'danger'); log(`AI 分析失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
 // ==================== 规则引擎 UI ====================
 
