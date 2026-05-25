@@ -2578,7 +2578,28 @@ async function handleImportFile(e) {
   }
 }
 
-async function clearLocalData() { if (!confirm('确定清空本地浏览数据吗？此操作不可恢复。')) return; await chrome.storage.local.set({ browsingData: [] }); setNote('本地数据已清空', 'success'); log('本地浏览数据已清空'); await refreshDashboard(); }
+async function clearLocalData() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', '确认清空数据');
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `<div class="modal-content" style="max-width:340px;text-align:center;"><p style="margin:0 0 16px;font-size:13px;color:var(--text);">确定清空本地浏览数据吗？此操作不可恢复。</p><div style="display:flex;gap:8px;justify-content:center;"><button class="action-btn" id="_clearCancel">取消</button><button class="action-btn primary" id="_clearOk" style="background:var(--red);border-color:var(--red);">清空</button></div></div>`;
+  document.body.appendChild(overlay);
+  const confirmed = await new Promise(resolve => {
+    overlay.querySelector('#_clearCancel').addEventListener('click', () => resolve(false));
+    overlay.querySelector('#_clearOk').addEventListener('click', () => resolve(true));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) resolve(false); });
+    overlay.querySelector('#_clearOk').focus();
+  });
+  overlay.remove();
+  if (!confirmed) return;
+  await chrome.storage.local.set({ browsingData: [] });
+  setNote('本地数据已清空', 'success');
+  log('本地浏览数据已清空');
+  await refreshDashboard();
+}
 function moveSidebarTabFocus(currentTab, direction) {
   const currentIndex = SIDEBAR_TABS.indexOf(currentTab);
   const nextIndex = (currentIndex + direction + SIDEBAR_TABS.length) % SIDEBAR_TABS.length;

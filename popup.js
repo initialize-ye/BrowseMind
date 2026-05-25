@@ -1,5 +1,23 @@
 // BrowseMind Popup 脚本 - 展示浏览数据统计（图表增强版）
 
+// 通用确认弹窗（替代原生 confirm）
+function showConfirm(message) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', '确认操作');
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `<div class="modal-content" style="max-width:340px;text-align:center;"><p style="margin:0 0 16px;font-size:13px;color:var(--text);">${message}</p><div style="display:flex;gap:8px;justify-content:center;"><button class="action-btn" id="_confirmCancel">取消</button><button class="action-btn primary" id="_confirmOk">确定</button></div></div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#_confirmCancel').addEventListener('click', () => { overlay.remove(); resolve(false); });
+    overlay.querySelector('#_confirmOk').addEventListener('click', () => { overlay.remove(); resolve(true); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+    overlay.querySelector('#_confirmOk').focus();
+  });
+}
+
 let currentChart = null;
 let chartData = null;
 let attentionChart = null;
@@ -1466,7 +1484,7 @@ async function createGoal() {
 let _deletingGoal = false;
 async function deleteGoal(goalId) {
   if (_deletingGoal) return;
-  if (!confirm('确定要删除这个目标吗？')) {
+  if (!await showConfirm('确定要删除这个目标吗？')) {
     return;
   }
   _deletingGoal = true;

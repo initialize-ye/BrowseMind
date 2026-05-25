@@ -21,12 +21,16 @@
   --shadow: 0 1px 3px oklch(18% 0.012 58 / 0.06);
   --radius-sm: 8px;
   --radius-md: 12px;
+  --radius-lg: 16px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --accent-hover: oklch(47% 0.14 275);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   /* Chart.js palette — hex required for Canvas API */
   --chart-1: #6366f1;
@@ -162,7 +166,7 @@ button {
 }
 
 button:hover {
-  background: oklch(47% 0.14 275);
+  background: var(--accent-hover);
   box-shadow: var(--shadow);
   transform: translateY(-1px);
 }

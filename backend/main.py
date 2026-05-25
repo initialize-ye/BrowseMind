@@ -7,8 +7,11 @@ load_dotenv()
 
 from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List
@@ -40,6 +43,11 @@ app = FastAPI(
     description="浏览行为分析后端服务",
     version="1.0.0"
 )
+
+# 速率限制
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # 配置 CORS（Chrome 扩展 + 本地开发）
 app.add_middleware(
@@ -237,7 +245,9 @@ async def root():
 
 
 @app.post("/api/upload", response_model=SuccessResponse)
+@limiter.limit("30/minute")
 async def upload_browsing_data(
+    request: Request,
     batch: BrowsingRecordBatch,
     db: Session = Depends(get_db)
 ):
@@ -582,7 +592,9 @@ async def get_user_stats(
 
 
 @app.post("/api/ai-analysis/{user_id}", response_model=AIAnalysisResponse)
+@limiter.limit("5/minute")
 async def get_ai_analysis(
+    request: Request,
     user_id: str,
     days: int = 7,
     db: Session = Depends(get_db)
@@ -1000,7 +1012,8 @@ def get_settings(user_id: str, db: Session = Depends(get_db)):
 
 
 @app.put("/api/settings/{user_id}")
-def update_settings(user_id: str, body: dict, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+def update_settings(request: Request, user_id: str, body: dict, db: Session = Depends(get_db)):
     """更新用户设置（全量覆盖）"""
     # 限制 body 大小（64KB）
     body_str = json.dumps(body, ensure_ascii=False)
@@ -1030,7 +1043,8 @@ def get_classification_rules(user_id: str, db: Session = Depends(get_db)):
 
 
 @app.put("/api/classification-rules/{user_id}")
-def update_classification_rules(user_id: str, body: dict, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+def update_classification_rules(request: Request, user_id: str, body: dict, db: Session = Depends(get_db)):
     """更新用户分类规则（全量覆盖）"""
     body_str = json.dumps(body, ensure_ascii=False)
     if len(body_str) > 65536:
@@ -1059,7 +1073,8 @@ def get_rules(user_id: str, db: Session = Depends(get_db)):
 
 
 @app.put("/api/rules/{user_id}")
-def update_rules(user_id: str, body: RuleSyncRequest, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+def update_rules(request: Request, user_id: str, body: RuleSyncRequest, db: Session = Depends(get_db)):
     """更新用户规则引擎规则（全量覆盖）"""
     if len(body.rules) > 65536:
         raise HTTPException(status_code=413, detail="规则数据过大（最大 64KB）")
@@ -1282,7 +1297,9 @@ async def shutdown_event():
 # ==================== 排行榜 ====================
 
 @app.post("/api/leaderboard/{user_id}")
+@limiter.limit("10/minute")
 def opt_in_leaderboard(
+    request: Request,
     user_id: str,
     body: dict = None,
     db: Session = Depends(get_db)
@@ -1383,7 +1400,9 @@ def opt_out_leaderboard(
 
 
 @app.get("/api/leaderboard")
+@limiter.limit("30/minute")
 def get_leaderboard(
+    request: Request,
     week: str = Query(None, description="周起始日期 YYYY-MM-DD，默认本周"),
     sort_by: str = Query("learning_duration", pattern="^(learning_duration|focus_duration|total_duration)$"),
     limit: int = Query(50, ge=1, le=100),
