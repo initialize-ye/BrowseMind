@@ -90,7 +90,6 @@ vm.runInContext(bgCode, bgCtx);
 const bgContext = {
   recordKey: bgSandbox.recordKey,
   parseListString: bgSandbox.parseListString,
-  parseCategoryTimeLimits: bgSandbox.parseCategoryTimeLimits,
   isInQuietHours: bgSandbox.isInQuietHours
 };
 
@@ -728,36 +727,6 @@ test('parseListString() handles empty/null input', () => {
   assertDeepEqual(bgContext.parseListString(''), [], 'Empty string should return []');
   assertDeepEqual(bgContext.parseListString(null), [], 'null should return []');
   assertDeepEqual(bgContext.parseListString(undefined), [], 'undefined should return []');
-});
-
-test('parseCategoryTimeLimits() parses correctly', () => {
-  const result = bgContext.parseCategoryTimeLimits('entertainment:30,social:20');
-  assertEqual(result.entertainment, 1800, 'entertainment should be 1800s (30min)');
-  assertEqual(result.social, 1200, 'social should be 1200s (20min)');
-});
-
-test('parseCategoryTimeLimits() handles Chinese comma', () => {
-  const result = bgContext.parseCategoryTimeLimits('entertainment:30，social:20');
-  assertEqual(result.entertainment, 1800, 'Should handle Chinese comma');
-});
-
-test('parseCategoryTimeLimits() skips invalid entries', () => {
-  const result = bgContext.parseCategoryTimeLimits('entertainment:30,bad-entry,social:abc');
-  assertEqual(result.entertainment, 1800, 'Should parse valid entry');
-  assert(!('bad-entry' in result), 'Should skip entry without colon');
-  assert(!('social' in result), 'Should skip entry with non-numeric value');
-});
-
-test('parseCategoryTimeLimits() handles empty input', () => {
-  const result = bgContext.parseCategoryTimeLimits('');
-  assertDeepEqual(result, {}, 'Empty string should return {}');
-  const result2 = bgContext.parseCategoryTimeLimits(null);
-  assertDeepEqual(result2, {}, 'null should return {}');
-});
-
-test('parseCategoryTimeLimits() lowercases categories', () => {
-  const result = bgContext.parseCategoryTimeLimits('Entertainment:30');
-  assertEqual(result.entertainment, 1800, 'Should lowercase category');
 });
 
 test('isInQuietHours() returns false for empty preferences', () => {

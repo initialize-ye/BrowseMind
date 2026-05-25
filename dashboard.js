@@ -34,7 +34,7 @@ let habitTrendChart = null;
 let currentClassifiedData = [];
 let domainFilterTimer = null;
 // 侧边栏标签页 ID 列表（与 HTML data-sidebar-tab 属性对应）
-const SIDEBAR_TABS = ['dashboard', 'insights', 'actions', 'goals', 'settings'];
+const SIDEBAR_TABS = ['dashboard', 'insights', 'actions', 'rules', 'settings'];
 
 // formatDuration() is defined in dataSync.js (shared with popup)
 function log(message) {
@@ -309,13 +309,7 @@ function applyPreferencesToForm(preferences) {
   document.getElementById('customThresholdsInput').value = preferences.customThresholds || '';
   document.getElementById('notificationSoundInput').checked = preferences.notificationSound !== false;
 }
-function updateInterventionWarning() {
-  const warnEl = document.getElementById('interventionWarning');
-  if (!warnEl) return;
-  const interventionsOn = document.getElementById('interventionsEnabledInput')?.checked;
-  const notificationsOn = document.getElementById('notificationsEnabledInput')?.checked;
-  warnEl.style.display = (interventionsOn && !notificationsOn) ? '' : 'none';
-}
+function updateInterventionWarning() { /* no-op: rule engine manages its own state */ }
 async function loadPreferences() {
   const preferences = await getPreferences();
   applyPreferencesToForm(preferences);
@@ -2054,7 +2048,7 @@ async function refreshDashboard() {
   document.getElementById('trendChartTitle').textContent = `${days} 天趋势`;
 
   // 并行加载独立模块
-  const tasks = [loadGoals()];
+  const tasks = [loadRules()];
   if (activeSidebarTab === 'insights') {
     tasks.push(loadAdvancedInsights(), loadReports(), loadLatestAIAnalysis(), loadFocusStats(), loadLeaderboard(), renderProductivityPanel());
   }
@@ -2075,96 +2069,216 @@ async function runAIAnalysis() {
   setButtonBusy(button, true, '分析中...');
   try { const preferences = await getPreferences(); await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); log('开始 AI 分析...'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/ai-analysis/${dataSync.userId}?days=${preferences.analysisDays}`, { method: 'POST' }); if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || 'AI 分析失败'); } const analysis = await response.json(); renderAIAnalysis(analysis); await loadReports(); setNote(`AI 分析完成：${analysis.summary}`, 'success'); log(`AI 总结：${analysis.summary}`); await switchSidebarTab('insights', { focusPanel: true }); } catch (error) { setNote(`AI 分析失败：${error.message}`, 'danger'); log(`AI 分析失败：${error.message}`); } finally { setButtonBusy(button, false); }
 }
-async function createGoal() {
-  const button = document.getElementById('createGoalBtn');
-  setButtonBusy(button, true, '添加中...');
-  try { await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const goalType = document.getElementById('goalTypeSelect').value; const durationMinutes = parseInt(document.getElementById('goalDurationInput').value, 10); if (!durationMinutes || durationMinutes <= 0 || durationMinutes > 1440) throw new Error('请输入有效的目标时长（1-1440 分钟）'); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal_type: goalType, category: CATEGORY_MAP[goalType], target_duration: durationMinutes * 60, date: todayString() }) }); if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.detail || '创建目标失败'); } setNote('目标已添加', 'success'); log(`已添加目标：${GOAL_TYPE_NAMES[goalType]} ${durationMinutes} 分钟`); await loadGoals(); } catch (error) { setNote(`创建目标失败：${error.message}`, 'danger'); log(`创建目标失败：${error.message}`); } finally { setButtonBusy(button, false); }
-}
-async function loadGoals() {
-  const list = document.getElementById('goalList');
-  try { await initDataSync(); if (!(await cachedCheckConnection())) { list.innerHTML = '<div class="goal-card"><div><strong>云服务器未连接</strong><p class="muted">连接后可管理目标。</p></div></div>'; return; } await dataSync.initUserId(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}?date=${todayString()}&is_active=1`); if (!response.ok) throw new Error('获取目标失败'); const goals = await response.json(); if (!goals.length) { list.innerHTML = '<div class="goal-card"><div><strong>还没有目标</strong><p class="muted">设一个今日目标，看看自己能走多远。</p></div></div>'; return; } list.innerHTML = goals.map(goal => { const pct = Number(goal.progress_percentage || 0); const achieved = pct >= 100; const warning = pct >= 80 && !achieved; const barClass = achieved ? 'achieved' : (warning ? 'warning' : ''); const safeGoalType = escapeHtml(GOAL_TYPE_NAMES[goal.goal_type] || goal.goal_type);
-const safeGoalId = escapeHtml(String(goal.id));
-return `<div class="goal-card ${achieved ? 'achieved' : ''}"><div><strong>${safeGoalType}</strong><p class="muted">${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)} · ${pct.toFixed(1)}%${achieved ? ' <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;"><path d="M9 12l2 2 4-4"/></svg>' : ''}</p></div><div class="button-row compact"><button class="secondary" data-goal-edit-id="${safeGoalId}" data-goal-duration="${Math.round(goal.target_duration / 60)}">编辑</button><button class="ghost" data-goal-disable-id="${safeGoalId}">停用</button><button class="danger" data-goal-id="${safeGoalId}">删除</button></div><div class="bar-track"><div class="bar-fill ${barClass}" style="width: ${Math.min(pct, 100)}%"></div></div></div>`; }).join(''); list.querySelectorAll('[data-goal-id]').forEach(button => button.addEventListener('click', () => deleteGoal(button.dataset.goalId))); list.querySelectorAll('[data-goal-disable-id]').forEach(button => button.addEventListener('click', () => deactivateGoal(button.dataset.goalDisableId))); list.querySelectorAll('[data-goal-edit-id]').forEach(button => button.addEventListener('click', () => editGoalDuration(button.dataset.goalEditId, button.dataset.goalDuration))); } catch (error) { list.innerHTML = `<div class="goal-card"><div><strong>加载失败</strong><p class="muted">${escapeHtml(error.message)}</p></div></div>`; }
-}
-async function refreshGoalProgress() {
-  const button = document.getElementById('refreshGoalsBtn');
-  setButtonBusy(button, true, '刷新中...');
-  try { await initDataSync(); if (!(await cachedCheckConnection())) throw new Error('无法连接后端服务'); await dataSync.initUserId(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${dataSync.userId}/update-progress?date=${encodeURIComponent(todayString())}`, { method: 'POST' }); if (!response.ok) throw new Error('刷新目标进度失败'); setNote('目标进度已刷新', 'success'); log('目标进度已刷新'); await loadGoals(); } catch (error) { setNote(`目标刷新失败：${error.message}`, 'danger'); log(`目标刷新失败：${error.message}`); } finally { setButtonBusy(button, false); }
-}
-async function editGoalDuration(goalId, currentMinutes) {
-  const editBtn = document.querySelector(`[data-goal-edit-id="${goalId}"]`);
-  if (!editBtn) return;
-  const row = editBtn.closest('.button-row');
-  if (!row) return;
-  row.innerHTML = `<input type="number" min="1" max="1440" value="${currentMinutes}" style="width:70px;min-height:32px;padding:4px 8px;font-size:12px;" aria-label="新的目标时长（分钟）"><button class="secondary" style="font-size:12px;min-height:32px;padding:4px 10px;" data-goal-save-id="${goalId}">保存</button><button class="ghost" style="font-size:12px;min-height:32px;padding:4px 10px;" data-goal-cancel>取消</button>`;
-  const input = row.querySelector('input');
-  input.focus();
-  input.select();
-  row.querySelector('[data-goal-save-id]').addEventListener('click', async () => {
-    const minutes = Number(input.value);
-    if (!minutes || minutes <= 0 || minutes > 1440) { setNote('请输入有效的目标时长（1-1440 分钟）', 'danger'); return; }
-    try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_duration: Math.round(minutes * 60) }) }); if (!response.ok) throw new Error('编辑失败'); setNote('目标已更新', 'success'); log(`已更新目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标编辑失败：${error.message}`, 'danger'); log(`目标编辑失败：${error.message}`); }
-  });
-  row.querySelector('[data-goal-cancel]').addEventListener('click', () => loadGoals());
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') row.querySelector('[data-goal-save-id]').click();
-    if (e.key === 'Escape') loadGoals();
-  });
-}
-async function deactivateGoal(goalId) {
-  showGoalConfirm('确定停用这个目标吗？停用后不会继续统计今日进度。', async () => {
-    try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: 0 }) }); if (!response.ok) throw new Error('停用失败'); setNote('目标已停用', 'success'); log(`已停用目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`目标停用失败：${error.message}`, 'danger'); log(`目标停用失败：${error.message}`); }
-  });
-}
-async function deleteGoal(goalId) {
-  showGoalConfirm('确定删除这个目标吗？', async () => {
-    try { await initDataSync(); const response = await authFetch(`${dataSync.apiBaseUrl}/api/goals/${goalId}`, { method: 'DELETE' }); if (!response.ok) throw new Error('删除失败'); setNote('目标已删除', 'success'); log(`已删除目标 #${goalId}`); await loadGoals(); } catch (error) { setNote(`删除目标失败：${error.message}`, 'danger'); log(`删除目标失败：${error.message}`); }
-  });
-}
-function showGoalConfirm(message, onConfirm) {
-  let backdrop = document.getElementById('goalConfirmBackdrop');
-  if (!backdrop) {
-    backdrop = document.createElement('div');
-    backdrop.id = 'goalConfirmBackdrop';
-    backdrop.style.cssText = 'display:none;position:fixed;inset:0;z-index:9997;background:oklch(0% 0 0 / 0.32);';
-    document.body.appendChild(backdrop);
-  }
-  let dialog = document.getElementById('goalConfirmDialog');
-  if (!dialog) {
-    dialog = document.createElement('div');
-    dialog.id = 'goalConfirmDialog';
-    dialog.setAttribute('role', 'alertdialog');
-    dialog.setAttribute('aria-modal', 'true');
-    dialog.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9998;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:0 12px 40px rgba(0,0,0,.18);padding:20px;min-width:260px;max-width:340px;';
-    document.body.appendChild(dialog);
-  }
-  dialog.innerHTML = `<p style="font-size:14px;line-height:1.6;margin-bottom:16px;color:var(--text);">${escapeHtml(message)}</p><div class="button-row compact" style="justify-content:flex-end;"><button class="ghost" id="goalConfirmCancel" style="font-size:12px;min-height:32px;padding:4px 14px;">取消</button><button class="danger" id="goalConfirmOk" style="font-size:12px;min-height:32px;padding:4px 14px;">确定</button></div>`;
-  backdrop.style.display = 'block';
-  dialog.style.display = 'block';
-  const trigger = document.activeElement;
-  function close() {
-    backdrop.style.display = 'none';
-    dialog.style.display = 'none';
-    document.removeEventListener('keydown', onKey);
-    backdrop.removeEventListener('click', close);
-    if (trigger && typeof trigger.focus === 'function') trigger.focus();
-  }
-  function onKey(e) {
-    if (e.key === 'Escape') { close(); return; }
-    if (e.key === 'Tab') {
-      const focusable = dialog.querySelectorAll('button:not([disabled])');
-      if (!focusable.length) return;
-      const first = focusable[0], last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+// ==================== 规则引擎 UI ====================
+
+const RULE_TYPE_LABELS = { limit: '限制', goal: '目标', domain_block: '域名阻断' };
+const RULE_COND_LABELS = { category_duration: '分类时长', domain_visit: '域名访问', continuous_duration: '连续时长' };
+const RULE_ACTION_LABELS = { notify: '仅通知', block: '通知+阻断', cooldown: '通知+冷却' };
+const RULE_OPERATOR_LABELS = { gte: '超过', lte: '不足' };
+
+function _ruleId() { return 'rule_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8); }
+
+async function loadRules() {
+  const list = document.getElementById('rulesList');
+  if (!list) return;
+  try {
+    const { rules: rulesJson = '[]' } = await chrome.storage.local.get('rules');
+    const rules = JSON.parse(rulesJson);
+    if (!rules.length) {
+      list.innerHTML = '<div class="empty" style="padding:var(--space-4);">还没有规则。点击"新建规则"开始，或等待默认规则自动创建。</div>';
+      return;
     }
+    renderRulesPanel(rules);
+  } catch (e) {
+    list.innerHTML = `<div class="empty" style="padding:var(--space-4);">加载规则失败：${escapeHtml(e.message)}</div>`;
   }
-  document.getElementById('goalConfirmCancel').addEventListener('click', close);
-  document.getElementById('goalConfirmOk').addEventListener('click', () => { close(); onConfirm(); });
-  backdrop.addEventListener('click', close);
-  document.addEventListener('keydown', onKey);
-  dialog.querySelector('#goalConfirmOk').focus();
 }
+
+function renderRulesPanel(rules) {
+  const list = document.getElementById('rulesList');
+  if (!list) return;
+  const sorted = rules.slice().sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  list.innerHTML = sorted.map(rule => {
+    const typeLabel = RULE_TYPE_LABELS[rule.type] || rule.type;
+    const cond = rule.condition || {};
+    let condText = '';
+    if (cond.type === 'domain_visit') condText = `域名：${escapeHtml(cond.domain || '')}`;
+    else if (cond.type === 'category_duration') condText = `${escapeHtml(cond.category || '')} ${RULE_OPERATOR_LABELS[cond.operator] || cond.operator} ${Math.round((cond.value || 0) / 60)} 分钟`;
+    else if (cond.type === 'continuous_duration') condText = `连续 ${escapeHtml(cond.category || '')} ${Math.round((cond.value || 0) / 60)} 分钟`;
+    const actionLabel = RULE_ACTION_LABELS[rule.action?.type] || rule.action?.type || 'notify';
+    const isGoal = rule.type === 'goal';
+    const progress = rule.dailyProgress || 0;
+    const target = rule.condition?.value || 0;
+    const pct = target > 0 ? Math.min(Math.round(progress / target * 100), 100) : 0;
+    const goalBar = isGoal && target > 0 ? `<div class="bar-track" style="margin-top:8px;"><div class="bar-fill${pct >= 100 ? ' achieved' : pct >= 80 ? ' warning' : ''}" style="width:${pct}%"></div></div><p class="muted" style="margin-top:4px;font-size:11px;">${formatDuration(progress)} / ${formatDuration(target)} · ${pct}%</p>` : '';
+    return `<div class="goal-card${isGoal && pct >= 100 ? ' achieved' : ''}" data-rule-id="${escapeHtml(rule.id)}" style="cursor:pointer;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:var(--surface-2);color:var(--muted);font-weight:600;">${typeLabel}</span>
+          <strong>${escapeHtml(rule.name || '未命名规则')}</strong>
+          ${!rule.enabled ? '<span style="font-size:11px;color:var(--muted);">(已禁用)</span>' : ''}
+        </div>
+        <p class="muted" style="margin:0;">条件：${condText} · 动作：${actionLabel}</p>
+        ${goalBar}
+      </div>
+      <div class="button-row compact">
+        <button class="ghost" data-rule-toggle="${escapeHtml(rule.id)}">${rule.enabled ? '禁用' : '启用'}</button>
+        <button class="danger" data-rule-delete="${escapeHtml(rule.id)}">删除</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Event listeners
+  list.querySelectorAll('[data-rule-id]').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('[data-rule-toggle]') || e.target.closest('[data-rule-delete]')) return;
+      const rule = rules.find(r => r.id === card.dataset.ruleId);
+      if (rule) openRuleEditor(rule);
+    });
+  });
+  list.querySelectorAll('[data-rule-toggle]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rule = rules.find(r => r.id === btn.dataset.ruleToggle);
+      if (rule) { rule.enabled = !rule.enabled; await _saveRulesFromUI(rules); }
+    });
+  });
+  list.querySelectorAll('[data-rule-delete]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = rules.findIndex(r => r.id === btn.dataset.ruleDelete);
+      if (idx >= 0) { rules.splice(idx, 1); await _saveRulesFromUI(rules); }
+    });
+  });
+}
+
+async function _saveRulesFromUI(rules) {
+  await chrome.storage.local.set({ rules: JSON.stringify(rules) });
+  renderRulesPanel(rules);
+  setNote('规则已保存', 'success');
+}
+
+function openRuleEditor(existingRule) {
+  const editor = document.getElementById('ruleEditor');
+  if (!editor) return;
+  const rule = existingRule || {
+    id: _ruleId(), type: 'limit', name: '', enabled: true,
+    condition: { type: 'category_duration', category: 'entertainment', operator: 'gte', value: 1800 },
+    action: { type: 'notify' }, priority: 0, dailyProgress: 0, lastTriggered: 0, createdAt: new Date().toISOString()
+  };
+  const isNew = !existingRule;
+  const cond = rule.condition || {};
+  const action = rule.action || {};
+
+  editor.style.display = 'block';
+  editor.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-3);">
+      <strong>${isNew ? '新建规则' : '编辑规则'}</strong>
+      <button class="ghost" id="ruleEditorClose" style="font-size:12px;">关闭</button>
+    </div>
+    <div class="settings-grid">
+      <div class="setting-row">
+        <div><strong>规则名称</strong></div>
+        <input id="reName" type="text" value="${escapeHtml(rule.name || '')}" placeholder="如：每日娱乐限制">
+      </div>
+      <div class="setting-row">
+        <div><strong>规则类型</strong></div>
+        <select id="reType">
+          <option value="limit"${rule.type === 'limit' ? ' selected' : ''}>限制</option>
+          <option value="goal"${rule.type === 'goal' ? ' selected' : ''}>目标</option>
+          <option value="domain_block"${rule.type === 'domain_block' ? ' selected' : ''}>域名阻断</option>
+        </select>
+      </div>
+      <div id="reCondFields">
+        <div class="setting-row" id="reDomainRow" style="display:${cond.type === 'domain_visit' ? '' : 'none'}">
+          <div><strong>域名</strong></div>
+          <input id="reDomain" type="text" value="${escapeHtml(cond.domain || '')}" placeholder="youtube.com">
+        </div>
+        <div class="setting-row" id="reCategoryRow" style="display:${cond.type !== 'domain_visit' ? '' : 'none'}">
+          <div><strong>分类</strong></div>
+          <select id="reCategory">
+            ${WebsiteClassifier.CATEGORIES.map(c => `<option value="${c}"${cond.category === c ? ' selected' : ''}>${WebsiteClassifier.CATEGORY_NAMES[c] || c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="setting-row" id="reOperatorRow" style="display:${cond.type === 'category_duration' ? '' : 'none'}">
+          <div><strong>方向</strong></div>
+          <select id="reOperator">
+            <option value="gte"${cond.operator === 'gte' ? ' selected' : ''}>超过（限制用）</option>
+            <option value="lte"${cond.operator === 'lte' ? ' selected' : ''}>不足（目标用）</option>
+          </select>
+        </div>
+        <div class="setting-row" id="reValueRow" style="display:${cond.type !== 'domain_visit' ? '' : 'none'}">
+          <div><strong>阈值（分钟）</strong></div>
+          <input id="reValue" type="number" min="1" max="1440" value="${Math.round((cond.value || 0) / 60)}">
+        </div>
+      </div>
+      <div class="setting-row">
+        <div><strong>动作</strong></div>
+        <select id="reAction">
+          <option value="notify"${action.type === 'notify' ? ' selected' : ''}>仅通知</option>
+          <option value="block"${action.type === 'block' ? ' selected' : ''}>通知 + 阻断</option>
+          <option value="cooldown"${action.type === 'cooldown' ? ' selected' : ''}>通知 + 冷却</option>
+        </select>
+      </div>
+      <div class="setting-row" id="reCooldownRow" style="display:${action.type === 'cooldown' ? '' : 'none'}">
+        <div><strong>冷却时间（分钟）</strong></div>
+        <input id="reCooldown" type="number" min="1" max="1440" value="${action.cooldownMinutes || 10}">
+      </div>
+    </div>
+    <div class="button-row compact" style="margin-top:var(--space-3);">
+      <button id="reSave">保存规则</button>
+      <button class="ghost" id="reCancel">取消</button>
+    </div>`;
+
+  // Toggle fields based on type
+  const typeSelect = editor.querySelector('#reType');
+  const updateFields = () => {
+    const t = typeSelect.value;
+    editor.querySelector('#reDomainRow').style.display = t === 'domain_block' ? '' : 'none';
+    editor.querySelector('#reCategoryRow').style.display = t !== 'domain_block' ? '' : 'none';
+    editor.querySelector('#reOperatorRow').style.display = t === 'domain_block' ? 'none' : '';
+    editor.querySelector('#reValueRow').style.display = t === 'domain_block' ? 'none' : '';
+    if (t === 'goal') editor.querySelector('#reOperator').value = 'lte';
+    if (t === 'limit') editor.querySelector('#reOperator').value = 'gte';
+  };
+  typeSelect.addEventListener('change', updateFields);
+  editor.querySelector('#reAction').addEventListener('change', () => {
+    editor.querySelector('#reCooldownRow').style.display = editor.querySelector('#reAction').value === 'cooldown' ? '' : 'none';
+  });
+
+  editor.querySelector('#reEditorClose')?.addEventListener('click', () => { editor.style.display = 'none'; });
+  editor.querySelector('#ruleEditorClose').addEventListener('click', () => { editor.style.display = 'none'; });
+  editor.querySelector('#reCancel').addEventListener('click', () => { editor.style.display = 'none'; });
+  editor.querySelector('#reSave').addEventListener('click', async () => {
+    rule.name = editor.querySelector('#reName').value.trim() || '未命名规则';
+    rule.type = typeSelect.value;
+    rule.condition = {};
+    if (rule.type === 'domain_block') {
+      rule.condition = { type: 'domain_visit', domain: editor.querySelector('#reDomain').value.trim().toLowerCase() };
+    } else {
+      const isGoal = rule.type === 'goal';
+      rule.condition = {
+        type: editor.querySelector('#reValue').value && !editor.querySelector('#reDomain').value ? 'category_duration' : 'category_duration',
+        category: editor.querySelector('#reCategory').value,
+        operator: isGoal ? 'lte' : editor.querySelector('#reOperator').value,
+        value: Number(editor.querySelector('#reValue').value) * 60
+      };
+    }
+    rule.action = { type: editor.querySelector('#reAction').value };
+    if (rule.action.type === 'cooldown') rule.action.cooldownMinutes = Number(editor.querySelector('#reCooldown').value) || 10;
+
+    const { rules: rulesJson = '[]' } = await chrome.storage.local.get('rules');
+    const rules = JSON.parse(rulesJson);
+    const idx = rules.findIndex(r => r.id === rule.id);
+    if (idx >= 0) rules[idx] = rule;
+    else rules.push(rule);
+    await _saveRulesFromUI(rules);
+    editor.style.display = 'none';
+    log(`规则已${isNew ? '创建' : '更新'}：${rule.name}`);
+  });
+}
+
+// Bind create rule button
+document.getElementById('createRuleBtn')?.addEventListener('click', () => openRuleEditor(null));
+document.getElementById('refreshRulesBtn')?.addEventListener('click', () => loadRules());
 let _autoSaveTimer = null;
 let _settingsStatusTimer = null;
 // 设置自动保存 — 500ms 防抖，避免频繁写入 storage
@@ -2515,7 +2629,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // 快捷键
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
-  const tabMap = { '1': 'dashboard', '2': 'insights', '3': 'actions', '4': 'goals', '5': 'settings' };
+  const tabMap = { '1': 'dashboard', '2': 'insights', '3': 'actions', '4': 'rules', '5': 'settings' };
   if (tabMap[e.key]) { e.preventDefault(); switchSidebarTab(tabMap[e.key]); }
   else if (e.key === '/') { e.preventDefault(); document.getElementById('timelineSearch')?.focus(); }
   else if (e.key === 'Escape') { document.activeElement?.blur(); }

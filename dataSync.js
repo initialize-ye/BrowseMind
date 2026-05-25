@@ -12,28 +12,22 @@ const DEFAULT_PREFERENCES = {
   blackholeThresholdMinutes: 30,
   analysisDays: 7,
   interventionsEnabled: false,
-  focusModeEnabled: false,
   domainAllowlist: '',
-  domainBlocklist: '',
-  categoryTimeLimits: '',
-  interventionCooldownMinutes: 30,
   quietHoursStart: '',
   quietHoursEnd: '',
   focusDurations: '25,45,60',
   dailySummaryEnabled: false,
   dailySummaryHour: 21,
-  continuousEntertainmentMinutes: 20,
-  learningDropAlertEnabled: false,
-  adaptiveThresholdEnabled: false,
+  // 规则引擎
+  rules: '[]',
+  rulesSyncTime: 0,
   // 主题自定义
   accentColor: '',
   fontSize: 'medium',
   chartScheme: 'default',
-  // 智能通知增强
+  // 通知
   notificationHistory: '',
-  notificationSound: true,
-  notifyCategories: 'entertainment,social',
-  customThresholds: ''
+  notificationSound: true
 };
 
 // 模块级缓存：避免每次调用都重新计算 Object.keys
@@ -60,28 +54,22 @@ async function getPreferences() {
     blackholeThresholdMinutes: stored.blackholeThresholdMinutes != null ? Number(stored.blackholeThresholdMinutes) : defaults.blackholeThresholdMinutes,
     analysisDays: stored.analysisDays != null ? Number(stored.analysisDays) : defaults.analysisDays,
     interventionsEnabled: stored.interventionsEnabled === true || stored.interventionsEnabled === 'true',
-    focusModeEnabled: stored.focusModeEnabled === true || stored.focusModeEnabled === 'true',
     domainAllowlist: stored.domainAllowlist != null ? stored.domainAllowlist : defaults.domainAllowlist,
-    domainBlocklist: stored.domainBlocklist != null ? stored.domainBlocklist : defaults.domainBlocklist,
-    categoryTimeLimits: stored.categoryTimeLimits != null ? stored.categoryTimeLimits : defaults.categoryTimeLimits,
-    interventionCooldownMinutes: stored.interventionCooldownMinutes != null ? Number(stored.interventionCooldownMinutes) : defaults.interventionCooldownMinutes,
     quietHoursStart: stored.quietHoursStart != null ? stored.quietHoursStart : defaults.quietHoursStart,
     quietHoursEnd: stored.quietHoursEnd != null ? stored.quietHoursEnd : defaults.quietHoursEnd,
     focusDurations: stored.focusDurations != null ? stored.focusDurations : defaults.focusDurations,
     dailySummaryEnabled: stored.dailySummaryEnabled === true || stored.dailySummaryEnabled === 'true',
     dailySummaryHour: stored.dailySummaryHour != null ? Number(stored.dailySummaryHour) : defaults.dailySummaryHour,
-    continuousEntertainmentMinutes: stored.continuousEntertainmentMinutes != null ? Number(stored.continuousEntertainmentMinutes) : defaults.continuousEntertainmentMinutes,
-    learningDropAlertEnabled: stored.learningDropAlertEnabled === true || stored.learningDropAlertEnabled === 'true',
-    adaptiveThresholdEnabled: stored.adaptiveThresholdEnabled === true || stored.adaptiveThresholdEnabled === 'true',
+    // 规则引擎
+    rules: stored.rules || defaults.rules,
+    rulesSyncTime: stored.rulesSyncTime != null ? Number(stored.rulesSyncTime) : defaults.rulesSyncTime,
     // 主题自定义
     accentColor: stored.accentColor || defaults.accentColor,
     fontSize: stored.fontSize || defaults.fontSize,
     chartScheme: stored.chartScheme || defaults.chartScheme,
-    // 智能通知增强
+    // 通知
     notificationHistory: stored.notificationHistory || defaults.notificationHistory,
-    notificationSound: stored.notificationSound === true || stored.notificationSound === 'true',
-    notifyCategories: stored.notifyCategories != null ? stored.notifyCategories : defaults.notifyCategories,
-    customThresholds: stored.customThresholds != null ? stored.customThresholds : defaults.customThresholds
+    notificationSound: stored.notificationSound === true || stored.notificationSound === 'true'
   };
 }
 
@@ -301,6 +289,12 @@ class DataSync {
         console.log('分类规则同步:', rulesResult.message);
       } catch (e) {
         console.warn('分类规则同步失败（不影响数据同步）:', e);
+      }
+      try {
+        const engineResult = await this.syncRules();
+        console.log('规则引擎同步:', engineResult.message);
+      } catch (e) {
+        console.warn('规则引擎同步失败（不影响数据同步）:', e);
       }
 
       // 获取本地数据和分类覆盖规则
@@ -532,6 +526,53 @@ class DataSync {
     if (!resp.ok) return { action: 'skip', message: `推送分类规则失败: ${resp.status}` };
     await chrome.storage.local.set({ rulesSyncTime: Date.now() });
     return { action: 'push', message: '已推送本地分类规则到云端' };
+  }
+
+  // 双向同步规则引擎规则
+  async syncRules() {
+    await this.initUserId();
+    const authHeaders = await this._getAuthHeaders();
+
+    let cloudData;
+    try {
+      const resp = await fetch(`${this.apiBaseUrl}/api/rules/${this.userId}`, { headers: authHeaders });
+      if (!resp.ok) throw new Error('拉取失败');
+      cloudData = await resp.json();
+    } catch {
+      return { action: 'skip', message: '无法拉取云端规则' };
+    }
+
+    const cloudRules = cloudData.rules;
+    const cloudUpdatedAt = cloudData.updated_at ? new Date(cloudData.updated_at).getTime() : 0;
+    const { rulesSyncTime = 0, rules: localRulesJson = '[]' } = await chrome.storage.local.get(['rulesSyncTime', 'rules']);
+
+    if (!cloudUpdatedAt) {
+      // 云端无规则，推送本地
+      const resp = await fetch(`${this.apiBaseUrl}/api/rules/${this.userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ rules: localRulesJson })
+      });
+      if (!resp.ok) return { action: 'skip', message: `推送规则失败: ${resp.status}` };
+      await chrome.storage.local.set({ rulesSyncTime: Date.now() });
+      return { action: 'push', message: '首次同步：已推送本地规则到云端' };
+    }
+
+    if (cloudUpdatedAt > rulesSyncTime) {
+      // 云端更新，拉取到本地
+      await chrome.storage.local.set({ rules: cloudRules || '[]', rulesSyncTime: Date.now() });
+      return { action: 'pull', message: '已从云端拉取最新规则' };
+    }
+
+    // 本地更新或相同，推送
+    const resp = await fetch(`${this.apiBaseUrl}/api/rules/${this.userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ rules: localRulesJson })
+    });
+    if (!resp.ok) return { action: 'skip', message: `推送规则失败: ${resp.status}` };
+    await chrome.storage.local.set({ rulesSyncTime: Date.now() });
+    return { action: 'push', message: '已推送本地规则到云端' };
   }
 }
 

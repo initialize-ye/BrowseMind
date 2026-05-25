@@ -119,3 +119,14 @@ class UserGoalResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RuleSyncRequest(BaseModel):
+    """规则同步请求"""
+    rules: str = Field(..., description="JSON 字符串，规则数组")
+
+
+class RuleSyncResponse(BaseModel):
+    """规则同步响应"""
+    rules: str = Field(default='[]', description="JSON 字符串，规则数组")
+    updated_at: Optional[str] = None

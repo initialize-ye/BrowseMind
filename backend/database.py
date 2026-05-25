@@ -162,6 +162,16 @@ class UserClassificationRule(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class UserRule(Base):
+    """用户规则引擎规则（云端同步）"""
+    __tablename__ = 'user_rules'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), unique=True, nullable=False, index=True)
+    rules_json = Column(Text, nullable=False, default='[]')
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class LeaderboardEntry(Base):
     """排行榜条目（匿名，opt-in）"""
     __tablename__ = 'leaderboard_entries'

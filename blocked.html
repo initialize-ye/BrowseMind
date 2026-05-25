@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>页面已阻断 - BrowseMind</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    background: var(--bg);
+    font-family: system-ui, -apple-system, sans-serif;
+    color: var(--text);
+  }
+  .blocked-card {
+    max-width: 420px;
+    width: 90%;
+    padding: var(--space-5);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    text-align: center;
+  }
+  .blocked-icon {
+    font-size: 48px;
+    margin-bottom: var(--space-3);
+  }
+  .blocked-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: var(--space-2);
+    color: var(--text);
+  }
+  .blocked-rule {
+    font-size: 0.875rem;
+    color: var(--muted);
+    margin-bottom: var(--space-1);
+  }
+  .blocked-domain {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: var(--space-4);
+    word-break: break-all;
+  }
+  .cooldown-timer {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin: var(--space-3) 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .cooldown-label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: var(--space-4);
+  }
+  .btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .btn-secondary {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+  }
+  .btn-secondary:hover { background: var(--line); }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .btn-primary.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .btn-primary.active:hover { filter: brightness(1.1); }
+</style>
+</head>
+<body>
+  <div class="blocked-card">
+    <div class="blocked-icon">&#128683;</div>
+    <div class="blocked-title" id="ruleName">页面已阻断</div>
+    <div class="blocked-rule" id="ruleDesc">此站点已被 BrowseMind 规则阻断</div>
+    <div class="blocked-domain" id="blockedDomain"></div>
+    <div id="cooldownSection" style="display:none">
+      <div class="cooldown-timer" id="cooldownTimer">--:--</div>
+      <div class="cooldown-label">冷却倒计时结束后可继续访问</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" id="continueBtn" onclick="continueAccess()">继续访问</button>
+      <button class="btn btn-secondary" onclick="history.back()">返回上页</button>
+    </div>
+  </div>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const ruleId = params.get('ruleId');
+  const domain = params.get('domain') || '';
+
+  document.getElementById('blockedDomain').textContent = domain;
+
+  // 从 storage 获取规则信息
+  chrome.storage.local.get('rules', ({ rules: rulesJson }) => {
+    try {
+      const rules = JSON.parse(rulesJson || '[]');
+      const rule = rules.find(r => r.id === ruleId);
+      if (rule) {
+        document.getElementById('ruleName').textContent = rule.name || '页面已阻断';
+        const cond = rule.condition || {};
+        let desc = '';
+        if (cond.type === 'domain_visit') desc = `域名匹配：${cond.domain}`;
+        else if (cond.type === 'category_duration') desc = `${cond.category} 类时长超过 ${Math.round(cond.value / 60)} 分钟`;
+        else if (cond.type === 'continuous_duration') desc = `连续浏览超过 ${Math.round(cond.value / 60)} 分钟`;
+        document.getElementById('ruleDesc').textContent = desc || '此站点已被 BrowseMind 规则阻断';
+
+        // cooldown 类型：显示倒计时
+        if (rule.action?.type === 'cooldown' && rule.action?.cooldownMinutes) {
+          const section = document.getElementById('cooldownSection');
+          section.style.display = 'block';
+          const btn = document.getElementById('continueBtn');
+          let remaining = rule.action.cooldownMinutes * 60;
+          const timerEl = document.getElementById('cooldownTimer');
+          const interval = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+              clearInterval(interval);
+              timerEl.textContent = '00:00';
+              btn.classList.add('active');
+              btn.textContent = '继续访问';
+            } else {
+              const m = Math.floor(remaining / 60);
+              const s = remaining % 60;
+              timerEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            }
+          }, 1000);
+          timerEl.textContent = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
+        } else {
+          // block 类型：直接可继续
+          document.getElementById('continueBtn').classList.add('active');
+        }
+      } else {
+        document.getElementById('continueBtn').classList.add('active');
+      }
+    } catch {
+      document.getElementById('continueBtn').classList.add('active');
+    }
+  });
+
+  function continueAccess() {
+    // 回到被阻断前的页面
+    history.back();
+  }
+</script>
+</body>
+</html>

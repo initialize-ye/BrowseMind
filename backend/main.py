@@ -17,7 +17,7 @@ import io
 import json
 import os
 
-from database import init_db, get_db, SessionLocal, BrowsingRecord, AnalysisReport, UserGoal, UserToken, UserSettings, UserClassificationRule, LeaderboardEntry
+from database import init_db, get_db, SessionLocal, BrowsingRecord, AnalysisReport, UserGoal, UserToken, UserSettings, UserClassificationRule, UserRule, LeaderboardEntry
 from schemas import (
     BrowsingRecordBatch,
     BrowsingRecordResponse,
@@ -27,7 +27,9 @@ from schemas import (
     AIAnalysisResponse,
     UserGoalCreate,
     UserGoalUpdate,
-    UserGoalResponse
+    UserGoalResponse,
+    RuleSyncRequest,
+    RuleSyncResponse
 )
 from ai_analyzer import AIAnalyzer
 from advanced_analyzer import AdvancedAnalyzer
@@ -1042,6 +1044,34 @@ def update_classification_rules(user_id: str, body: dict, db: Session = Depends(
         db.add(rules)
     db.commit()
     return {"success": True, "updated_at": rules.updated_at.isoformat()}
+
+
+@app.get("/api/rules/{user_id}", response_model=RuleSyncResponse)
+def get_rules(user_id: str, db: Session = Depends(get_db)):
+    """获取用户规则引擎规则"""
+    rule = db.query(UserRule).filter(UserRule.user_id == user_id).first()
+    if not rule:
+        return RuleSyncResponse(rules='[]', updated_at=None)
+    return RuleSyncResponse(
+        rules=rule.rules_json,
+        updated_at=rule.updated_at.isoformat() if rule.updated_at else None
+    )
+
+
+@app.put("/api/rules/{user_id}")
+def update_rules(user_id: str, body: RuleSyncRequest, db: Session = Depends(get_db)):
+    """更新用户规则引擎规则（全量覆盖）"""
+    if len(body.rules) > 65536:
+        raise HTTPException(status_code=413, detail="规则数据过大（最大 64KB）")
+    rule = db.query(UserRule).filter(UserRule.user_id == user_id).first()
+    if rule:
+        rule.rules_json = body.rules
+        rule.updated_at = datetime.utcnow()
+    else:
+        rule = UserRule(user_id=user_id, rules_json=body.rules)
+        db.add(rule)
+    db.commit()
+    return {"success": True, "updated_at": rule.updated_at.isoformat()}
 
 
 # ==================== 数据导出 ====================

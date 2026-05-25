@@ -10,7 +10,8 @@
     "activeTab",
     "alarms",
     "notifications",
-    "contextMenus"
+    "contextMenus",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -31,6 +32,12 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["chart.min.js", "icons/*", "blocked.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }

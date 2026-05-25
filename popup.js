@@ -444,7 +444,7 @@ function showDomainContextMenu(event, domain, currentCategory) {
   const sep = document.createElement('div');
   sep.style.cssText = 'height:1px;background:var(--line);margin:4px 0;';
   menu.appendChild(sep);
-  addItem('加入黑名单', () => addToBlocklist(domain), 'var(--red)');
+  addItem('添加阻断规则', () => addDomainBlockRule(domain), 'var(--red)');
   addItem('加入白名单', () => addToAllowlist(domain), 'var(--green)');
   document.body.appendChild(menu);
   _contextMenuEl = menu;
@@ -477,14 +477,22 @@ async function applyCategoryOverride(domain, category) {
   loadData();
 }
 
-async function addToBlocklist(domain) {
-  const { domainBlocklist = '' } = await chrome.storage.local.get('domainBlocklist');
-  const list = domainBlocklist.split(/[,，\n\r]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
-  if (!list.includes(domain)) {
-    list.push(domain);
-    await chrome.storage.local.set({ domainBlocklist: list.join(',') });
+async function addDomainBlockRule(domain) {
+  const { rules: rulesJson = '[]' } = await chrome.storage.local.get('rules');
+  const rules = JSON.parse(rulesJson);
+  // 检查是否已存在
+  if (rules.some(r => r.type === 'domain_block' && r.condition?.domain === domain)) {
+    notifyPopup('info', `${domain} 已在阻断规则中`);
+    return;
   }
-  notifyPopup('success', `已将 ${domain} 加入黑名单`);
+  rules.push({
+    id: 'rule_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    type: 'domain_block', name: `阻断 ${domain}`, enabled: true,
+    condition: { type: 'domain_visit', domain },
+    action: { type: 'block' }, priority: 10, dailyProgress: 0, lastTriggered: 0, createdAt: new Date().toISOString()
+  });
+  await chrome.storage.local.set({ rules: JSON.stringify(rules) });
+  notifyPopup('success', `已添加阻断规则：${domain}`);
 }
 
 async function addToAllowlist(domain) {
