@@ -1212,6 +1212,10 @@ let _timelineData = [];
 let _timelineTimer = null;
 let _timelineView = 'list';
 let _timelineChart = null;
+let _timelineFiltered = [];
+let _timelineRendered = 0;
+const _TIMELINE_PAGE_SIZE = 50;
+let _timelineObserver = null;
 
 function renderTimeline(browsingData) {
   _timelineData = browsingData.slice().sort((a, b) => (b.visitTime || 0) - (a.visitTime || 0));
@@ -1246,26 +1250,22 @@ function _applyTimelineFilter() {
     filtered = filtered.filter(r => (r.date || '') <= dateTo);
   }
 
+  _timelineFiltered = filtered;
+  _timelineRendered = 0;
   const catColors = getCategoryColors();
 
-  const MAX_DISPLAY = 200;
-  const display = filtered.slice(0, MAX_DISPLAY);
-  countEl.textContent = filtered.length > 0 ? `显示 ${display.length} / ${filtered.length} 条记录` : '';
+  countEl.textContent = filtered.length > 0 ? `已加载 0 / ${filtered.length} 条记录` : '';
 
-  if (!display.length) {
-    list.innerHTML = `<div class="timeline-empty">${filtered.length === 0 && _timelineData.length > 0 ? '没有匹配的记录' : '暂无浏览数据'}</div>`;
+  if (!filtered.length) {
+    list.innerHTML = `<div class="timeline-empty">${_timelineData.length > 0 ? '没有匹配的记录' : '暂无浏览数据'}</div>`;
     document.getElementById('timelineChartWrap').style.display = 'none';
+    _disconnectTimelineObserver();
     return;
   }
 
-  const timeFmt = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
-  list.innerHTML = display.map(r => {
-    const cat = r.category || 'other';
-    const color = catColors[cat] || catColors.other;
-    const time = r.visitTime ? timeFmt.format(new Date(r.visitTime)) : '';
-    const dur = r.duration ? formatDuration(r.duration) : '';
-    return `<div class="timeline-item" role="listitem" tabindex="0" aria-label="${escapeHtml(r.domain || '')} ${r.date || ''} ${time}${dur ? ' ' + dur : ''}"><div><div class="timeline-item-domain">${escapeHtml(r.domain || '')}</div><div class="timeline-item-title">${escapeHtml(r.title || '')}</div></div><div class="timeline-item-meta"><span class="timeline-cat-dot" style="background:${color}"></span>${r.date || ''} ${time}${dur ? ' · ' + dur : ''}</div></div>`;
-  }).join('');
+  // 清空列表并渲染第一批
+  list.innerHTML = '';
+  _appendTimelineItems(list, catColors);
 
   // 切换列表/甘特图视图
   const listWrap = document.getElementById('timelineList');
@@ -1273,11 +1273,71 @@ function _applyTimelineFilter() {
   if (_timelineView === 'chart') {
     listWrap.style.display = 'none';
     chartWrap.style.display = '';
-    renderTimelineChart(display, catColors);
+    renderTimelineChart(filtered, catColors);
   } else {
     listWrap.style.display = '';
     chartWrap.style.display = 'none';
   }
+}
+
+function _appendTimelineItems(list, catColors) {
+  const timeFmt = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const start = _timelineRendered;
+  const end = Math.min(start + _TIMELINE_PAGE_SIZE, _timelineFiltered.length);
+  const batch = _timelineFiltered.slice(start, end);
+
+  const frag = document.createDocumentFragment();
+  for (const r of batch) {
+    const cat = r.category || 'other';
+    const color = catColors[cat] || catColors.other;
+    const time = r.visitTime ? timeFmt.format(new Date(r.visitTime)) : '';
+    const dur = r.duration ? formatDuration(r.duration) : '';
+    const div = document.createElement('div');
+    div.className = 'timeline-item';
+    div.setAttribute('role', 'listitem');
+    div.setAttribute('tabindex', '0');
+    div.setAttribute('aria-label', `${r.domain || ''} ${r.date || ''} ${time}${dur ? ' ' + dur : ''}`);
+    div.innerHTML = `<div><div class="timeline-item-domain">${escapeHtml(r.domain || '')}</div><div class="timeline-item-title">${escapeHtml(r.title || '')}</div></div><div class="timeline-item-meta"><span class="timeline-cat-dot" style="background:${color}"></span>${r.date || ''} ${time}${dur ? ' · ' + dur : ''}</div>`;
+    frag.appendChild(div);
+  }
+  list.appendChild(frag);
+  _timelineRendered = end;
+
+  const countEl = document.getElementById('timelineCount');
+  countEl.textContent = `已加载 ${_timelineRendered} / ${_timelineFiltered.length} 条记录`;
+
+  // 还有更多数据时设置 sentinel
+  if (_timelineRendered < _timelineFiltered.length) {
+    _setupTimelineObserver(list, catColors);
+  } else {
+    _disconnectTimelineObserver();
+  }
+}
+
+function _setupTimelineObserver(list, catColors) {
+  _disconnectTimelineObserver();
+  let sentinel = document.getElementById('timelineSentinel');
+  if (!sentinel) {
+    sentinel = document.createElement('div');
+    sentinel.id = 'timelineSentinel';
+    sentinel.style.height = '1px';
+    list.appendChild(sentinel);
+  }
+  _timelineObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      _appendTimelineItems(list, catColors);
+    }
+  }, { root: list, threshold: 0 });
+  _timelineObserver.observe(sentinel);
+}
+
+function _disconnectTimelineObserver() {
+  if (_timelineObserver) {
+    _timelineObserver.disconnect();
+    _timelineObserver = null;
+  }
+  const sentinel = document.getElementById('timelineSentinel');
+  if (sentinel) sentinel.remove();
 }
 
 function _debounceTimeline() {
@@ -2371,7 +2431,8 @@ async function generateShareCard() {
 
   // 分类饼图
   const cats = Object.entries(catStats).sort((a, b) => b[1] - a[1]);
-  const sharePalette = [1,2,3,4,5,6].map(i => cs.getPropertyValue(`--chart-${i}`).trim());
+  const chartFallbacks = ['#6366f1', '#34d399', '#fbbf24', '#f87171', '#a1a1aa', '#818cf8'];
+  const sharePalette = [1,2,3,4,5,6].map((i, idx) => cssVar(`--chart-${i}`, chartFallbacks[idx]));
   const pieX = 480, pieY = 220, pieR = 70;
   let startAngle = -Math.PI / 2;
   const totalCat = cats.reduce((s, [, d]) => s + d, 0) || 1;

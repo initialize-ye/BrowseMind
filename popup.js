@@ -46,7 +46,29 @@ document.querySelectorAll('.chart-tab').forEach(btn => {
 
 // 专注会话
 document.getElementById('focusBtn').addEventListener('click', showFocusPicker);
+document.getElementById('closeFocusModal').addEventListener('click', closeFocusModal);
+document.getElementById('focusDurationModal').addEventListener('click', function(e) { if (e.target === this) closeFocusModal(); });
+document.getElementById('focusCustomBtn').addEventListener('click', () => {
+  const input = document.getElementById('focusCustomInput');
+  const m = parseInt(input.value, 10);
+  if (!m || m <= 0 || m > 240) return;
+  closeFocusModal();
+  startFocusFromPopup(m);
+});
 document.getElementById('focusStopBtn').addEventListener('click', stopFocusFromPopup);
+
+// 记录搜索
+let _recordSearchTimer = null;
+document.getElementById('recordSearchInput')?.addEventListener('input', () => {
+  clearTimeout(_recordSearchTimer);
+  _recordSearchTimer = setTimeout(() => {
+    const search = (document.getElementById('recordSearchInput').value || '').toLowerCase().trim();
+    const filtered = search
+      ? _popupAllRecords.filter(r => (r.domain || '').toLowerCase().includes(search) || (r.title || '').toLowerCase().includes(search))
+      : _popupAllRecords;
+    renderPopupRecords(filtered.slice(0, search ? 50 : 10));
+  }, 200);
+});
 
 // 快捷键
 document.addEventListener('keydown', (e) => {
@@ -59,30 +81,35 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape') {
     document.getElementById('aiAnalysisModal').style.display === 'none' ? null : closeModal();
     document.getElementById('goalModal').style.display === 'none' ? null : closeGoalModal();
+    document.getElementById('focusDurationModal').style.display === 'none' ? null : closeFocusModal();
     hideContextMenu();
   }
 });
 
 let _popupFocusTimer = null;
+let _popupAllRecords = [];
 
 async function showFocusPicker() {
-  const btn = document.getElementById('focusBtn');
-  if (btn.dataset.picking) {
-    btn.dataset.picking = '';
-    btn.textContent = '专注';
-    return;
-  }
   const preferences = await getPreferences();
-  const durations = (preferences.focusDurations || '25,45,60').split(/[,，]/).map(s => s.trim()).filter(Boolean);
-  btn.dataset.picking = '1';
-  btn.textContent = durations.join(' / ');
-  const minutes = prompt(`专注时长（分钟）：${durations.join('、')}`, durations[0]);
-  btn.dataset.picking = '';
-  btn.textContent = '专注';
-  if (!minutes) return;
-  const m = parseInt(minutes, 10);
-  if (!m || m <= 0 || m > 240) return;
-  startFocusFromPopup(m);
+  const durations = (preferences.focusDurations || '25,45,60').split(/[,，]/).map(s => parseInt(s.trim())).filter(n => n > 0 && n <= 240);
+  const btnContainer = document.getElementById('focusDurationButtons');
+  btnContainer.innerHTML = durations.map(m => `<button class="action-btn focus-pick-btn" data-minutes="${m}" style="flex:1;min-width:60px;">${m} 分</button>`).join('');
+  btnContainer.querySelectorAll('.focus-pick-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      closeFocusModal();
+      startFocusFromPopup(parseInt(btn.dataset.minutes));
+    });
+  });
+  document.getElementById('focusCustomInput').value = '';
+  document.getElementById('focusDurationModal').style.display = 'flex';
+  setupModalFocusTrap('focusDurationModal', closeFocusModal);
+}
+
+function closeFocusModal() {
+  const modal = document.getElementById('focusDurationModal');
+  modal.style.display = 'none';
+  document.getElementById('focusBtn').dataset.picking = '';
+  document.getElementById('focusBtn').textContent = '专注';
 }
 
 async function startFocusFromPopup(minutes) {
@@ -374,13 +401,22 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
   // 更新今日分类统计
   updateTodayCategoryStats(todayStats, classifier);
 
-  // 显示最近访问记录（最新10条）
-  const recentRecords = data
-    .sort((a, b) => b.visitTime - a.visitTime)
-    .slice(0, 10);
+  // 显示最近访问记录
+  _popupAllRecords = data.slice().sort((a, b) => b.visitTime - a.visitTime);
+  const search = (document.getElementById('recordSearchInput')?.value || '').toLowerCase().trim();
+  const filtered = search
+    ? _popupAllRecords.filter(r => (r.domain || '').toLowerCase().includes(search) || (r.title || '').toLowerCase().includes(search))
+    : _popupAllRecords;
+  renderPopupRecords(filtered.slice(0, search ? 50 : 10));
+}
 
+function renderPopupRecords(records) {
   const recordsContainer = document.getElementById('recentRecords');
-  recordsContainer.innerHTML = recentRecords.map(record => {
+  if (!records.length) {
+    recordsContainer.innerHTML = '<div class="empty-state" style="padding:8px;font-size:12px;">没有匹配的记录</div>';
+    return;
+  }
+  recordsContainer.innerHTML = records.map(record => {
     const domain = extractDomain(record.url) || record.url;
     const time = formatTime(record.visitTime);
     const duration = record.duration > 0 ? ` · ${formatDuration(record.duration)}` : '';
@@ -392,7 +428,6 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
       </div>
     `;
   }).join('');
-  // Bind context menu on record items
   recordsContainer.querySelectorAll('.record-item').forEach(item => {
     item.addEventListener('contextmenu', (e) => {
       e.preventDefault();

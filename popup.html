@@ -464,6 +464,7 @@
         <div class="section-header">
           <span class="section-title">最近访问</span>
         </div>
+        <input type="search" id="recordSearchInput" placeholder="搜索域名或标题..." aria-label="搜索访问记录" style="width:100%;padding:6px 10px;margin-bottom:8px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box;">
         <div class="record-list" id="recentRecords"></div>
       </div>
 
@@ -537,6 +538,18 @@
           <input type="number" id="goalDurationInput" min="1" max="1440" value="60">
         </div>
         <button id="saveGoalBtn" class="action-btn primary" style="width:100%;">添加目标</button>
+      </div>
+    </div>
+
+    <div id="focusDurationModal" class="modal" role="dialog" aria-modal="true" aria-label="选择专注时长" style="display: none;">
+      <div class="modal-content">
+        <button class="modal-close" id="closeFocusModal" aria-label="关闭">&times;</button>
+        <h2>选择专注时长</h2>
+        <div id="focusDurationButtons" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="number" id="focusCustomInput" min="1" max="240" placeholder="自定义" style="flex:1;">
+          <button id="focusCustomBtn" class="action-btn" style="flex-shrink:0;">开始</button>
+        </div>
       </div>
     </div>
 
