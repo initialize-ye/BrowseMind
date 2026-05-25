@@ -27,6 +27,7 @@ class DataProcessor {
 
   // 清洗数据
   clean() {
+    const MAX_SESSION_SECONDS = 24 * 60 * 60; // 单次访问最长 24 小时
     this.processedData = this.rawData
       .filter(record => record.url && !record.url.startsWith('chrome://'))
       .map(record => ({
@@ -34,7 +35,8 @@ class DataProcessor {
         domain: this.extractDomain(record.url),
         category: null // 稍后分类
       }))
-      .filter(record => record.domain); // 移除无效域名
+      .filter(record => record.domain)
+      .filter(record => !record.duration || record.duration <= MAX_SESSION_SECONDS); // 过滤异常时长
 
     return this;
   }
