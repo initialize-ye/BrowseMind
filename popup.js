@@ -1205,8 +1205,9 @@ async function loadAdvancedAnalysis() {
       return;
     }
     const preferences = await getPreferences();
+    const cleanedData = new DataProcessor(browsingData).clean().getData();
     const localAnalyzer = new LocalAdvancedAnalyzer(preferences.blackholeThresholdMinutes);
-    const analysis = localAnalyzer.analyzeAll(browsingData, preferences.blackholeThresholdMinutes);
+    const analysis = localAnalyzer.analyzeAll(cleanedData, preferences.blackholeThresholdMinutes);
     displayBlackholes(analysis.blackholes);
     displayAttentionCurve(analysis.attentionCurve);
   } catch (error) {

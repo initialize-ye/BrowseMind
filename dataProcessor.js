@@ -584,6 +584,7 @@ class LocalAdvancedAnalyzer {
   // 时间黑洞检测：识别长时间单次访问或高频访问的域名
   // 娱乐/社交类域名权重 1.5x，排序更靠前
   detectBlackholes(records) {
+    const MAX_SESSION_SECONDS = 24 * 60 * 60; // 单次访问最长 24 小时
     const blackholes = [];
     let totalDuration = 0;
     const domainStats = {};
@@ -591,6 +592,7 @@ class LocalAdvancedAnalyzer {
     for (const record of records) {
       const domain = record.domain || '';
       const duration = record.duration || 0;
+      if (duration > MAX_SESSION_SECONDS) continue; // 跳过异常时长
       totalDuration += duration;
       if (!domain) continue;
 
@@ -644,11 +646,13 @@ class LocalAdvancedAnalyzer {
   // 注意力曲线分析：按小时统计专注/娱乐时长，计算每小时注意力分数
   // 分数公式：focusRatio * 100 - entRatio * 50（专注占比越高分越高，娱乐越多扣分越多）
   analyzeAttention(records) {
+    const MAX_SESSION_SECONDS = 24 * 60 * 60;
     const hourlyStats = Array(24).fill(null).map(() => ({
       totalDuration: 0, focusDuration: 0, entertainmentDuration: 0, otherDuration: 0
     }));
 
     for (const record of records) {
+      if (record.duration > MAX_SESSION_SECONDS) continue; // 跳过异常时长
       const vt = record.visitTime;
       let hour;
       if (typeof vt === 'number') {

@@ -1581,8 +1581,9 @@ async function loadAdvancedInsights() {
     renderAdvancedEmpty('暂无浏览数据，无法进行高级分析。');
     return;
   }
+  const cleanedData = new DataProcessor(browsingData).clean().getData();
   const localAnalyzer = new LocalAdvancedAnalyzer(preferences.blackholeThresholdMinutes);
-  const analysis = localAnalyzer.analyzeAll(browsingData, preferences.blackholeThresholdMinutes);
+  const analysis = localAnalyzer.analyzeAll(cleanedData, preferences.blackholeThresholdMinutes);
   renderBlackholes(analysis.blackholes);
   renderAttentionCurve(analysis.attentionCurve);
 }
