@@ -279,7 +279,6 @@ function applyPreferencesToForm(preferences) {
   document.getElementById('apiBaseUrlInput').value = preferences.apiBaseUrl;
   document.getElementById('autoSyncEnabledInput').checked = Boolean(preferences.autoSyncEnabled);
   document.getElementById('notificationsEnabledInput').checked = Boolean(preferences.notificationsEnabled);
-  updateInterventionWarning();
   document.getElementById('autoSyncDebounceInput').value = Math.round(preferences.autoSyncDebounceMs / 1000);
   document.getElementById('autoSyncMinIntervalInput').value = Math.round(preferences.autoSyncMinIntervalMs / 1000);
   document.getElementById('dataRetentionDaysInput').value = preferences.dataRetentionDays;
@@ -287,26 +286,17 @@ function applyPreferencesToForm(preferences) {
   document.getElementById('blackholeThresholdInput').value = preferences.blackholeThresholdMinutes;
   document.getElementById('analysisDaysInput').value = String(preferences.analysisDays);
   document.getElementById('interventionsEnabledInput').checked = Boolean(preferences.interventionsEnabled);
-  document.getElementById('focusModeEnabledInput').checked = Boolean(preferences.focusModeEnabled);
   document.getElementById('domainAllowlistInput').value = preferences.domainAllowlist || '';
-  document.getElementById('domainBlocklistInput').value = preferences.domainBlocklist || '';
-  document.getElementById('categoryTimeLimitsInput').value = preferences.categoryTimeLimits || '';
-  document.getElementById('interventionCooldownInput').value = preferences.interventionCooldownMinutes;
   document.getElementById('quietHoursStartInput').value = preferences.quietHoursStart || '';
   document.getElementById('quietHoursEndInput').value = preferences.quietHoursEnd || '';
   document.getElementById('focusDurationsInput').value = preferences.focusDurations || '25,45,60';
   document.getElementById('dailySummaryEnabledInput').checked = Boolean(preferences.dailySummaryEnabled);
   document.getElementById('dailySummaryHourInput').value = preferences.dailySummaryHour || 21;
-  document.getElementById('continuousEntertainmentInput').value = preferences.continuousEntertainmentMinutes || 20;
-  document.getElementById('learningDropAlertEnabledInput').checked = Boolean(preferences.learningDropAlertEnabled);
-  document.getElementById('adaptiveThresholdEnabledInput').checked = Boolean(preferences.adaptiveThresholdEnabled);
   // 主题自定义
   document.getElementById('accentColorInput').value = preferences.accentColor || '#6366f1';
   document.getElementById('fontSizeInput').value = preferences.fontSize || 'medium';
   document.getElementById('chartSchemeInput').value = preferences.chartScheme || 'default';
-  // 通知规则
-  document.getElementById('notifyCategoriesInput').value = preferences.notifyCategories || 'entertainment,social';
-  document.getElementById('customThresholdsInput').value = preferences.customThresholds || '';
+  // 通知
   document.getElementById('notificationSoundInput').checked = preferences.notificationSound !== false;
 }
 function updateInterventionWarning() { /* no-op: rule engine manages its own state */ }
@@ -327,26 +317,17 @@ function readPreferencesFromForm() {
     blackholeThresholdMinutes: Math.max(1, Number(document.getElementById('blackholeThresholdInput').value || 30)),
     analysisDays: Math.max(1, Number(document.getElementById('analysisDaysInput').value || 7)),
     interventionsEnabled: document.getElementById('interventionsEnabledInput').checked,
-    focusModeEnabled: document.getElementById('focusModeEnabledInput').checked,
     domainAllowlist: document.getElementById('domainAllowlistInput').value.trim(),
-    domainBlocklist: document.getElementById('domainBlocklistInput').value.trim(),
-    categoryTimeLimits: document.getElementById('categoryTimeLimitsInput').value.trim(),
-    interventionCooldownMinutes: Math.max(1, Number(document.getElementById('interventionCooldownInput').value || 30)),
     quietHoursStart: document.getElementById('quietHoursStartInput').value || '',
     quietHoursEnd: document.getElementById('quietHoursEndInput').value || '',
     focusDurations: document.getElementById('focusDurationsInput').value.trim() || '25,45,60',
     dailySummaryEnabled: document.getElementById('dailySummaryEnabledInput').checked,
     dailySummaryHour: Math.max(0, Math.min(23, Number(document.getElementById('dailySummaryHourInput').value || 21))),
-    continuousEntertainmentMinutes: Math.max(5, Math.min(120, Number(document.getElementById('continuousEntertainmentInput').value || 20))),
-    learningDropAlertEnabled: document.getElementById('learningDropAlertEnabledInput').checked,
-    adaptiveThresholdEnabled: document.getElementById('adaptiveThresholdEnabledInput').checked,
     // 主题自定义
     accentColor: document.getElementById('accentColorInput').value,
     fontSize: document.getElementById('fontSizeInput').value,
     chartScheme: document.getElementById('chartSchemeInput').value,
-    // 通知规则
-    notifyCategories: document.getElementById('notifyCategoriesInput').value.trim(),
-    customThresholds: document.getElementById('customThresholdsInput').value.trim(),
+    // 通知
     notificationSound: document.getElementById('notificationSoundInput').checked
   };
 }
