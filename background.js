@@ -523,9 +523,9 @@ async function endFocusSession(completed = true) {
   };
 
   // 保存到本地
-  const { _focusSessions = [] } = await chrome.storage.local.get('_focusSessions');
-  _focusSessions.push(session);
-  await chrome.storage.local.set({ _focusSessions });
+  const { focusSessions = [] } = await chrome.storage.local.get('focusSessions');
+  focusSessions.push(session);
+  await chrome.storage.local.set({ focusSessions });
 
   _focusSession = { active: false, startTime: null, durationMinutes: 0, endTime: null, interruptions: 0, domains: new Set() };
   chrome.alarms.clear('_focusSessionEnd');
