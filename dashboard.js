@@ -784,6 +784,8 @@ function bindDashboardChartSwitcher() {
       fromInput.value = toLocalDate(from);
       toInput.value = toLocalDate(to);
     }
+    quickBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
     applyRange();
   }));
   // Set defaults
