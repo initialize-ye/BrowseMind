@@ -98,7 +98,7 @@
 </head>
 <body>
   <div class="blocked-card">
-    <div class="blocked-icon">&#128683;</div>
+    <div class="blocked-icon" role="img" aria-label="页面已阻断">&#128683;</div>
     <div class="blocked-title" id="ruleName">页面已阻断</div>
     <div class="blocked-rule" id="ruleDesc">此站点已被 BrowseMind 规则阻断</div>
     <div class="blocked-domain" id="blockedDomain"></div>
@@ -159,12 +159,17 @@
           document.getElementById('continueBtn').classList.add('active');
         }
       } else {
+        document.getElementById('ruleDesc').textContent = '规则数据未找到，可能已被删除';
         document.getElementById('continueBtn').classList.add('active');
       }
     } catch {
+      document.getElementById('ruleDesc').textContent = '无法加载规则详情';
       document.getElementById('continueBtn').classList.add('active');
     }
   });
+
+  // 自动聚焦返回按钮
+  document.getElementById('backBtn').focus();
 
   function goBack() {
     // 优先使用 history.back()，如果无历史记录则尝试跳转到域名根路径
