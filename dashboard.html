@@ -32,7 +32,7 @@
     .sidebar-brand-copy { min-width: 0; line-height: 1.2; }
     .sidebar-title { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.02em; margin: 0; line-height: 1.2; }
     .sidebar-subtitle { margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 450; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sidebar-toggle { width: 38px; height: 38px; padding: 0; border-radius: 6px; color: var(--muted); background: transparent; font-size: 14px; transition: color 0.18s var(--ease-out), background 0.18s var(--ease-out), transform 0.18s var(--ease-out); }
+    .sidebar-toggle { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 6px; color: var(--muted); background: transparent; font-size: 14px; transition: color 0.18s var(--ease-out), background 0.18s var(--ease-out), transform 0.18s var(--ease-out); }
     .sidebar-toggle:hover { color: var(--accent); background: var(--accent-soft); box-shadow: none; transform: none; }
     .sidebar-label { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 0 4px; margin: 4px 0 10px; }
     .sidebar-tabs { display: grid; gap: 1px; padding: 0; border: 0; background: transparent; box-shadow: none; margin-bottom: 12px; }
@@ -113,7 +113,7 @@
     .heatmap-labels { display: grid; grid-template-rows: repeat(7, var(--hm-size, 13px)); gap: var(--hm-gap, 3px); margin-right: 6px; flex-shrink: 0; }
     .heatmap-labels span { font-size: 10px; color: var(--muted); line-height: var(--hm-size, 13px); text-align: right; width: 20px; }
     .heatmap { display: grid; grid-template-rows: repeat(7, var(--hm-size, 13px)); grid-auto-flow: column; grid-auto-columns: var(--hm-size, 13px); gap: var(--hm-gap, 3px); }
-    .heatmap-cell { border-radius: 2px; outline: 1px solid oklch(90% 0 0 / 0.5); outline-offset: -1px; background: var(--heatmap-l0); transition: outline-color 0.1s; }
+    .heatmap-cell { border-radius: 2px; outline: 1px solid oklch(90% 0 0 / 0.5); outline-offset: -1px; background: var(--heatmap-l0); transition: outline-color 0.1s, outline-width 0.1s; }
     html[data-theme="dark"] .heatmap-cell { outline-color: oklch(25% 0 0 / 0.6); }
     .heatmap-cell[data-level="1"] { background: var(--heatmap-l1); }
     .heatmap-cell[data-level="2"] { background: var(--heatmap-l2); }
@@ -144,7 +144,7 @@
     .section-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); padding-left: 12px; border-left: 3px solid var(--accent); border-radius: 0; }
     .section-title h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
     .chart-tabs { display: flex; gap: 2px; padding: 3px; border-radius: var(--radius-sm); background: var(--surface-2); }
-    .chart-tab { all: unset; cursor: pointer; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 600; color: var(--muted); background: transparent; transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out); }
+    .chart-tab { all: unset; cursor: pointer; padding: 8px 12px; border-radius: var(--radius-sm); font-family: inherit; font-size: 11px; font-weight: 600; color: var(--muted); background: transparent; transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out); }
     .chart-tab:hover { color: var(--text); }
     .chart-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-glow); }
     .chart-tab.active { color: var(--accent); background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
@@ -202,8 +202,8 @@
     input:disabled, select:disabled, textarea:disabled { opacity: 0.7; cursor: not-allowed; }
     .form-grid { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: end; margin-top: 12px; }
     .settings-grid { display: grid; gap: 12px; margin-top: 12px; }
-    .settings-status { display: flex; align-items: center; gap: 8px; padding: 8px 14px; margin-bottom: 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; color: var(--green); background: var(--green-soft); opacity: 0; transform: translateY(-4px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; height: 0; padding: 0; margin: 0; overflow: hidden; }
-    .settings-status.visible { opacity: 1; transform: translateY(0); height: auto; padding: 8px 14px; margin-bottom: 12px; }
+    .settings-status { display: flex; align-items: center; gap: 8px; padding: 8px 14px; margin-bottom: 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; color: var(--green); background: var(--green-soft); opacity: 0; transform: translateY(-4px); transition: opacity 0.2s, transform 0.2s, max-height 0.2s, padding 0.2s, margin 0.2s; pointer-events: none; max-height: 0; padding: 0; margin: 0; overflow: hidden; }
+    .settings-status.visible { opacity: 1; transform: translateY(0); max-height: 40px; padding: 8px 14px; margin-bottom: 12px; }
     .inline-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
     .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
     .toggle-row:last-child { border-bottom: 0; }
@@ -392,7 +392,7 @@
         <section class="main-view" id="mainViewActions" data-main-view="actions" role="tabpanel" aria-labelledby="sidebarTabActions" tabindex="0" hidden>
           <div class="view-shell">
             <div class="view-header panel"><div class="view-copy"><h2>插件操作</h2><p>同步数据、导出记录，并查看最近操作日志。</p></div><button id="refreshBtnActions" class="secondary">刷新状态</button></div>
-            <div class="panel"><div class="button-row compact"><button id="syncBtn">立即同步</button><button id="exportJsonBtn" class="ghost">导出本地 JSON</button><button id="exportCloudBtn" class="ghost">导出云端数据</button><select id="exportDaysSelect" aria-label="导出时间范围" style="padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-1);color:var(--text);font-size:12px;"><option value="0">全部</option><option value="7">近 7 天</option><option value="14">近 14 天</option><option value="30" selected>近 30 天</option></select><button id="shareCardBtn" class="ghost">分享卡片</button><button id="clearLocalBtn" class="danger">清空本地数据</button></div><div class="note" id="operationNote" aria-live="polite"></div><div class="log-box" id="logBox" aria-live="polite" style="margin-top:14px;">等待操作...</div></div>
+            <div class="panel"><div class="button-row compact"><button id="syncBtn">立即同步</button><button id="exportJsonBtn" class="ghost">导出本地 JSON</button><button id="exportCloudBtn" class="ghost">导出云端数据</button><select id="exportDaysSelect" aria-label="导出时间范围" style="padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:12px;"><option value="0">全部</option><option value="7">近 7 天</option><option value="14">近 14 天</option><option value="30" selected>近 30 天</option></select><button id="shareCardBtn" class="ghost">分享卡片</button><button id="clearLocalBtn" class="danger">清空本地数据</button></div><div class="note" id="operationNote" aria-live="polite"></div><div class="log-box" id="logBox" aria-live="polite" style="margin-top:14px;">等待操作...</div></div>
             <div class="panel" style="margin-top:12px;"><h2 style="margin:0 0 10px;font-size:13px;font-weight:600;">导入数据</h2><div class="button-row compact"><input type="file" id="importFileInput" accept=".json" style="display:none;"><button id="importBtn" class="ghost">选择文件导入</button><span id="importFileName" style="font-size:12px;color:var(--muted);line-height:32px;"></span></div><div class="note" id="importNote" aria-live="polite"></div></div>
           </div>
         </section>

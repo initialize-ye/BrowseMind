@@ -190,7 +190,7 @@ button.ghost {
 }
 
 button.ghost:hover {
-  background: var(--accent-glow);
+  background: var(--accent-soft);
   border-color: var(--accent);
 }
 

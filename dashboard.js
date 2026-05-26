@@ -1201,7 +1201,12 @@ function renderHeatmap(browsingData) {
       domainHtml = top3.map(([dom, dur2]) => `<br><span class="tip-date">${escapeHtml(dom)} ${formatDuration(dur2)}</span>`).join('');
     }
     tip.innerHTML = `${label}<br><span class="tip-date">${dateLabel}</span>${domainHtml}`;
-    tip.style.transform = `translate(${e.clientX + 12}px, ${e.clientY - 40}px)`;
+    // 视口边界防溢出
+    const tipW = tip.offsetWidth || 120;
+    const tipH = tip.offsetHeight || 40;
+    const x = Math.min(e.clientX + 12, window.innerWidth - tipW - 8);
+    const y = Math.max(e.clientY - 40, 8);
+    tip.style.transform = `translate(${x}px, ${y}px)`;
     tip.classList.add('visible');
   };
   grid.onmouseleave = () => tip.classList.remove('visible');

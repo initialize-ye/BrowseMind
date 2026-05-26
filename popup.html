@@ -206,7 +206,7 @@
       font-size: 12.5px;
       transition: background 0.15s var(--ease-out);
     }
-    .category-item-compact:hover { background: var(--surface-2); margin: 0 -6px; padding: 8px 6px; border-radius: var(--radius-sm); }
+    .category-item-compact:hover { background: var(--surface-2); border-radius: var(--radius-sm); }
     .category-item-compact:last-child { border-bottom: 0; }
     .category-item-compact .category-name { flex: 1; }
     .category-item-compact .category-value { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -287,7 +287,6 @@
       flex: 1;
       min-height: 42px;
       padding: 10px;
-      border: 0;
       border-radius: var(--radius-sm);
       cursor: pointer;
       font-family: inherit;
@@ -314,6 +313,12 @@
       border-color: transparent;
     }
     .action-btn.secondary:hover { background: color-mix(in oklch, var(--accent) 20%, var(--surface)); }
+    .action-btn.danger {
+      color: var(--red);
+      background: var(--red-soft);
+      border-color: transparent;
+    }
+    .action-btn.danger:hover { background: color-mix(in oklch, var(--red) 20%, var(--surface)); }
     .action-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 
     .modal {
