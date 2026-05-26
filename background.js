@@ -3,6 +3,9 @@
 importScripts('dataProcessor.js', 'dataSync.js');
 // getPreferences(), DEFAULT_API_BASE_URL, DEFAULT_PREFERENCES are defined in dataSync.js
 
+const DEBUG = false;
+function log(...args) { if (DEBUG) console.log('[BrowseMind]', ...args); }
+
 // 日期工具（本地时间，不能用 toISOString 因为它返回 UTC）
 function _todayString() {
   const d = new Date();
@@ -60,13 +63,13 @@ let _focusSession = {
 // 初始化：加载历史记录 + 创建右键菜单 + 生成认证 token
 chrome.runtime.onInstalled.addListener(async () => {
   try {
-    console.log('BrowseMind 已安装');
+    log('BrowseMind 已安装');
     // 生成认证 token（首次安装时）
     const { authToken } = await chrome.storage.local.get('authToken');
     if (!authToken) {
       const token = crypto.randomUUID();
       await chrome.storage.local.set({ authToken: token });
-      console.log('已生成认证 token');
+      log('已生成认证 token');
     }
     await migrateOrCreateRules();
     collectHistoryData();
@@ -157,7 +160,7 @@ async function migrateOrCreateRules() {
   }
 
   await chrome.storage.local.set({ rules: JSON.stringify(rules) });
-  console.log(`规则迁移完成：创建 ${rules.length} 条规则`);
+  log(`规则迁移完成：创建 ${rules.length} 条规则`);
 }
 
 // ==================== 右键菜单 ====================
@@ -411,10 +414,17 @@ async function addBrowsingRecord(record) {
 async function flushPendingRecords() {
   _flushTimer = null;
   if (!_pendingRecords.length) return;
-  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
-  browsingData.push(..._pendingRecords);
+  // Swap out before await — new records arriving during the write
+  // go into a fresh array and get flushed on the next cycle.
+  const toFlush = _pendingRecords;
   _pendingRecords = [];
+  const { browsingData = [] } = await chrome.storage.local.get('browsingData');
+  browsingData.push(...toFlush);
   await chrome.storage.local.set({ browsingData });
+  // If new records arrived while we were writing, schedule another flush
+  if (_pendingRecords.length && !_flushTimer) {
+    _flushTimer = setTimeout(flushPendingRecords, 50);
+  }
 }
 
 // 从 Chrome 历史 API 采集数据，与本地记录合并（按 url+visitTime 去重）
@@ -480,7 +490,7 @@ async function collectHistoryData() {
 
   const unique = Array.from(existingMap.values());
   await chrome.storage.local.set({ browsingData: unique, lastCollectTime: Date.now() });
-  console.log(`已采集 ${records.length} 条历史记录，合并后共 ${unique.length} 条`);
+  log(`已采集 ${records.length} 条历史记录，合并后共 ${unique.length} 条`);
 }
 
 // 定期清理旧数据（每小时执行一次）
@@ -504,7 +514,7 @@ function startFocusSession(durationMinutes) {
   chrome.alarms.create('_focusSessionEnd', { delayInMinutes: durationMinutes });
   chrome.action.setBadgeText({ text: 'F' });
   chrome.action.setBadgeBackgroundColor({ color: '#6366f1' });
-  console.log(`专注会话开始：${durationMinutes} 分钟`);
+  log(`专注会话开始：${durationMinutes} 分钟`);
 }
 
 async function endFocusSession(completed = true) {
@@ -530,7 +540,7 @@ async function endFocusSession(completed = true) {
   _focusSession = { active: false, startTime: null, durationMinutes: 0, endTime: null, interruptions: 0, domains: new Set() };
   chrome.alarms.clear('_focusSessionEnd');
   chrome.action.setBadgeText({ text: '' });
-  console.log(`专注会话结束：${completed ? '完成' : '中断'}，实际 ${actualDuration} 秒`);
+  log(`专注会话结束：${completed ? '完成' : '中断'}，实际 ${actualDuration} 秒`);
 }
 
 function getFocusStatus() {
@@ -567,7 +577,7 @@ async function cleanOldData() {
   const filtered = browsingData.filter(r => r.visitTime > retentionStart);
   if (filtered.length !== browsingData.length) {
     await chrome.storage.local.set({ browsingData: filtered });
-    console.log(`清理旧数据：${browsingData.length - filtered.length} 条已移除`);
+    log(`清理旧数据：${browsingData.length - filtered.length} 条已移除`);
   }
 }
 
@@ -679,7 +689,7 @@ async function showNotification(type, message) {
       message: message,
       priority
     });
-    console.log('通知已发送:', notificationId, type, message);
+    log('通知已发送:', notificationId, type, message);
 
     // 写入通知历史（最多 50 条）
     try {
@@ -742,7 +752,7 @@ async function syncLocalDataInBackground(source) {
     if (!isConnected) return;
 
     const result = await dataSync.syncLocalData();
-    console.log('后台自动同步完成:', source, result.message || '成功');
+    log('后台自动同步完成:', source, result.message || '成功');
   } catch (error) {
     console.error('后台自动同步失败:', source, error);
   } finally {
@@ -850,6 +860,13 @@ async function evaluateRules(domain, category) {
     } else if (rule.type === 'domain_block') {
       await showNotification('warning', `规则"${rule.name}"：你正在访问 ${domain}。`);
     }
+
+    // 记录干预响应日志（供自适应阈值使用）
+    const { interventionResponseLog = [] } = await chrome.storage.local.get('interventionResponseLog');
+    interventionResponseLog.push({ ruleId: rule.id, domain, category, time: now, responded: false });
+    // 只保留最近 100 条
+    if (interventionResponseLog.length > 100) interventionResponseLog.splice(0, interventionResponseLog.length - 100);
+    await chrome.storage.local.set({ interventionResponseLog });
 
     // 阻断或冷却动作
     if (actionType === 'block' || actionType === 'cooldown') {

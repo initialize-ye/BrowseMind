@@ -1,5 +1,7 @@
 // BrowseMind 数据同步模块 - 与后端服务通信
 
+const _syncLog = (...args) => { if (typeof DEBUG !== 'undefined' && DEBUG) console.log('[DataSync]', ...args); };
+
 const DEFAULT_API_BASE_URL = 'http://119.29.55.112:8000';
 const DEFAULT_PREFERENCES = {
   apiBaseUrl: DEFAULT_API_BASE_URL,
@@ -201,7 +203,7 @@ class DataSync {
         records: records
       };
 
-      console.log(`上传数据: ${records.length} 条记录`);
+      _syncLog(`上传数据: ${records.length} 条记录`);
 
       const authHeaders = await this._getAuthHeaders();
       const response = await fetchWithRetry(`${this.apiBaseUrl}/api/upload`, {
@@ -220,7 +222,7 @@ class DataSync {
       }
 
       const result = await response.json();
-      console.log('数据上传成功:', result);
+      _syncLog('数据上传成功:', result);
       return result;
 
     } catch (error) {
@@ -280,19 +282,19 @@ class DataSync {
       // 同步设置和分类规则
       try {
         const settingsResult = await this.syncSettings();
-        console.log('设置同步:', settingsResult.message);
+        _syncLog('设置同步:', settingsResult.message);
       } catch (e) {
         console.warn('设置同步失败（不影响数据同步）:', e);
       }
       try {
         const rulesResult = await this.syncClassificationRules();
-        console.log('分类规则同步:', rulesResult.message);
+        _syncLog('分类规则同步:', rulesResult.message);
       } catch (e) {
         console.warn('分类规则同步失败（不影响数据同步）:', e);
       }
       try {
         const engineResult = await this.syncRules();
-        console.log('规则引擎同步:', engineResult.message);
+        _syncLog('规则引擎同步:', engineResult.message);
       } catch (e) {
         console.warn('规则引擎同步失败（不影响数据同步）:', e);
       }
@@ -301,7 +303,7 @@ class DataSync {
       const { browsingData = [], classificationOverrides = {} } = await chrome.storage.local.get(['browsingData', 'classificationOverrides']);
 
       if (browsingData.length === 0) {
-        console.log('没有需要同步的数据');
+        _syncLog('没有需要同步的数据');
         return { success: true, message: '没有需要同步的数据' };
       }
 
@@ -393,7 +395,7 @@ class DataSync {
 
     if (added > 0) {
       await chrome.storage.local.set({ browsingData });
-      console.log(`从服务器拉取了 ${added} 条新记录`);
+      _syncLog(`从服务器拉取了 ${added} 条新记录`);
     }
   }
 

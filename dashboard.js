@@ -2274,7 +2274,6 @@ function openRuleEditor(existingRule) {
     editor.querySelector('#reCooldownRow').style.display = editor.querySelector('#reAction').value === 'cooldown' ? '' : 'none';
   });
 
-  editor.querySelector('#reEditorClose')?.addEventListener('click', () => { editor.style.display = 'none'; });
   editor.querySelector('#ruleEditorClose').addEventListener('click', () => { editor.style.display = 'none'; });
   editor.querySelector('#reCancel').addEventListener('click', () => { editor.style.display = 'none'; });
   editor.querySelector('#reSave').addEventListener('click', async () => {

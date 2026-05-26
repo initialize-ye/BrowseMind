@@ -194,6 +194,16 @@ button.ghost:hover {
   border-color: var(--accent);
 }
 
+button.ghost.primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button.ghost.primary:hover {
+  background: var(--accent-hover);
+}
+
 button.danger {
   color: var(--red);
   background: var(--red-soft);

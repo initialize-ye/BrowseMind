@@ -254,16 +254,6 @@ function stopLoadingRotation() { clearInterval(_loadingMsgTimer); _loadingMsgTim
 
 // 弹窗数据加载管线：读取 storage → 分类处理 → 渲染统计/图表/排行 → 加载目标和习惯评分
 async function loadData() {
-  // 应用主题设置
-  const { themeMode = 'light', accentColor = '', fontSize = 'medium', chartScheme = 'default' } = await chrome.storage.local.get(['themeMode', 'accentColor', 'fontSize', 'chartScheme']);
-  const html = document.documentElement;
-  if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) html.setAttribute('data-theme', 'dark');
-  else html.removeAttribute('data-theme');
-  if (accentColor) applyAccentColor(accentColor);
-  if (fontSize !== 'medium') html.setAttribute('data-font-size', fontSize); else html.removeAttribute('data-font-size');
-  if (chartScheme !== 'default') html.setAttribute('data-chart-scheme', chartScheme); else html.removeAttribute('data-chart-scheme');
-  invalidateChartPalette();
-
   const loading = document.getElementById('loading');
   const content = document.getElementById('content');
   const emptyState = document.getElementById('emptyState');
@@ -274,18 +264,18 @@ async function loadData() {
   startLoadingRotation();
 
   try {
-    // Batch all storage reads into one call
-    const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback', 'themeMode']);
+    const storage = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback', 'themeMode', 'accentColor', 'fontSize', 'chartScheme']);
     const preferences = await getPreferences();
     await initDataSync(preferences);
-    const { themeMode = 'light' } = storage;
+    // 应用主题设置
+    const { themeMode = 'light', accentColor = '', fontSize = 'medium', chartScheme = 'default' } = storage;
     const html = document.documentElement;
-    if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      html.setAttribute('data-theme', 'dark');
-    } else {
-      html.removeAttribute('data-theme');
-    }
-    invalidateChartPalette(); // Clear cache after theme set
+    if (themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) html.setAttribute('data-theme', 'dark');
+    else html.removeAttribute('data-theme');
+    if (accentColor) applyAccentColor(accentColor);
+    if (fontSize !== 'medium') html.setAttribute('data-font-size', fontSize); else html.removeAttribute('data-font-size');
+    if (chartScheme !== 'default') html.setAttribute('data-chart-scheme', chartScheme); else html.removeAttribute('data-chart-scheme');
+    invalidateChartPalette();
     updateCurrentSite();
     clearInterval(_siteTrackerTimer);
     _siteTrackerTimer = setInterval(updateCurrentSite, 5000);
