@@ -1198,7 +1198,7 @@ function renderHeatmap(browsingData) {
     let domainHtml = '';
     if (dur > 0 && dateDomainMap[dateStr]) {
       const top3 = Object.entries(dateDomainMap[dateStr]).sort((a, b) => b[1] - a[1]).slice(0, 3);
-      domainHtml = top3.map(([dom, dur2]) => `<br><span class="tip-date">${dom} ${formatDuration(dur2)}</span>`).join('');
+      domainHtml = top3.map(([dom, dur2]) => `<br><span class="tip-date">${escapeHtml(dom)} ${formatDuration(dur2)}</span>`).join('');
     }
     tip.innerHTML = `${label}<br><span class="tip-date">${dateLabel}</span>${domainHtml}`;
     tip.style.transform = `translate(${e.clientX + 12}px, ${e.clientY - 40}px)`;
@@ -1683,7 +1683,7 @@ let _focusTimer = null;
 async function renderProductivityPanel() {
   const container = document.getElementById('productivityPanel');
   if (!container) return;
-  const { browsingData = [], classificationOverrides = {}, classificationFeedback = [] } = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback']);
+  const { browsingData = [], classificationOverrides = {}, classificationFeedback = {} } = await chrome.storage.local.get(['browsingData', 'classificationOverrides', 'classificationFeedback']);
   const data = validateBrowsingData(browsingData);
   if (data.length < 3) { container.innerHTML = '<div class="empty">积累几天数据后生成效率报告。</div>'; return; }
 
@@ -1694,7 +1694,7 @@ async function renderProductivityPanel() {
   const scorer = new HabitScorer(classified);
   const comparison = scorer.computeWeeklyComparison();
   const scoreHistory = scorer.computeScoreHistory(7);
-  const todayScore = scorer.computeDailyScore(_toLocalDate(Date.now()));
+  const todayScore = scorer.computeDailyScore(toLocalDate(Date.now()));
 
   // 效率分环形图
   const scoreColor = todayScore >= 70 ? 'var(--green)' : todayScore >= 40 ? 'var(--yellow)' : 'var(--red)';
@@ -2305,9 +2305,6 @@ function openRuleEditor(existingRule) {
   });
 }
 
-// Bind create rule button
-document.getElementById('createRuleBtn')?.addEventListener('click', () => openRuleEditor(null));
-document.getElementById('refreshRulesBtn')?.addEventListener('click', () => loadRules());
 let _autoSaveTimer = null;
 let _settingsStatusTimer = null;
 // 设置自动保存 — 500ms 防抖，避免频繁写入 storage

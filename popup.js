@@ -9,7 +9,8 @@ function showConfirm(message) {
     overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-label', '确认操作');
     overlay.style.display = 'flex';
-    overlay.innerHTML = `<div class="modal-content" style="max-width:340px;text-align:center;"><p style="margin:0 0 16px;font-size:13px;color:var(--text);">${message}</p><div style="display:flex;gap:8px;justify-content:center;"><button class="action-btn" id="_confirmCancel">取消</button><button class="action-btn primary" id="_confirmOk">确定</button></div></div>`;
+    overlay.innerHTML = `<div class="modal-content" style="max-width:340px;text-align:center;"><p id="_confirmMsg" style="margin:0 0 16px;font-size:13px;color:var(--text);"></p><div style="display:flex;gap:8px;justify-content:center;"><button class="action-btn" id="_confirmCancel">取消</button><button class="action-btn primary" id="_confirmOk">确定</button></div></div>`;
+    overlay.querySelector('#_confirmMsg').textContent = message;
     document.body.appendChild(overlay);
     overlay.querySelector('#_confirmCancel').addEventListener('click', () => { overlay.remove(); resolve(false); });
     overlay.querySelector('#_confirmOk').addEventListener('click', () => { overlay.remove(); resolve(true); });
@@ -98,9 +99,6 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); showFocusPicker(); }
   else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); showAIAnalysis(); }
   else if (e.key === 'Escape') {
-    document.getElementById('aiAnalysisModal').style.display === 'none' ? null : closeModal();
-    document.getElementById('goalModal').style.display === 'none' ? null : closeGoalModal();
-    document.getElementById('focusDurationModal').style.display === 'none' ? null : closeFocusModal();
     hideContextMenu();
   }
 });

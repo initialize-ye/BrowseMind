@@ -107,8 +107,8 @@
       <div class="cooldown-label">冷却倒计时结束后可继续访问</div>
     </div>
     <div class="btn-group">
-      <button class="btn btn-primary" id="continueBtn" onclick="continueAccess()">继续访问</button>
-      <button class="btn btn-secondary" onclick="history.back()">返回上页</button>
+      <button class="btn btn-primary" id="continueBtn">继续访问</button>
+      <button class="btn btn-secondary" id="backBtn">返回上页</button>
     </div>
   </div>
 
@@ -166,10 +166,21 @@
     }
   });
 
-  function continueAccess() {
-    // 回到被阻断前的页面
-    history.back();
+  function goBack() {
+    // 优先使用 history.back()，如果无历史记录则尝试跳转到域名根路径
+    if (window.history.length > 1) {
+      history.back();
+    } else if (domain) {
+      location.href = `https://${domain}`;
+    }
   }
+
+  function continueAccess() {
+    goBack();
+  }
+
+  document.getElementById('continueBtn').addEventListener('click', continueAccess);
+  document.getElementById('backBtn').addEventListener('click', goBack);
 </script>
 </body>
 </html>

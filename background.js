@@ -208,6 +208,24 @@ async function appendToList(listKey, domain) {
   return true;
 }
 
+async function addDomainBlockRule(domain) {
+  const { rules: rulesJson = '[]' } = await chrome.storage.local.get('rules');
+  const rules = JSON.parse(rulesJson);
+  if (rules.some(r => r.type === 'domain_block' && r.condition?.domain === domain)) {
+    showNotification('info', `${domain} 已在阻断规则中`);
+    return;
+  }
+  rules.push({
+    id: 'rule_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    type: 'domain_block', name: `阻断 ${domain}`, enabled: true,
+    condition: { type: 'domain_visit', domain },
+    action: { type: 'block' }, priority: 10, dailyProgress: 0, lastTriggered: 0, createdAt: new Date().toISOString()
+  });
+  await chrome.storage.local.set({ rules: JSON.stringify(rules) });
+  await syncDynamicRules();
+  showNotification('warning', `已添加阻断规则：${domain}`);
+}
+
 async function openDashboard() {
   const url = chrome.runtime.getURL('dashboard.html');
   await chrome.tabs.create({ url });
@@ -229,11 +247,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         break;
       case 'bm-blocklist':
         if (!domain) return;
-        if (await appendToList('domainBlocklist', domain)) {
-          showNotification('warning', `已将 ${domain} 加入黑名单`);
-        } else {
-          showNotification('info', `${domain} 已在黑名单中`);
-        }
+        await addDomainBlockRule(domain);
         break;
       case 'bm-dashboard':
         openDashboard();
@@ -496,6 +510,16 @@ async function collectHistoryData() {
 // 定期清理旧数据（每小时执行一次）
 chrome.alarms.create('cleanOldData', { periodInMinutes: 60 });
 
+// 恢复专注会话状态（service worker 重启后）
+chrome.storage.local.get('_activeFocusSession').then(({ _activeFocusSession: s }) => {
+  if (s && s.active && s.endTime > Date.now()) {
+    _focusSession = { ...s, domains: new Set() };
+    chrome.action.setBadgeText({ text: 'F' });
+    chrome.action.setBadgeBackgroundColor({ color: '#6366f1' });
+    log('已恢复专注会话状态');
+  }
+});
+
 // ==================== 专注会话 ====================
 
 function startFocusSession(durationMinutes) {
@@ -511,6 +535,11 @@ function startFocusSession(durationMinutes) {
     interruptions: 0,
     domains: new Set()
   };
+  // 持久化专注会话状态，防止 service worker 重启丢失
+  chrome.storage.local.set({ _activeFocusSession: {
+    active: true, startTime: now, durationMinutes,
+    endTime: _focusSession.endTime, interruptions: 0
+  }});
   chrome.alarms.create('_focusSessionEnd', { delayInMinutes: durationMinutes });
   chrome.action.setBadgeText({ text: 'F' });
   chrome.action.setBadgeBackgroundColor({ color: '#6366f1' });
@@ -538,6 +567,7 @@ async function endFocusSession(completed = true) {
   await chrome.storage.local.set({ focusSessions });
 
   _focusSession = { active: false, startTime: null, durationMinutes: 0, endTime: null, interruptions: 0, domains: new Set() };
+  chrome.storage.local.remove('_activeFocusSession');
   chrome.alarms.clear('_focusSessionEnd');
   chrome.action.setBadgeText({ text: '' });
   log(`专注会话结束：${completed ? '完成' : '中断'}，实际 ${actualDuration} 秒`);
@@ -578,6 +608,8 @@ async function cleanOldData() {
   if (filtered.length !== browsingData.length) {
     await chrome.storage.local.set({ browsingData: filtered });
     log(`清理旧数据：${browsingData.length - filtered.length} 条已移除`);
+    // 重置去重缓存，避免已清理记录的 key 阻止重新记录
+    _recentRecordKeys = null;
   }
 }
 
@@ -620,13 +652,18 @@ async function checkDailySummary() {
   await chrome.storage.local.set({ lastDailySummary: today });
 }
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
   try {
     if (alarm.name === 'cleanOldData') {
       cleanOldData().catch(e => console.error('cleanOldData failed:', e));
     } else if (alarm.name === 'syncBrowsingData') {
       syncLocalDataInBackground('alarm').catch(e => console.error('syncBrowsingData failed:', e));
     } else if (alarm.name === '_focusSessionEnd') {
+      // 如果 service worker 重启导致状态丢失，从 storage 恢复
+      if (!_focusSession.active) {
+        const { _activeFocusSession: s } = await chrome.storage.local.get('_activeFocusSession');
+        if (s && s.active) _focusSession = { ...s, domains: new Set() };
+      }
       endFocusSession(true).catch(e => console.error('endFocusSession failed:', e));
       showNotification('info', '专注会话完成！你做到了。').catch(e => console.error('showNotification failed:', e));
     } else if (alarm.name === 'dailySummary') {
@@ -884,8 +921,8 @@ async function evaluateRules(domain, category) {
     }
   }
 
-  // 保存更新后的 lastTriggered
-  await _saveRules(sorted);
+  // 保存完整规则列表（包括未启用的规则）
+  await _saveRules(rules);
 
   // 更新规则进度
   await updateRuleProgress();
