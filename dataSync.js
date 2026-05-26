@@ -466,7 +466,24 @@ class DataSync {
 
     if (cloudUpdatedAt > settingsSyncTime) {
       // 云端更新，拉取到本地（合并：云端覆盖本地，但保留本地独有的键）
-      const merged = { ...localPrefs, ...cloudSettings };
+      const rawMerged = { ...localPrefs, ...cloudSettings };
+      // 对合并结果应用类型强制转换，避免云端字符串值导致本地类型不匹配
+      const merged = {
+        ...rawMerged,
+        autoSyncEnabled: rawMerged.autoSyncEnabled === true || rawMerged.autoSyncEnabled === 'true',
+        autoSyncDebounceMs: rawMerged.autoSyncDebounceMs != null ? Number(rawMerged.autoSyncDebounceMs) : DEFAULT_PREFERENCES.autoSyncDebounceMs,
+        autoSyncMinIntervalMs: rawMerged.autoSyncMinIntervalMs != null ? Number(rawMerged.autoSyncMinIntervalMs) : DEFAULT_PREFERENCES.autoSyncMinIntervalMs,
+        dataRetentionDays: rawMerged.dataRetentionDays != null ? Number(rawMerged.dataRetentionDays) : DEFAULT_PREFERENCES.dataRetentionDays,
+        minVisitDurationSeconds: rawMerged.minVisitDurationSeconds != null ? Number(rawMerged.minVisitDurationSeconds) : DEFAULT_PREFERENCES.minVisitDurationSeconds,
+        notificationsEnabled: rawMerged.notificationsEnabled === true || rawMerged.notificationsEnabled === 'true',
+        blackholeThresholdMinutes: rawMerged.blackholeThresholdMinutes != null ? Number(rawMerged.blackholeThresholdMinutes) : DEFAULT_PREFERENCES.blackholeThresholdMinutes,
+        analysisDays: rawMerged.analysisDays != null ? Number(rawMerged.analysisDays) : DEFAULT_PREFERENCES.analysisDays,
+        interventionsEnabled: rawMerged.interventionsEnabled === true || rawMerged.interventionsEnabled === 'true',
+        dailySummaryEnabled: rawMerged.dailySummaryEnabled === true || rawMerged.dailySummaryEnabled === 'true',
+        dailySummaryHour: rawMerged.dailySummaryHour != null ? Number(rawMerged.dailySummaryHour) : DEFAULT_PREFERENCES.dailySummaryHour,
+        rulesSyncTime: rawMerged.rulesSyncTime != null ? Number(rawMerged.rulesSyncTime) : DEFAULT_PREFERENCES.rulesSyncTime,
+        notificationSound: rawMerged.notificationSound === true || rawMerged.notificationSound === 'true'
+      };
       await chrome.storage.local.set({ ...merged, settingsSyncTime: Date.now() });
       return { action: 'pull', message: '已从云端拉取最新设置' };
     }

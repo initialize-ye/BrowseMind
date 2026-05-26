@@ -1388,7 +1388,7 @@ function displayGoals(goals) {
           <div class="goal-progress-fill ${isWarning ? 'warning' : ''}" style="width: ${Math.min(percentage, 100)}%"></div>
         </div>
         <div class="goal-meta">
-          <span>${formatDuration(goal.current_progress)} / ${formatDuration(goal.target_duration)}</span>
+          <span>${formatDuration(goal.current_progress || 0)} / ${formatDuration(goal.target_duration || 0)}</span>
           <span>${percentage.toFixed(1)}%</span>
         </div>
       </div>

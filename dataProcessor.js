@@ -844,8 +844,10 @@ class HabitScorer {
 
     const weekStats = (start, end) => {
       let total = 0, focus = 0, scores = [];
-      for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
-        const ds = _toLocalDate(d);
+      const startTime = start.getTime();
+      const endTime = end.getTime();
+      for (let t = startTime; t < endTime; t += 86400000) {
+        const ds = _toLocalDate(new Date(t));
         const dayData = this.data.filter(r => r.date === ds);
         total += dayData.reduce((s, r) => s + (r.duration || 0), 0);
         focus += dayData.filter(r => r.category === 'learning' || r.category === 'coding').reduce((s, r) => s + (r.duration || 0), 0);
