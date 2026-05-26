@@ -447,7 +447,9 @@ function updateUI(stats, data, categoryStats, todayStats, classifier) {
 function renderPopupRecords(records) {
   const recordsContainer = document.getElementById('recentRecords');
   if (!records.length) {
-    recordsContainer.innerHTML = '<div class="empty-state" style="padding:8px;font-size:12px;">没有匹配的记录</div>';
+    const searchInput = document.getElementById('recordSearchInput');
+    const isSearch = searchInput && searchInput.value.trim();
+    recordsContainer.innerHTML = `<div class="empty-state" style="padding:8px;font-size:12px;">${isSearch ? '没有匹配的记录，试试其他关键词' : '暂无浏览记录'}</div>`;
     return;
   }
   recordsContainer.innerHTML = records.map(record => {
@@ -612,7 +614,7 @@ function showNoteInput() {
 
 async function addQuickNote(text) {
   text = (text || '').trim();
-  if (!text) return;
+  if (!text) { notifyPopup('info', '请输入笔记内容'); return; }
   const storage = await chrome.storage.local.get('browsingData');
   const data = storage.browsingData || [];
   data.push({ url: 'note://quick-note', title: text, domain: 'note', category: 'note', visitTime: Date.now(), duration: 0, date: todayString(), isNote: true });
