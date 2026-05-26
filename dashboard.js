@@ -646,7 +646,7 @@ function renderDomainList(domains) {
 function _renderDomainPage() {
   const container = document.getElementById('domainList');
   if (!_allDomains.length) {
-    container.innerHTML = '<div class="empty">暂无站点数据。</div>';
+    container.innerHTML = '<div class="empty">暂无站点数据。浏览一些网站后刷新查看。</div>';
     return;
   }
   const page = _allDomains.slice(0, _domainPage * DOMAIN_PAGE_SIZE);
