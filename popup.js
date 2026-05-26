@@ -130,26 +130,28 @@ function closeFocusModal() {
 }
 
 async function startFocusFromPopup(minutes) {
-  await new Promise(resolve => {
+  const res = await new Promise(resolve => {
     const timer = setTimeout(() => resolve(null), 2000);
     chrome.runtime.sendMessage({ action: 'startFocus', durationMinutes: minutes }, res => {
       clearTimeout(timer);
-      if (chrome.runtime.lastError) console.warn('sendMessage:', chrome.runtime.lastError.message);
+      if (chrome.runtime.lastError) { console.warn('sendMessage:', chrome.runtime.lastError.message); resolve(null); return; }
       resolve(res);
     });
   });
+  if (!res) notifyPopup('warning', '无法启动专注会话，后台服务可能未响应');
   loadFocusStatus();
 }
 
 async function stopFocusFromPopup() {
-  await new Promise(resolve => {
+  const res = await new Promise(resolve => {
     const timer = setTimeout(() => resolve(null), 2000);
     chrome.runtime.sendMessage({ action: 'stopFocus' }, res => {
       clearTimeout(timer);
-      if (chrome.runtime.lastError) console.warn('sendMessage:', chrome.runtime.lastError.message);
+      if (chrome.runtime.lastError) { console.warn('sendMessage:', chrome.runtime.lastError.message); resolve(null); return; }
       resolve(res);
     });
   });
+  if (!res) notifyPopup('warning', '无法停止专注会话，后台服务可能未响应');
   loadFocusStatus();
 }
 
@@ -454,17 +456,16 @@ function renderPopupRecords(records) {
     const duration = record.duration > 0 ? ` · ${formatDuration(record.duration)}` : '';
     const cat = record.category || 'other';
     return `
-      <div class="record-item" data-domain="${escapeHtml(domain)}" data-category="${cat}">
+      <div class="record-item" data-domain="${escapeHtml(domain)}" data-category="${cat}" tabindex="0" role="button" aria-label="${escapeHtml(domain)} 的操作菜单">
         <div class="record-title">${escapeHtml(record.title || domain)}</div>
         <div class="record-meta">${domain} · ${time}${duration}</div>
       </div>
     `;
   }).join('');
   recordsContainer.querySelectorAll('.record-item').forEach(item => {
-    item.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      showDomainContextMenu(e, item.dataset.domain, item.dataset.category);
-    });
+    const showMenu = (e) => { e.preventDefault(); showDomainContextMenu(e, item.dataset.domain, item.dataset.category); };
+    item.addEventListener('contextmenu', showMenu);
+    item.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showMenu(e); } });
   });
 }
 
@@ -497,10 +498,13 @@ function showDomainContextMenu(event, domain, currentCategory) {
   const categories = WebsiteClassifier.CATEGORIES;
   const menu = document.createElement('div');
   menu.className = 'context-menu';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', `${domain} 操作菜单`);
   menu.style.cssText = `position:fixed;left:${Math.min(event.clientX, window.innerWidth - 180)}px;top:${Math.min(event.clientY, window.innerHeight - 220)}px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:0 4px 16px oklch(0% 0 0 / 0.12);z-index:9999;min-width:160px;padding:4px;font-size:12px;`;
   const addItem = (label, onClick, color) => {
     const btn = document.createElement('button');
     btn.textContent = label;
+    btn.setAttribute('role', 'menuitem');
     btn.style.cssText = `display:block;width:100%;text-align:left;padding:8px 12px;border:0;background:transparent;cursor:pointer;font:inherit;font-size:12px;color:${color || 'var(--text)'};border-radius:4px;min-height:auto;`;
     btn.addEventListener('click', () => { hideContextMenu(); onClick(); });
     btn.addEventListener('mouseenter', () => btn.style.background = 'var(--surface-2)');
@@ -509,12 +513,24 @@ function showDomainContextMenu(event, domain, currentCategory) {
   };
   addItem(`修改分类 (${WebsiteClassifier.CATEGORY_NAMES[currentCategory] || currentCategory})`, () => showCategoryPickerPopup(domain, currentCategory));
   const sep = document.createElement('div');
+  sep.setAttribute('role', 'separator');
   sep.style.cssText = 'height:1px;background:var(--line);margin:4px 0;';
   menu.appendChild(sep);
   addItem('添加阻断规则', () => addDomainBlockRule(domain), 'var(--red)');
   addItem('加入白名单', () => addToAllowlist(domain), 'var(--green)');
+  // 键盘导航：上下箭头移动焦点，Escape 关闭
+  menu.addEventListener('keydown', (e) => {
+    const items = Array.from(menu.querySelectorAll('[role="menuitem"]'));
+    const idx = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[(idx + 1) % items.length]?.focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[(idx - 1 + items.length) % items.length]?.focus(); }
+    else if (e.key === 'Escape') { hideContextMenu(); }
+    else if (e.key === 'Tab') { hideContextMenu(); }
+  });
   document.body.appendChild(menu);
   _contextMenuEl = menu;
+  const menuItems = menu.querySelectorAll('[role="menuitem"]');
+  if (menuItems.length) menuItems[0].focus();
   const closeHandler = (e) => { if (!menu.contains(e.target)) { hideContextMenu(); document.removeEventListener('click', closeHandler); } };
   setTimeout(() => document.addEventListener('click', closeHandler), 0);
 }
@@ -523,8 +539,11 @@ function hideContextMenu() { if (_contextMenuEl) { _contextMenuEl.remove(); _con
 function showCategoryPickerPopup(domain, currentCategory) {
   const categories = WebsiteClassifier.CATEGORIES;
   const modal = document.createElement('div');
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-label', `修改 ${domain} 的分类`);
   modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:oklch(0% 0 0/0.32);';
-  modal.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius-md);padding:20px;max-width:280px;width:100%;"><h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">修改 ${escapeHtml(domain)} 的分类</h3><div style="display:flex;flex-wrap:wrap;gap:6px;">${categories.map(c => `<button class="ghost${c === currentCategory ? ' primary' : ''}" data-cat="${c}" style="min-height:34px;padding:6px 12px;font-size:12px;">${WebsiteClassifier.CATEGORY_NAMES[c]}</button>`).join('')}</div></div>`;
+  modal.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius-md);padding:20px;max-width:280px;width:100%;"><h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">修改 ${escapeHtml(domain)} 的分类</h3><div role="group" style="display:flex;flex-wrap:wrap;gap:6px;">${categories.map(c => `<button class="ghost${c === currentCategory ? ' primary' : ''}" data-cat="${c}" style="min-height:34px;padding:6px 12px;font-size:12px;">${WebsiteClassifier.CATEGORY_NAMES[c]}</button>`).join('')}</div></div>`;
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.remove();
     const btn = e.target.closest('[data-cat]');
@@ -533,7 +552,10 @@ function showCategoryPickerPopup(domain, currentCategory) {
       modal.remove();
     }
   });
+  modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') modal.remove(); });
   document.body.appendChild(modal);
+  const firstBtn = modal.querySelector('button');
+  if (firstBtn) firstBtn.focus();
 }
 
 async function applyCategoryOverride(domain, category) {
@@ -541,6 +563,7 @@ async function applyCategoryOverride(domain, category) {
   const overrides = storage.classificationOverrides || {};
   overrides[domain] = category;
   await chrome.storage.local.set({ classificationOverrides: overrides });
+  notifyPopup('success', `${domain} 已归类为${WebsiteClassifier.CATEGORY_NAMES[category] || category}`);
   loadData();
 }
 

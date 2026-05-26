@@ -1560,6 +1560,12 @@ async function loadAdvancedInsights() {
   const preferences = await getPreferences();
   await initDataSync();
 
+  // 显示加载状态
+  const blackholeEl = document.getElementById('blackholeStats');
+  const attentionEl = document.getElementById('attentionStats');
+  if (blackholeEl) blackholeEl.innerHTML = '<div class="empty-line">正在加载高级洞察...</div>';
+  if (attentionEl) attentionEl.innerHTML = '<div class="empty-line">正在加载高级洞察...</div>';
+
   if (await cachedCheckConnection()) {
     await dataSync.initUserId();
     const response = await authFetch(`${dataSync.apiBaseUrl}/api/advanced-analysis/${dataSync.userId}?days=${preferences.analysisDays}&blackhole_threshold=${preferences.blackholeThresholdMinutes}`);
@@ -1821,7 +1827,7 @@ function renderFocusSessionInfo(status) {
 function renderFocusHistory(sessions) {
   const container = document.getElementById('focusHistory');
   if (!sessions.length) {
-    container.innerHTML = '';
+    container.innerHTML = '<div class="empty-line">暂无专注记录，开始你的第一次专注吧</div>';
     return;
   }
   const html = sessions.map(s => {
@@ -1846,25 +1852,45 @@ async function showFocusDurationPicker() {
 }
 
 async function startFocusSession(minutes) {
-  await new Promise(resolve => {
-    chrome.runtime.sendMessage({ action: 'startFocus', durationMinutes: minutes }, resolve);
+  const res = await new Promise(resolve => {
+    const timer = setTimeout(() => resolve(null), 3000);
+    chrome.runtime.sendMessage({ action: 'startFocus', durationMinutes: minutes }, res => {
+      clearTimeout(timer);
+      if (chrome.runtime.lastError) { console.warn('sendMessage:', chrome.runtime.lastError.message); resolve(null); return; }
+      resolve(res);
+    });
   });
   await loadFocusStats();
-  setNote(`专注会话开始：${minutes} 分钟`, 'success');
-  log(`专注会话开始：${minutes} 分钟`);
+  if (res) {
+    setNote(`专注会话开始：${minutes} 分钟`, 'success');
+    log(`专注会话开始：${minutes} 分钟`);
+  } else {
+    setNote('无法启动专注会话，后台服务可能未响应', 'warning');
+  }
 }
 
 async function stopFocusSession() {
-  await new Promise(resolve => {
-    chrome.runtime.sendMessage({ action: 'stopFocus' }, resolve);
+  const res = await new Promise(resolve => {
+    const timer = setTimeout(() => resolve(null), 3000);
+    chrome.runtime.sendMessage({ action: 'stopFocus' }, res => {
+      clearTimeout(timer);
+      if (chrome.runtime.lastError) { console.warn('sendMessage:', chrome.runtime.lastError.message); resolve(null); return; }
+      resolve(res);
+    });
   });
   await loadFocusStats();
-  setNote('专注会话已停止', 'info');
-  log('专注会话已手动停止');
+  if (res) {
+    setNote('专注会话已停止', 'info');
+    log('专注会话已手动停止');
+  } else {
+    setNote('无法停止专注会话，后台服务可能未响应', 'warning');
+  }
 }
 
 async function loadReports(reportType) {
   try {
+    const reportList = document.getElementById('reportList');
+    if (reportList) reportList.innerHTML = '<div class="empty-line">正在加载报告...</div>';
     await initDataSync();
     if (!(await cachedCheckConnection())) {
       renderReports([]);
@@ -1888,6 +1914,7 @@ async function loadReports(reportType) {
 }
 async function loadLatestAIAnalysis() {
   const container = document.getElementById('aiAnalysisResult');
+  if (container) container.innerHTML = '<div class="empty-line">正在加载 AI 分析...</div>';
   try {
     await initDataSync();
     if (!(await cachedCheckConnection())) {
@@ -1936,6 +1963,7 @@ async function refreshInsights() {
 // ==================== 排行榜 ====================
 async function loadLeaderboard() {
   const container = document.getElementById('leaderboardContent');
+  if (container) container.innerHTML = '<div class="empty-line">正在加载排行榜...</div>';
   try {
     await initDataSync();
     if (!(await cachedCheckConnection())) {
@@ -2169,13 +2197,36 @@ function renderRulesPanel(rules) {
   list.querySelectorAll('[data-rule-toggle]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const rule = rules.find(r => r.id === btn.dataset.ruleToggle);
-      if (rule) { rule.enabled = !rule.enabled; await _saveRulesFromUI(rules); }
+      if (rule) {
+        rule.enabled = !rule.enabled;
+        await _saveRulesFromUI(rules);
+        setNote(rule.enabled ? '规则已启用' : '规则已禁用', 'success');
+      }
     });
   });
   list.querySelectorAll('[data-rule-delete]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const idx = rules.findIndex(r => r.id === btn.dataset.ruleDelete);
-      if (idx >= 0) { rules.splice(idx, 1); await _saveRulesFromUI(rules); }
+      if (idx < 0) return;
+      const ruleName = rules[idx].name || '此规则';
+      const overlay = document.createElement('div');
+      overlay.className = 'modal';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-label', '确认删除规则');
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `<div class="modal-content" style="max-width:340px;text-align:center;"><p style="margin:0 0 16px;font-size:13px;color:var(--text);">确定删除规则「${escapeHtml(ruleName)}」吗？此操作不可恢复。</p><div style="display:flex;gap:8px;justify-content:center;"><button class="action-btn" id="_ruleDelCancel">取消</button><button class="action-btn primary" id="_ruleDelOk" style="background:var(--red);border-color:var(--red);">删除</button></div></div>`;
+      document.body.appendChild(overlay);
+      const confirmed = await new Promise(resolve => {
+        overlay.querySelector('#_ruleDelCancel').addEventListener('click', () => resolve(false));
+        overlay.querySelector('#_ruleDelOk').addEventListener('click', () => resolve(true));
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) resolve(false); });
+        overlay.querySelector('#_ruleDelOk').focus();
+      });
+      overlay.remove();
+      if (!confirmed) return;
+      rules.splice(idx, 1);
+      await _saveRulesFromUI(rules);
     });
   });
 }
@@ -2311,11 +2362,16 @@ let _settingsStatusTimer = null;
 function autoSaveSettings() {
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(async () => {
-    const preferences = readPreferencesFromForm();
-    await chrome.storage.local.set(preferences);
-    await initDataSync();
-    showSettingsStatus('已自动保存');
-    log(`设置已自动保存`);
+    try {
+      const preferences = readPreferencesFromForm();
+      await chrome.storage.local.set(preferences);
+      await initDataSync();
+      showSettingsStatus('已自动保存');
+      log(`设置已自动保存`);
+    } catch (e) {
+      console.error('autoSaveSettings failed:', e);
+      showSettingsStatus('保存失败');
+    }
   }, 500);
 }
 function showSettingsStatus(text) {
@@ -2643,7 +2699,27 @@ document.getElementById('interventionsEnabledInput').addEventListener('change', 
 document.getElementById('accentColorInput')?.addEventListener('input', (e) => { applyAccentColor(e.target.value); invalidateChartPalette(); });
 document.getElementById('fontSizeInput')?.addEventListener('change', (e) => { const html = document.documentElement; if (e.target.value !== 'medium') html.setAttribute('data-font-size', e.target.value); else html.removeAttribute('data-font-size'); });
 document.getElementById('chartSchemeInput')?.addEventListener('change', (e) => { const html = document.documentElement; if (e.target.value !== 'default') html.setAttribute('data-chart-scheme', e.target.value); else html.removeAttribute('data-chart-scheme'); invalidateChartPalette(); });
-document.getElementById('clearNotificationHistoryBtn')?.addEventListener('click', async () => { await chrome.storage.local.set({ notificationHistory: '' }); renderNotificationHistory(); });
+document.getElementById('clearNotificationHistoryBtn')?.addEventListener('click', async () => {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', '确认清空通知历史');
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `<div class="modal-content" style="max-width:340px;text-align:center;"><p style="margin:0 0 16px;font-size:13px;color:var(--text);">确定清空所有通知历史吗？</p><div style="display:flex;gap:8px;justify-content:center;"><button class="action-btn" id="_notifClearCancel">取消</button><button class="action-btn primary" id="_notifClearOk" style="background:var(--red);border-color:var(--red);">清空</button></div></div>`;
+  document.body.appendChild(overlay);
+  const confirmed = await new Promise(resolve => {
+    overlay.querySelector('#_notifClearCancel').addEventListener('click', () => resolve(false));
+    overlay.querySelector('#_notifClearOk').addEventListener('click', () => resolve(true));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) resolve(false); });
+    overlay.querySelector('#_notifClearOk').focus();
+  });
+  overlay.remove();
+  if (!confirmed) return;
+  await chrome.storage.local.set({ notificationHistory: '' });
+  renderNotificationHistory();
+  setNote('通知历史已清空', 'success');
+});
 document.querySelectorAll('[data-sidebar-tab]').forEach(button => { button.addEventListener('click', () => switchSidebarTab(button.dataset.sidebarTab, { focusPanel: true }).catch(e => { if (DEBUG) console.error('切换标签失败:', e); })); button.addEventListener('keydown', (event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, 1); } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { event.preventDefault(); moveSidebarTabFocus(button.dataset.sidebarTab, -1); } else if (event.key === 'Home') { event.preventDefault(); const firstButton = document.querySelector('[data-sidebar-tab="dashboard"]'); if (firstButton) { switchSidebarTab('dashboard'); firstButton.focus(); } } else if (event.key === 'End') { event.preventDefault(); const lastTab = SIDEBAR_TABS[SIDEBAR_TABS.length - 1]; const lastButton = document.querySelector(`[data-sidebar-tab="${lastTab}"]`); if (lastButton) { switchSidebarTab(lastTab); lastButton.focus(); } } }); }); }
 
 const _dashLoadingMsgs = ['正在唤醒分析引擎...', '整理你的浏览足迹...', '数据马上就绪...'];
